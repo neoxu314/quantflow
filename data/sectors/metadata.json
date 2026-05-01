@@ -1,0 +1,35 @@
+{
+  "last_update": "2026-04-25T10:34:06.966259",
+  "sources": {
+    "em": {},
+    "ths": {
+      "industries": {
+        "file": "ths/industries.json",
+        "count": 90,
+        "last_update": "2026-04-25T10:34:06.966259"
+      },
+      "concepts": {
+        "file": "ths/concepts.json",
+        "count": 375,
+        "last_update": "2026-04-25T10:34:06.966259"
+      }
+    },
+    "sw": {
+      "l1": {
+        "file": "sw/l1.json",
+        "count": 31,
+        "last_update": "2026-04-25T10:34:06.966259"
+      },
+      "l2": {
+        "file": "sw/l2.json",
+        "count": 131,
+        "last_update": "2026-04-25T10:34:06.966259"
+      },
+      "l3": {
+        "file": "sw/l3.json",
+        "count": 336,
+        "last_update": "2026-04-25T10:34:06.966259"
+      }
+    }
+  }
+}

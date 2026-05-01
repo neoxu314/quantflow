@@ -1,0 +1,142 @@
+{
+  "meta": {
+    "source": "sw",
+    "level": "L3",
+    "industry_code": "857371.SI",
+    "industry_name": "锂电池",
+    "fetch_time": "2026-04-24",
+    "total_count": 26
+  },
+  "stocks": [
+    {
+      "code": "002850",
+      "exchange": "SZ",
+      "standard": "002850.SZ"
+    },
+    {
+      "code": "688345",
+      "exchange": "SH",
+      "standard": "688345.SH"
+    },
+    {
+      "code": "600110",
+      "exchange": "SH",
+      "standard": "600110.SH"
+    },
+    {
+      "code": "688567",
+      "exchange": "SH",
+      "standard": "688567.SH"
+    },
+    {
+      "code": "002074",
+      "exchange": "SZ",
+      "standard": "002074.SZ"
+    },
+    {
+      "code": "300750",
+      "exchange": "SZ",
+      "standard": "300750.SZ"
+    },
+    {
+      "code": "600152",
+      "exchange": "SH",
+      "standard": "600152.SH"
+    },
+    {
+      "code": "301327",
+      "exchange": "SZ",
+      "standard": "301327.SZ"
+    },
+    {
+      "code": "300953",
+      "exchange": "SZ",
+      "standard": "300953.SZ"
+    },
+    {
+      "code": "301587",
+      "exchange": "SZ",
+      "standard": "301587.SZ"
+    },
+    {
+      "code": "301210",
+      "exchange": "SZ",
+      "standard": "301210.SZ"
+    },
+    {
+      "code": "688772",
+      "exchange": "SH",
+      "standard": "688772.SH"
+    },
+    {
+      "code": "688388",
+      "exchange": "SH",
+      "standard": "688388.SH"
+    },
+    {
+      "code": "001283",
+      "exchange": "SZ",
+      "standard": "001283.SZ"
+    },
+    {
+      "code": "300438",
+      "exchange": "SZ",
+      "standard": "300438.SZ"
+    },
+    {
+      "code": "000049",
+      "exchange": "SZ",
+      "standard": "000049.SZ"
+    },
+    {
+      "code": "688063",
+      "exchange": "SH",
+      "standard": "688063.SH"
+    },
+    {
+      "code": "300014",
+      "exchange": "SZ",
+      "standard": "300014.SZ"
+    },
+    {
+      "code": "301511",
+      "exchange": "SZ",
+      "standard": "301511.SZ"
+    },
+    {
+      "code": "600241",
+      "exchange": "SH",
+      "standard": "600241.SH"
+    },
+    {
+      "code": "600478",
+      "exchange": "SH",
+      "standard": "600478.SH"
+    },
+    {
+      "code": "301150",
+      "exchange": "SZ",
+      "standard": "301150.SZ"
+    },
+    {
+      "code": "002245",
+      "exchange": "SZ",
+      "standard": "002245.SZ"
+    },
+    {
+      "code": "300207",
+      "exchange": "SZ",
+      "standard": "300207.SZ"
+    },
+    {
+      "code": "301121",
+      "exchange": "SZ",
+      "standard": "301121.SZ"
+    },
+    {
+      "code": "301217",
+      "exchange": "SZ",
+      "standard": "301217.SZ"
+    }
+  ]
+}

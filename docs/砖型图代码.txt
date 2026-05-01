@@ -1,0 +1,34 @@
+{1. 基础动能计算 - 保持原逻辑不变}
+VAR1A:=(HHV(HIGH,4)-CLOSE)/(HHV(HIGH,4)-LLV(LOW,4))*100-90;
+VAR2A:=SMA(VAR1A,4,1)+100;
+VAR3A:=(CLOSE-LLV(LOW,4))/(HHV(HIGH,4)-LLV(LOW,4))*100;
+VAR4A:=SMA(VAR3A,6,1);
+VAR5A:=SMA(VAR4A,6,1)+100;
+VAR6A:=VAR5A-VAR2A;
+砖型图:IF(VAR6A>4,VAR6A-4,0),NODRAW,COLORRED;
+
+{2. 柱状线绘制}
+STICKLINE(砖型图>REF(砖型图,1),砖型图,REF(砖型图,1),3,0),COLORRED;
+STICKLINE(砖型图<REF(砖型图,1),砖型图,REF(砖型图,1),3,0),COLORGREEN;
+
+{3. 趋势与量能过滤}
+MA20:=MA(C,20);
+V5:=MA(V,5);
+
+{4. 核心：动态强度逻辑修正}
+{计算每一根砖块的实际变动高度(振幅)}
+砖块高度:=砖型图 - REF(砖型图,1);
+昨砖高度:=REF(砖型图,1) - REF(砖型图,2);
+
+{判定拐点：昨天是跌(绿)，今天变涨(红)}
+拐点触发:=砖块高度 > 0 AND 昨砖高度 < 0;
+
+{强度确认：今天的上涨高度 > 昨天下跌高度绝对值的 2/3}
+强度达标:=砖块高度 > (ABS(昨砖高度) * 0.666);
+
+{5. 综合稳健买点}
+稳健买点:=拐点触发 AND 强度达标 AND C>MA20 AND V>V5;
+
+{6. 标注}
+DRAWICON(稳健买点, 砖型图*1.1, 1);
+DRAWTEXT(稳健买点, 砖型图*1.4, '强力推荐'),COLORMAGENTA;

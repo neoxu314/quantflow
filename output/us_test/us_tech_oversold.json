@@ -1,0 +1,44 @@
+[
+  {
+    "code": "GOOG.US",
+    "buy_signals": 1,
+    "sell_signals": 0,
+    "reasons": [
+      "Oversold J=14.2 in bull channel"
+    ],
+    "timestamp": "2026-05-01T10:16:13.373241"
+  },
+  {
+    "code": "TSLA.US",
+    "buy_signals": 1,
+    "sell_signals": 0,
+    "reasons": [
+      "Oversold J=-0.3 in bull channel"
+    ],
+    "timestamp": "2026-05-01T10:16:13.690392"
+  },
+  {
+    "code": "GS.US",
+    "buy_signals": 5,
+    "sell_signals": 0,
+    "reasons": [
+      "Oversold J=12.3 in bull channel",
+      "Oversold J=4.0 in bull channel",
+      "Oversold J=2.3 in bull channel",
+      "Oversold J=11.6 in bull channel",
+      "Oversold J=15.8 in bull channel"
+    ],
+    "timestamp": "2026-05-01T10:16:14.037028"
+  },
+  {
+    "code": "NVDA.US",
+    "buy_signals": 3,
+    "sell_signals": 0,
+    "reasons": [
+      "Oversold J=8.6 in bull channel",
+      "Oversold J=7.9 in bull channel",
+      "Oversold J=17.4 in bull channel"
+    ],
+    "timestamp": "2026-05-01T10:16:14.363664"
+  }
+]

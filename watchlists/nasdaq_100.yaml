@@ -1,0 +1,407 @@
+name: Nasdaq 100_Components
+description: Auto-generated Nasdaq 100 components from Wikipedia
+items:
+- code: ADBE.US
+  name: Adobe Inc.
+  tags:
+  - Nasdaq 100
+- code: AMD.US
+  name: Advanced Micro Devices
+  tags:
+  - Nasdaq 100
+- code: ABNB.US
+  name: Airbnb
+  tags:
+  - Nasdaq 100
+- code: ALNY.US
+  name: Alnylam Pharmaceuticals
+  tags:
+  - Nasdaq 100
+- code: GOOGL.US
+  name: Alphabet Inc. (Class A)
+  tags:
+  - Nasdaq 100
+- code: GOOG.US
+  name: Alphabet Inc. (Class C)
+  tags:
+  - Nasdaq 100
+- code: AMZN.US
+  name: Amazon
+  tags:
+  - Nasdaq 100
+- code: AEP.US
+  name: American Electric Power
+  tags:
+  - Nasdaq 100
+- code: AMGN.US
+  name: Amgen
+  tags:
+  - Nasdaq 100
+- code: ADI.US
+  name: Analog Devices
+  tags:
+  - Nasdaq 100
+- code: AAPL.US
+  name: Apple Inc.
+  tags:
+  - Nasdaq 100
+- code: AMAT.US
+  name: Applied Materials
+  tags:
+  - Nasdaq 100
+- code: APP.US
+  name: AppLovin
+  tags:
+  - Nasdaq 100
+- code: ARM.US
+  name: Arm Holdings
+  tags:
+  - Nasdaq 100
+- code: ASML.US
+  name: ASML Holding
+  tags:
+  - Nasdaq 100
+- code: ADSK.US
+  name: Autodesk
+  tags:
+  - Nasdaq 100
+- code: ADP.US
+  name: Automatic Data Processing
+  tags:
+  - Nasdaq 100
+- code: AXON.US
+  name: Axon Enterprise
+  tags:
+  - Nasdaq 100
+- code: BKR.US
+  name: Baker Hughes
+  tags:
+  - Nasdaq 100
+- code: BKNG.US
+  name: Booking Holdings
+  tags:
+  - Nasdaq 100
+- code: AVGO.US
+  name: Broadcom
+  tags:
+  - Nasdaq 100
+- code: CDNS.US
+  name: Cadence Design Systems
+  tags:
+  - Nasdaq 100
+- code: CHTR.US
+  name: Charter Communications
+  tags:
+  - Nasdaq 100
+- code: CTAS.US
+  name: Cintas
+  tags:
+  - Nasdaq 100
+- code: CSCO.US
+  name: Cisco
+  tags:
+  - Nasdaq 100
+- code: CCEP.US
+  name: Coca-Cola Europacific Partners
+  tags:
+  - Nasdaq 100
+- code: CTSH.US
+  name: Cognizant
+  tags:
+  - Nasdaq 100
+- code: CMCSA.US
+  name: Comcast
+  tags:
+  - Nasdaq 100
+- code: CEG.US
+  name: Constellation Energy
+  tags:
+  - Nasdaq 100
+- code: CPRT.US
+  name: Copart
+  tags:
+  - Nasdaq 100
+- code: CSGP.US
+  name: CoStar Group
+  tags:
+  - Nasdaq 100
+- code: COST.US
+  name: Costco
+  tags:
+  - Nasdaq 100
+- code: CRWD.US
+  name: CrowdStrike
+  tags:
+  - Nasdaq 100
+- code: CSX.US
+  name: CSX Corporation
+  tags:
+  - Nasdaq 100
+- code: DDOG.US
+  name: Datadog
+  tags:
+  - Nasdaq 100
+- code: DXCM.US
+  name: DexCom
+  tags:
+  - Nasdaq 100
+- code: FANG.US
+  name: Diamondback Energy
+  tags:
+  - Nasdaq 100
+- code: DASH.US
+  name: DoorDash
+  tags:
+  - Nasdaq 100
+- code: EA.US
+  name: Electronic Arts
+  tags:
+  - Nasdaq 100
+- code: EXC.US
+  name: Exelon
+  tags:
+  - Nasdaq 100
+- code: FAST.US
+  name: Fastenal
+  tags:
+  - Nasdaq 100
+- code: FER.US
+  name: Ferrovial
+  tags:
+  - Nasdaq 100
+- code: FTNT.US
+  name: Fortinet
+  tags:
+  - Nasdaq 100
+- code: GEHC.US
+  name: GE HealthCare
+  tags:
+  - Nasdaq 100
+- code: GILD.US
+  name: Gilead Sciences
+  tags:
+  - Nasdaq 100
+- code: HON.US
+  name: Honeywell
+  tags:
+  - Nasdaq 100
+- code: IDXX.US
+  name: Idexx Laboratories
+  tags:
+  - Nasdaq 100
+- code: INSM.US
+  name: Insmed Incorporated
+  tags:
+  - Nasdaq 100
+- code: INTC.US
+  name: Intel
+  tags:
+  - Nasdaq 100
+- code: INTU.US
+  name: Intuit
+  tags:
+  - Nasdaq 100
+- code: ISRG.US
+  name: Intuitive Surgical
+  tags:
+  - Nasdaq 100
+- code: KDP.US
+  name: Keurig Dr Pepper
+  tags:
+  - Nasdaq 100
+- code: KLAC.US
+  name: KLA Corporation
+  tags:
+  - Nasdaq 100
+- code: KHC.US
+  name: Kraft Heinz
+  tags:
+  - Nasdaq 100
+- code: LRCX.US
+  name: Lam Research
+  tags:
+  - Nasdaq 100
+- code: LIN.US
+  name: Linde plc
+  tags:
+  - Nasdaq 100
+- code: MAR.US
+  name: Marriott International
+  tags:
+  - Nasdaq 100
+- code: MRVL.US
+  name: Marvell Technology
+  tags:
+  - Nasdaq 100
+- code: MELI.US
+  name: Mercado Libre
+  tags:
+  - Nasdaq 100
+- code: META.US
+  name: Meta Platforms
+  tags:
+  - Nasdaq 100
+- code: MCHP.US
+  name: Microchip Technology
+  tags:
+  - Nasdaq 100
+- code: MU.US
+  name: Micron Technology
+  tags:
+  - Nasdaq 100
+- code: MSFT.US
+  name: Microsoft
+  tags:
+  - Nasdaq 100
+- code: MSTR.US
+  name: MicroStrategy
+  tags:
+  - Nasdaq 100
+- code: MDLZ.US
+  name: Mondelez International
+  tags:
+  - Nasdaq 100
+- code: MPWR.US
+  name: Monolithic Power Systems
+  tags:
+  - Nasdaq 100
+- code: MNST.US
+  name: Monster Beverage
+  tags:
+  - Nasdaq 100
+- code: NFLX.US
+  name: Netflix, Inc.
+  tags:
+  - Nasdaq 100
+- code: NVDA.US
+  name: Nvidia
+  tags:
+  - Nasdaq 100
+- code: NXPI.US
+  name: NXP Semiconductors
+  tags:
+  - Nasdaq 100
+- code: ORLY.US
+  name: O'Reilly Automotive
+  tags:
+  - Nasdaq 100
+- code: ODFL.US
+  name: Old Dominion Freight Line
+  tags:
+  - Nasdaq 100
+- code: PCAR.US
+  name: Paccar
+  tags:
+  - Nasdaq 100
+- code: PLTR.US
+  name: Palantir Technologies
+  tags:
+  - Nasdaq 100
+- code: PANW.US
+  name: Palo Alto Networks
+  tags:
+  - Nasdaq 100
+- code: PAYX.US
+  name: Paychex
+  tags:
+  - Nasdaq 100
+- code: PYPL.US
+  name: PayPal
+  tags:
+  - Nasdaq 100
+- code: PDD.US
+  name: PDD Holdings
+  tags:
+  - Nasdaq 100
+- code: PEP.US
+  name: PepsiCo
+  tags:
+  - Nasdaq 100
+- code: QCOM.US
+  name: Qualcomm
+  tags:
+  - Nasdaq 100
+- code: REGN.US
+  name: Regeneron Pharmaceuticals
+  tags:
+  - Nasdaq 100
+- code: ROP.US
+  name: Roper Technologies
+  tags:
+  - Nasdaq 100
+- code: ROST.US
+  name: Ross Stores
+  tags:
+  - Nasdaq 100
+- code: SNDK.US
+  name: Sandisk
+  tags:
+  - Nasdaq 100
+- code: STX.US
+  name: Seagate Technology
+  tags:
+  - Nasdaq 100
+- code: SHOP.US
+  name: Shopify
+  tags:
+  - Nasdaq 100
+- code: SBUX.US
+  name: Starbucks
+  tags:
+  - Nasdaq 100
+- code: SNPS.US
+  name: Synopsys
+  tags:
+  - Nasdaq 100
+- code: TMUS.US
+  name: T-Mobile US
+  tags:
+  - Nasdaq 100
+- code: TTWO.US
+  name: Take-Two Interactive
+  tags:
+  - Nasdaq 100
+- code: TSLA.US
+  name: Tesla, Inc.
+  tags:
+  - Nasdaq 100
+- code: TXN.US
+  name: Texas Instruments
+  tags:
+  - Nasdaq 100
+- code: TRI.US
+  name: Thomson Reuters
+  tags:
+  - Nasdaq 100
+- code: VRSK.US
+  name: Verisk Analytics
+  tags:
+  - Nasdaq 100
+- code: VRTX.US
+  name: Vertex Pharmaceuticals
+  tags:
+  - Nasdaq 100
+- code: WMT.US
+  name: Walmart
+  tags:
+  - Nasdaq 100
+- code: WBD.US
+  name: Warner Bros. Discovery
+  tags:
+  - Nasdaq 100
+- code: WDC.US
+  name: Western Digital
+  tags:
+  - Nasdaq 100
+- code: WDAY.US
+  name: Workday, Inc.
+  tags:
+  - Nasdaq 100
+- code: XEL.US
+  name: Xcel Energy
+  tags:
+  - Nasdaq 100
+- code: ZS.US
+  name: Zscaler
+  tags:
+  - Nasdaq 100

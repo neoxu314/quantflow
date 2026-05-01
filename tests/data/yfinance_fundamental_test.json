@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "source": "yfinance",
+    "fetch_time": "2026-04-24",
+    "note": "Fundamental data test with YFinance"
+  },
+  "results": {
+    "09660": {
+      "pe_ttm": null,
+      "pb": 7.1212735,
+      "total_mv": 111835865088
+    },
+    "00700": {
+      "pe_ttm": 17.793005,
+      "pb": 3.3642154,
+      "total_mv": 4458806247424
+    },
+    "PDD": {
+      "pe_ttm": 9.952284,
+      "pb": 2.2618594,
+      "total_mv": 139167940608
+    }
+  }
+}

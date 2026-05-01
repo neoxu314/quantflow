@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantflow"
+version = "0.1.0"
+description = "Stock Quantitative Analysis System"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "baostock>=0.8.9",
+    "tushare>=1.3.0",
+    "akshare>=1.10.0",
+    "yfinance>=0.2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+viz = [
+    "matplotlib>=3.7.0",
+    "mplfinance>=0.12.10",
+]
+
+[project.scripts]
+quantflow-scan = "quantflow.cli:scan"
+quantflow-monitor = "quantflow.cli:monitor"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "integration: marks tests as integration tests (require network/API access)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]

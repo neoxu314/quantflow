@@ -1,0 +1,3 @@
+[console_scripts]
+quantflow-monitor = quantflow.cli:monitor
+quantflow-scan = quantflow.cli:scan

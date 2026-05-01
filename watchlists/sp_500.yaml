@@ -1,0 +1,2015 @@
+name: S&P 500_Components
+description: Auto-generated S&P 500 components from Wikipedia
+items:
+- code: MMM.US
+  name: 3M
+  tags:
+  - S&P 500
+- code: AOS.US
+  name: A. O. Smith
+  tags:
+  - S&P 500
+- code: ABT.US
+  name: Abbott Laboratories
+  tags:
+  - S&P 500
+- code: ABBV.US
+  name: AbbVie
+  tags:
+  - S&P 500
+- code: ACN.US
+  name: Accenture
+  tags:
+  - S&P 500
+- code: ADBE.US
+  name: Adobe Inc.
+  tags:
+  - S&P 500
+- code: AMD.US
+  name: Advanced Micro Devices
+  tags:
+  - S&P 500
+- code: AES.US
+  name: AES Corporation
+  tags:
+  - S&P 500
+- code: AFL.US
+  name: Aflac
+  tags:
+  - S&P 500
+- code: A.US
+  name: Agilent Technologies
+  tags:
+  - S&P 500
+- code: APD.US
+  name: Air Products
+  tags:
+  - S&P 500
+- code: ABNB.US
+  name: Airbnb
+  tags:
+  - S&P 500
+- code: AKAM.US
+  name: Akamai Technologies
+  tags:
+  - S&P 500
+- code: ALB.US
+  name: Albemarle Corporation
+  tags:
+  - S&P 500
+- code: ARE.US
+  name: Alexandria Real Estate Equities
+  tags:
+  - S&P 500
+- code: ALGN.US
+  name: Align Technology
+  tags:
+  - S&P 500
+- code: ALLE.US
+  name: Allegion
+  tags:
+  - S&P 500
+- code: LNT.US
+  name: Alliant Energy
+  tags:
+  - S&P 500
+- code: ALL.US
+  name: Allstate
+  tags:
+  - S&P 500
+- code: GOOGL.US
+  name: Alphabet Inc. (Class A)
+  tags:
+  - S&P 500
+- code: GOOG.US
+  name: Alphabet Inc. (Class C)
+  tags:
+  - S&P 500
+- code: MO.US
+  name: Altria
+  tags:
+  - S&P 500
+- code: AMZN.US
+  name: Amazon
+  tags:
+  - S&P 500
+- code: AMCR.US
+  name: Amcor
+  tags:
+  - S&P 500
+- code: AEE.US
+  name: Ameren
+  tags:
+  - S&P 500
+- code: AEP.US
+  name: American Electric Power
+  tags:
+  - S&P 500
+- code: AXP.US
+  name: American Express
+  tags:
+  - S&P 500
+- code: AIG.US
+  name: American International Group
+  tags:
+  - S&P 500
+- code: AMT.US
+  name: American Tower
+  tags:
+  - S&P 500
+- code: AWK.US
+  name: American Water Works
+  tags:
+  - S&P 500
+- code: AMP.US
+  name: Ameriprise Financial
+  tags:
+  - S&P 500
+- code: AME.US
+  name: Ametek
+  tags:
+  - S&P 500
+- code: AMGN.US
+  name: Amgen
+  tags:
+  - S&P 500
+- code: APH.US
+  name: Amphenol
+  tags:
+  - S&P 500
+- code: ADI.US
+  name: Analog Devices
+  tags:
+  - S&P 500
+- code: AON.US
+  name: Aon plc
+  tags:
+  - S&P 500
+- code: APA.US
+  name: APA Corporation
+  tags:
+  - S&P 500
+- code: APO.US
+  name: Apollo Global Management
+  tags:
+  - S&P 500
+- code: AAPL.US
+  name: Apple Inc.
+  tags:
+  - S&P 500
+- code: AMAT.US
+  name: Applied Materials
+  tags:
+  - S&P 500
+- code: APP.US
+  name: AppLovin
+  tags:
+  - S&P 500
+- code: APTV.US
+  name: Aptiv
+  tags:
+  - S&P 500
+- code: ACGL.US
+  name: Arch Capital Group
+  tags:
+  - S&P 500
+- code: ADM.US
+  name: Archer Daniels Midland
+  tags:
+  - S&P 500
+- code: ARES.US
+  name: Ares Management
+  tags:
+  - S&P 500
+- code: ANET.US
+  name: Arista Networks
+  tags:
+  - S&P 500
+- code: AJG.US
+  name: Arthur J. Gallagher & Co.
+  tags:
+  - S&P 500
+- code: AIZ.US
+  name: Assurant
+  tags:
+  - S&P 500
+- code: T.US
+  name: AT&T
+  tags:
+  - S&P 500
+- code: ATO.US
+  name: Atmos Energy
+  tags:
+  - S&P 500
+- code: ADSK.US
+  name: Autodesk
+  tags:
+  - S&P 500
+- code: ADP.US
+  name: Automatic Data Processing
+  tags:
+  - S&P 500
+- code: AZO.US
+  name: AutoZone
+  tags:
+  - S&P 500
+- code: AVB.US
+  name: AvalonBay Communities
+  tags:
+  - S&P 500
+- code: AVY.US
+  name: Avery Dennison
+  tags:
+  - S&P 500
+- code: AXON.US
+  name: Axon Enterprise
+  tags:
+  - S&P 500
+- code: BKR.US
+  name: Baker Hughes
+  tags:
+  - S&P 500
+- code: BALL.US
+  name: Ball Corporation
+  tags:
+  - S&P 500
+- code: BAC.US
+  name: Bank of America
+  tags:
+  - S&P 500
+- code: BAX.US
+  name: Baxter International
+  tags:
+  - S&P 500
+- code: BDX.US
+  name: Becton Dickinson
+  tags:
+  - S&P 500
+- code: BRK-B.US
+  name: Berkshire Hathaway
+  tags:
+  - S&P 500
+- code: BBY.US
+  name: Best Buy
+  tags:
+  - S&P 500
+- code: TECH.US
+  name: Bio-Techne
+  tags:
+  - S&P 500
+- code: BIIB.US
+  name: Biogen
+  tags:
+  - S&P 500
+- code: BLK.US
+  name: BlackRock
+  tags:
+  - S&P 500
+- code: BX.US
+  name: Blackstone Inc.
+  tags:
+  - S&P 500
+- code: XYZ.US
+  name: Block, Inc.
+  tags:
+  - S&P 500
+- code: BK.US
+  name: BNY Mellon
+  tags:
+  - S&P 500
+- code: BA.US
+  name: Boeing
+  tags:
+  - S&P 500
+- code: BKNG.US
+  name: Booking Holdings
+  tags:
+  - S&P 500
+- code: BSX.US
+  name: Boston Scientific
+  tags:
+  - S&P 500
+- code: BMY.US
+  name: Bristol Myers Squibb
+  tags:
+  - S&P 500
+- code: AVGO.US
+  name: Broadcom
+  tags:
+  - S&P 500
+- code: BR.US
+  name: Broadridge Financial Solutions
+  tags:
+  - S&P 500
+- code: BRO.US
+  name: Brown & Brown
+  tags:
+  - S&P 500
+- code: BF-B.US
+  name: Brown–Forman
+  tags:
+  - S&P 500
+- code: BLDR.US
+  name: Builders FirstSource
+  tags:
+  - S&P 500
+- code: BG.US
+  name: Bunge Global
+  tags:
+  - S&P 500
+- code: BXP.US
+  name: BXP, Inc.
+  tags:
+  - S&P 500
+- code: CHRW.US
+  name: C.H. Robinson
+  tags:
+  - S&P 500
+- code: CDNS.US
+  name: Cadence Design Systems
+  tags:
+  - S&P 500
+- code: CPT.US
+  name: Camden Property Trust
+  tags:
+  - S&P 500
+- code: CPB.US
+  name: Campbell's Company (The)
+  tags:
+  - S&P 500
+- code: COF.US
+  name: Capital One
+  tags:
+  - S&P 500
+- code: CAH.US
+  name: Cardinal Health
+  tags:
+  - S&P 500
+- code: CCL.US
+  name: Carnival
+  tags:
+  - S&P 500
+- code: CARR.US
+  name: Carrier Global
+  tags:
+  - S&P 500
+- code: CVNA.US
+  name: Carvana
+  tags:
+  - S&P 500
+- code: CASY.US
+  name: Casey's
+  tags:
+  - S&P 500
+- code: CAT.US
+  name: Caterpillar Inc.
+  tags:
+  - S&P 500
+- code: CBOE.US
+  name: Cboe Global Markets
+  tags:
+  - S&P 500
+- code: CBRE.US
+  name: CBRE Group
+  tags:
+  - S&P 500
+- code: CDW.US
+  name: CDW Corporation
+  tags:
+  - S&P 500
+- code: COR.US
+  name: Cencora
+  tags:
+  - S&P 500
+- code: CNC.US
+  name: Centene Corporation
+  tags:
+  - S&P 500
+- code: CNP.US
+  name: CenterPoint Energy
+  tags:
+  - S&P 500
+- code: CF.US
+  name: CF Industries
+  tags:
+  - S&P 500
+- code: CRL.US
+  name: Charles River Laboratories
+  tags:
+  - S&P 500
+- code: SCHW.US
+  name: Charles Schwab Corporation
+  tags:
+  - S&P 500
+- code: CHTR.US
+  name: Charter Communications
+  tags:
+  - S&P 500
+- code: CVX.US
+  name: Chevron Corporation
+  tags:
+  - S&P 500
+- code: CMG.US
+  name: Chipotle Mexican Grill
+  tags:
+  - S&P 500
+- code: CB.US
+  name: Chubb Limited
+  tags:
+  - S&P 500
+- code: CHD.US
+  name: Church & Dwight
+  tags:
+  - S&P 500
+- code: CIEN.US
+  name: Ciena
+  tags:
+  - S&P 500
+- code: CI.US
+  name: Cigna
+  tags:
+  - S&P 500
+- code: CINF.US
+  name: Cincinnati Financial
+  tags:
+  - S&P 500
+- code: CTAS.US
+  name: Cintas
+  tags:
+  - S&P 500
+- code: CSCO.US
+  name: Cisco
+  tags:
+  - S&P 500
+- code: C.US
+  name: Citigroup
+  tags:
+  - S&P 500
+- code: CFG.US
+  name: Citizens Financial Group
+  tags:
+  - S&P 500
+- code: CLX.US
+  name: Clorox
+  tags:
+  - S&P 500
+- code: CME.US
+  name: CME Group
+  tags:
+  - S&P 500
+- code: CMS.US
+  name: CMS Energy
+  tags:
+  - S&P 500
+- code: KO.US
+  name: Coca-Cola Company (The)
+  tags:
+  - S&P 500
+- code: CTSH.US
+  name: Cognizant
+  tags:
+  - S&P 500
+- code: COHR.US
+  name: Coherent Corp.
+  tags:
+  - S&P 500
+- code: COIN.US
+  name: Coinbase
+  tags:
+  - S&P 500
+- code: CL.US
+  name: Colgate-Palmolive
+  tags:
+  - S&P 500
+- code: CMCSA.US
+  name: Comcast
+  tags:
+  - S&P 500
+- code: FIX.US
+  name: Comfort Systems USA
+  tags:
+  - S&P 500
+- code: CAG.US
+  name: Conagra Brands
+  tags:
+  - S&P 500
+- code: COP.US
+  name: ConocoPhillips
+  tags:
+  - S&P 500
+- code: ED.US
+  name: Consolidated Edison
+  tags:
+  - S&P 500
+- code: STZ.US
+  name: Constellation Brands
+  tags:
+  - S&P 500
+- code: CEG.US
+  name: Constellation Energy
+  tags:
+  - S&P 500
+- code: COO.US
+  name: Cooper Companies (The)
+  tags:
+  - S&P 500
+- code: CPRT.US
+  name: Copart
+  tags:
+  - S&P 500
+- code: GLW.US
+  name: Corning Inc.
+  tags:
+  - S&P 500
+- code: CPAY.US
+  name: Corpay
+  tags:
+  - S&P 500
+- code: CTVA.US
+  name: Corteva
+  tags:
+  - S&P 500
+- code: CSGP.US
+  name: CoStar Group
+  tags:
+  - S&P 500
+- code: COST.US
+  name: Costco
+  tags:
+  - S&P 500
+- code: CTRA.US
+  name: Coterra
+  tags:
+  - S&P 500
+- code: CRH.US
+  name: CRH plc
+  tags:
+  - S&P 500
+- code: CRWD.US
+  name: CrowdStrike
+  tags:
+  - S&P 500
+- code: CCI.US
+  name: Crown Castle
+  tags:
+  - S&P 500
+- code: CSX.US
+  name: CSX Corporation
+  tags:
+  - S&P 500
+- code: CMI.US
+  name: Cummins
+  tags:
+  - S&P 500
+- code: CVS.US
+  name: CVS Health
+  tags:
+  - S&P 500
+- code: DHR.US
+  name: Danaher Corporation
+  tags:
+  - S&P 500
+- code: DRI.US
+  name: Darden Restaurants
+  tags:
+  - S&P 500
+- code: DDOG.US
+  name: Datadog
+  tags:
+  - S&P 500
+- code: DVA.US
+  name: DaVita
+  tags:
+  - S&P 500
+- code: DECK.US
+  name: Deckers Brands
+  tags:
+  - S&P 500
+- code: DE.US
+  name: Deere & Company
+  tags:
+  - S&P 500
+- code: DELL.US
+  name: Dell Technologies
+  tags:
+  - S&P 500
+- code: DAL.US
+  name: Delta Air Lines
+  tags:
+  - S&P 500
+- code: DVN.US
+  name: Devon Energy
+  tags:
+  - S&P 500
+- code: DXCM.US
+  name: Dexcom
+  tags:
+  - S&P 500
+- code: FANG.US
+  name: Diamondback Energy
+  tags:
+  - S&P 500
+- code: DLR.US
+  name: Digital Realty
+  tags:
+  - S&P 500
+- code: DG.US
+  name: Dollar General
+  tags:
+  - S&P 500
+- code: DLTR.US
+  name: Dollar Tree
+  tags:
+  - S&P 500
+- code: D.US
+  name: Dominion Energy
+  tags:
+  - S&P 500
+- code: DPZ.US
+  name: Domino's
+  tags:
+  - S&P 500
+- code: DASH.US
+  name: DoorDash
+  tags:
+  - S&P 500
+- code: DOV.US
+  name: Dover Corporation
+  tags:
+  - S&P 500
+- code: DOW.US
+  name: Dow Inc.
+  tags:
+  - S&P 500
+- code: DHI.US
+  name: D. R. Horton
+  tags:
+  - S&P 500
+- code: DTE.US
+  name: DTE Energy
+  tags:
+  - S&P 500
+- code: DUK.US
+  name: Duke Energy
+  tags:
+  - S&P 500
+- code: DD.US
+  name: DuPont
+  tags:
+  - S&P 500
+- code: ETN.US
+  name: Eaton Corporation
+  tags:
+  - S&P 500
+- code: EBAY.US
+  name: eBay Inc.
+  tags:
+  - S&P 500
+- code: SATS.US
+  name: EchoStar
+  tags:
+  - S&P 500
+- code: ECL.US
+  name: Ecolab
+  tags:
+  - S&P 500
+- code: EIX.US
+  name: Edison International
+  tags:
+  - S&P 500
+- code: EW.US
+  name: Edwards Lifesciences
+  tags:
+  - S&P 500
+- code: EA.US
+  name: Electronic Arts
+  tags:
+  - S&P 500
+- code: ELV.US
+  name: Elevance Health
+  tags:
+  - S&P 500
+- code: EME.US
+  name: Emcor
+  tags:
+  - S&P 500
+- code: EMR.US
+  name: Emerson Electric
+  tags:
+  - S&P 500
+- code: ETR.US
+  name: Entergy
+  tags:
+  - S&P 500
+- code: EOG.US
+  name: EOG Resources
+  tags:
+  - S&P 500
+- code: EPAM.US
+  name: EPAM Systems
+  tags:
+  - S&P 500
+- code: EQT.US
+  name: EQT Corporation
+  tags:
+  - S&P 500
+- code: EFX.US
+  name: Equifax
+  tags:
+  - S&P 500
+- code: EQIX.US
+  name: Equinix
+  tags:
+  - S&P 500
+- code: EQR.US
+  name: Equity Residential
+  tags:
+  - S&P 500
+- code: ERIE.US
+  name: Erie Indemnity
+  tags:
+  - S&P 500
+- code: ESS.US
+  name: Essex Property Trust
+  tags:
+  - S&P 500
+- code: EL.US
+  name: Estée Lauder Companies (The)
+  tags:
+  - S&P 500
+- code: EG.US
+  name: Everest Group
+  tags:
+  - S&P 500
+- code: EVRG.US
+  name: Evergy
+  tags:
+  - S&P 500
+- code: ES.US
+  name: Eversource Energy
+  tags:
+  - S&P 500
+- code: EXC.US
+  name: Exelon
+  tags:
+  - S&P 500
+- code: EXE.US
+  name: Expand Energy
+  tags:
+  - S&P 500
+- code: EXPE.US
+  name: Expedia Group
+  tags:
+  - S&P 500
+- code: EXPD.US
+  name: Expeditors International
+  tags:
+  - S&P 500
+- code: EXR.US
+  name: Extra Space Storage
+  tags:
+  - S&P 500
+- code: XOM.US
+  name: ExxonMobil
+  tags:
+  - S&P 500
+- code: FFIV.US
+  name: F5, Inc.
+  tags:
+  - S&P 500
+- code: FDS.US
+  name: FactSet
+  tags:
+  - S&P 500
+- code: FICO.US
+  name: Fair Isaac
+  tags:
+  - S&P 500
+- code: FAST.US
+  name: Fastenal
+  tags:
+  - S&P 500
+- code: FRT.US
+  name: Federal Realty Investment Trust
+  tags:
+  - S&P 500
+- code: FDX.US
+  name: FedEx
+  tags:
+  - S&P 500
+- code: FIS.US
+  name: Fidelity National Information Services
+  tags:
+  - S&P 500
+- code: FITB.US
+  name: Fifth Third Bancorp
+  tags:
+  - S&P 500
+- code: FSLR.US
+  name: First Solar
+  tags:
+  - S&P 500
+- code: FE.US
+  name: FirstEnergy
+  tags:
+  - S&P 500
+- code: FISV.US
+  name: Fiserv
+  tags:
+  - S&P 500
+- code: F.US
+  name: Ford Motor Company
+  tags:
+  - S&P 500
+- code: FTNT.US
+  name: Fortinet
+  tags:
+  - S&P 500
+- code: FTV.US
+  name: Fortive
+  tags:
+  - S&P 500
+- code: FOXA.US
+  name: Fox Corporation (Class A)
+  tags:
+  - S&P 500
+- code: FOX.US
+  name: Fox Corporation (Class B)
+  tags:
+  - S&P 500
+- code: BEN.US
+  name: Franklin Resources
+  tags:
+  - S&P 500
+- code: FCX.US
+  name: Freeport-McMoRan
+  tags:
+  - S&P 500
+- code: GRMN.US
+  name: Garmin
+  tags:
+  - S&P 500
+- code: IT.US
+  name: Gartner
+  tags:
+  - S&P 500
+- code: GE.US
+  name: GE Aerospace
+  tags:
+  - S&P 500
+- code: GEHC.US
+  name: GE HealthCare
+  tags:
+  - S&P 500
+- code: GEV.US
+  name: GE Vernova
+  tags:
+  - S&P 500
+- code: GEN.US
+  name: Gen Digital
+  tags:
+  - S&P 500
+- code: GNRC.US
+  name: Generac
+  tags:
+  - S&P 500
+- code: GD.US
+  name: General Dynamics
+  tags:
+  - S&P 500
+- code: GIS.US
+  name: General Mills
+  tags:
+  - S&P 500
+- code: GM.US
+  name: General Motors
+  tags:
+  - S&P 500
+- code: GPC.US
+  name: Genuine Parts Company
+  tags:
+  - S&P 500
+- code: GILD.US
+  name: Gilead Sciences
+  tags:
+  - S&P 500
+- code: GPN.US
+  name: Global Payments
+  tags:
+  - S&P 500
+- code: GL.US
+  name: Globe Life
+  tags:
+  - S&P 500
+- code: GDDY.US
+  name: GoDaddy
+  tags:
+  - S&P 500
+- code: GS.US
+  name: Goldman Sachs
+  tags:
+  - S&P 500
+- code: HAL.US
+  name: Halliburton
+  tags:
+  - S&P 500
+- code: HIG.US
+  name: Hartford (The)
+  tags:
+  - S&P 500
+- code: HAS.US
+  name: Hasbro
+  tags:
+  - S&P 500
+- code: HCA.US
+  name: HCA Healthcare
+  tags:
+  - S&P 500
+- code: DOC.US
+  name: Healthpeak Properties
+  tags:
+  - S&P 500
+- code: HSIC.US
+  name: Henry Schein
+  tags:
+  - S&P 500
+- code: HSY.US
+  name: Hershey Company (The)
+  tags:
+  - S&P 500
+- code: HPE.US
+  name: Hewlett Packard Enterprise
+  tags:
+  - S&P 500
+- code: HLT.US
+  name: Hilton Worldwide
+  tags:
+  - S&P 500
+- code: HD.US
+  name: Home Depot (The)
+  tags:
+  - S&P 500
+- code: HON.US
+  name: Honeywell
+  tags:
+  - S&P 500
+- code: HRL.US
+  name: Hormel Foods
+  tags:
+  - S&P 500
+- code: HST.US
+  name: Host Hotels & Resorts
+  tags:
+  - S&P 500
+- code: HWM.US
+  name: Howmet Aerospace
+  tags:
+  - S&P 500
+- code: HPQ.US
+  name: HP Inc.
+  tags:
+  - S&P 500
+- code: HUBB.US
+  name: Hubbell Incorporated
+  tags:
+  - S&P 500
+- code: HUM.US
+  name: Humana
+  tags:
+  - S&P 500
+- code: HBAN.US
+  name: Huntington Bancshares
+  tags:
+  - S&P 500
+- code: HII.US
+  name: Huntington Ingalls Industries
+  tags:
+  - S&P 500
+- code: IBM.US
+  name: IBM
+  tags:
+  - S&P 500
+- code: IEX.US
+  name: IDEX Corporation
+  tags:
+  - S&P 500
+- code: IDXX.US
+  name: Idexx Laboratories
+  tags:
+  - S&P 500
+- code: ITW.US
+  name: Illinois Tool Works
+  tags:
+  - S&P 500
+- code: INCY.US
+  name: Incyte
+  tags:
+  - S&P 500
+- code: IR.US
+  name: Ingersoll Rand
+  tags:
+  - S&P 500
+- code: PODD.US
+  name: Insulet Corporation
+  tags:
+  - S&P 500
+- code: INTC.US
+  name: Intel
+  tags:
+  - S&P 500
+- code: IBKR.US
+  name: Interactive Brokers
+  tags:
+  - S&P 500
+- code: ICE.US
+  name: Intercontinental Exchange
+  tags:
+  - S&P 500
+- code: IFF.US
+  name: International Flavors & Fragrances
+  tags:
+  - S&P 500
+- code: IP.US
+  name: International Paper
+  tags:
+  - S&P 500
+- code: INTU.US
+  name: Intuit
+  tags:
+  - S&P 500
+- code: ISRG.US
+  name: Intuitive Surgical
+  tags:
+  - S&P 500
+- code: IVZ.US
+  name: Invesco
+  tags:
+  - S&P 500
+- code: INVH.US
+  name: Invitation Homes
+  tags:
+  - S&P 500
+- code: IQV.US
+  name: IQVIA
+  tags:
+  - S&P 500
+- code: IRM.US
+  name: Iron Mountain
+  tags:
+  - S&P 500
+- code: JBHT.US
+  name: J.B. Hunt
+  tags:
+  - S&P 500
+- code: JBL.US
+  name: Jabil
+  tags:
+  - S&P 500
+- code: JKHY.US
+  name: Jack Henry & Associates
+  tags:
+  - S&P 500
+- code: J.US
+  name: Jacobs Solutions
+  tags:
+  - S&P 500
+- code: JNJ.US
+  name: Johnson & Johnson
+  tags:
+  - S&P 500
+- code: JCI.US
+  name: Johnson Controls
+  tags:
+  - S&P 500
+- code: JPM.US
+  name: JPMorgan Chase
+  tags:
+  - S&P 500
+- code: KVUE.US
+  name: Kenvue
+  tags:
+  - S&P 500
+- code: KDP.US
+  name: Keurig Dr Pepper
+  tags:
+  - S&P 500
+- code: KEY.US
+  name: KeyCorp
+  tags:
+  - S&P 500
+- code: KEYS.US
+  name: Keysight Technologies
+  tags:
+  - S&P 500
+- code: KMB.US
+  name: Kimberly-Clark
+  tags:
+  - S&P 500
+- code: KIM.US
+  name: Kimco Realty
+  tags:
+  - S&P 500
+- code: KMI.US
+  name: Kinder Morgan
+  tags:
+  - S&P 500
+- code: KKR.US
+  name: KKR & Co.
+  tags:
+  - S&P 500
+- code: KLAC.US
+  name: KLA Corporation
+  tags:
+  - S&P 500
+- code: KHC.US
+  name: Kraft Heinz
+  tags:
+  - S&P 500
+- code: KR.US
+  name: Kroger
+  tags:
+  - S&P 500
+- code: LHX.US
+  name: L3Harris
+  tags:
+  - S&P 500
+- code: LH.US
+  name: Labcorp
+  tags:
+  - S&P 500
+- code: LRCX.US
+  name: Lam Research
+  tags:
+  - S&P 500
+- code: LVS.US
+  name: Las Vegas Sands
+  tags:
+  - S&P 500
+- code: LDOS.US
+  name: Leidos
+  tags:
+  - S&P 500
+- code: LEN.US
+  name: Lennar
+  tags:
+  - S&P 500
+- code: LII.US
+  name: Lennox International
+  tags:
+  - S&P 500
+- code: LLY.US
+  name: Lilly (Eli)
+  tags:
+  - S&P 500
+- code: LIN.US
+  name: Linde plc
+  tags:
+  - S&P 500
+- code: LYV.US
+  name: Live Nation Entertainment
+  tags:
+  - S&P 500
+- code: LMT.US
+  name: Lockheed Martin
+  tags:
+  - S&P 500
+- code: L.US
+  name: Loews Corporation
+  tags:
+  - S&P 500
+- code: LOW.US
+  name: Lowe's
+  tags:
+  - S&P 500
+- code: LULU.US
+  name: Lululemon Athletica
+  tags:
+  - S&P 500
+- code: LITE.US
+  name: Lumentum
+  tags:
+  - S&P 500
+- code: LYB.US
+  name: LyondellBasell
+  tags:
+  - S&P 500
+- code: MTB.US
+  name: M&T Bank
+  tags:
+  - S&P 500
+- code: MPC.US
+  name: Marathon Petroleum
+  tags:
+  - S&P 500
+- code: MAR.US
+  name: Marriott International
+  tags:
+  - S&P 500
+- code: MRSH.US
+  name: Marsh McLennan
+  tags:
+  - S&P 500
+- code: MLM.US
+  name: Martin Marietta Materials
+  tags:
+  - S&P 500
+- code: MAS.US
+  name: Masco
+  tags:
+  - S&P 500
+- code: MA.US
+  name: Mastercard
+  tags:
+  - S&P 500
+- code: MKC.US
+  name: McCormick & Company
+  tags:
+  - S&P 500
+- code: MCD.US
+  name: McDonald's
+  tags:
+  - S&P 500
+- code: MCK.US
+  name: McKesson Corporation
+  tags:
+  - S&P 500
+- code: MDT.US
+  name: Medtronic
+  tags:
+  - S&P 500
+- code: MRK.US
+  name: Merck & Co.
+  tags:
+  - S&P 500
+- code: META.US
+  name: Meta Platforms
+  tags:
+  - S&P 500
+- code: MET.US
+  name: MetLife
+  tags:
+  - S&P 500
+- code: MTD.US
+  name: Mettler Toledo
+  tags:
+  - S&P 500
+- code: MGM.US
+  name: MGM Resorts
+  tags:
+  - S&P 500
+- code: MCHP.US
+  name: Microchip Technology
+  tags:
+  - S&P 500
+- code: MU.US
+  name: Micron Technology
+  tags:
+  - S&P 500
+- code: MSFT.US
+  name: Microsoft
+  tags:
+  - S&P 500
+- code: MAA.US
+  name: Mid-America Apartment Communities
+  tags:
+  - S&P 500
+- code: MRNA.US
+  name: Moderna
+  tags:
+  - S&P 500
+- code: TAP.US
+  name: Molson Coors Beverage Company
+  tags:
+  - S&P 500
+- code: MDLZ.US
+  name: Mondelez International
+  tags:
+  - S&P 500
+- code: MPWR.US
+  name: Monolithic Power Systems
+  tags:
+  - S&P 500
+- code: MNST.US
+  name: Monster Beverage
+  tags:
+  - S&P 500
+- code: MCO.US
+  name: Moody's Corporation
+  tags:
+  - S&P 500
+- code: MS.US
+  name: Morgan Stanley
+  tags:
+  - S&P 500
+- code: MOS.US
+  name: Mosaic Company (The)
+  tags:
+  - S&P 500
+- code: MSI.US
+  name: Motorola Solutions
+  tags:
+  - S&P 500
+- code: MSCI.US
+  name: MSCI Inc.
+  tags:
+  - S&P 500
+- code: NDAQ.US
+  name: Nasdaq, Inc.
+  tags:
+  - S&P 500
+- code: NTAP.US
+  name: NetApp
+  tags:
+  - S&P 500
+- code: NFLX.US
+  name: Netflix
+  tags:
+  - S&P 500
+- code: NEM.US
+  name: Newmont
+  tags:
+  - S&P 500
+- code: NWSA.US
+  name: News Corp (Class A)
+  tags:
+  - S&P 500
+- code: NWS.US
+  name: News Corp (Class B)
+  tags:
+  - S&P 500
+- code: NEE.US
+  name: NextEra Energy
+  tags:
+  - S&P 500
+- code: NKE.US
+  name: Nike, Inc.
+  tags:
+  - S&P 500
+- code: NI.US
+  name: NiSource
+  tags:
+  - S&P 500
+- code: NDSN.US
+  name: Nordson Corporation
+  tags:
+  - S&P 500
+- code: NSC.US
+  name: Norfolk Southern
+  tags:
+  - S&P 500
+- code: NTRS.US
+  name: Northern Trust
+  tags:
+  - S&P 500
+- code: NOC.US
+  name: Northrop Grumman
+  tags:
+  - S&P 500
+- code: NCLH.US
+  name: Norwegian Cruise Line Holdings
+  tags:
+  - S&P 500
+- code: NRG.US
+  name: NRG Energy
+  tags:
+  - S&P 500
+- code: NUE.US
+  name: Nucor
+  tags:
+  - S&P 500
+- code: NVDA.US
+  name: Nvidia
+  tags:
+  - S&P 500
+- code: NVR.US
+  name: NVR, Inc.
+  tags:
+  - S&P 500
+- code: NXPI.US
+  name: NXP Semiconductors
+  tags:
+  - S&P 500
+- code: ORLY.US
+  name: O’Reilly Automotive
+  tags:
+  - S&P 500
+- code: OXY.US
+  name: Occidental Petroleum
+  tags:
+  - S&P 500
+- code: ODFL.US
+  name: Old Dominion
+  tags:
+  - S&P 500
+- code: OMC.US
+  name: Omnicom Group
+  tags:
+  - S&P 500
+- code: ON.US
+  name: ON Semiconductor
+  tags:
+  - S&P 500
+- code: OKE.US
+  name: Oneok
+  tags:
+  - S&P 500
+- code: ORCL.US
+  name: Oracle Corporation
+  tags:
+  - S&P 500
+- code: OTIS.US
+  name: Otis Worldwide
+  tags:
+  - S&P 500
+- code: PCAR.US
+  name: Paccar
+  tags:
+  - S&P 500
+- code: PKG.US
+  name: Packaging Corporation of America
+  tags:
+  - S&P 500
+- code: PLTR.US
+  name: Palantir Technologies
+  tags:
+  - S&P 500
+- code: PANW.US
+  name: Palo Alto Networks
+  tags:
+  - S&P 500
+- code: PSKY.US
+  name: Paramount Skydance Corporation
+  tags:
+  - S&P 500
+- code: PH.US
+  name: Parker Hannifin
+  tags:
+  - S&P 500
+- code: PAYX.US
+  name: Paychex
+  tags:
+  - S&P 500
+- code: PYPL.US
+  name: PayPal
+  tags:
+  - S&P 500
+- code: PNR.US
+  name: Pentair
+  tags:
+  - S&P 500
+- code: PEP.US
+  name: PepsiCo
+  tags:
+  - S&P 500
+- code: PFE.US
+  name: Pfizer
+  tags:
+  - S&P 500
+- code: PCG.US
+  name: PG&E Corporation
+  tags:
+  - S&P 500
+- code: PM.US
+  name: Philip Morris International
+  tags:
+  - S&P 500
+- code: PSX.US
+  name: Phillips 66
+  tags:
+  - S&P 500
+- code: PNW.US
+  name: Pinnacle West Capital
+  tags:
+  - S&P 500
+- code: PNC.US
+  name: PNC Financial Services
+  tags:
+  - S&P 500
+- code: POOL.US
+  name: Pool Corporation
+  tags:
+  - S&P 500
+- code: PPG.US
+  name: PPG Industries
+  tags:
+  - S&P 500
+- code: PPL.US
+  name: PPL Corporation
+  tags:
+  - S&P 500
+- code: PFG.US
+  name: Principal Financial Group
+  tags:
+  - S&P 500
+- code: PG.US
+  name: Procter & Gamble
+  tags:
+  - S&P 500
+- code: PGR.US
+  name: Progressive Corporation
+  tags:
+  - S&P 500
+- code: PLD.US
+  name: Prologis
+  tags:
+  - S&P 500
+- code: PRU.US
+  name: Prudential Financial
+  tags:
+  - S&P 500
+- code: PEG.US
+  name: Public Service Enterprise Group
+  tags:
+  - S&P 500
+- code: PTC.US
+  name: PTC Inc.
+  tags:
+  - S&P 500
+- code: PSA.US
+  name: Public Storage
+  tags:
+  - S&P 500
+- code: PHM.US
+  name: PulteGroup
+  tags:
+  - S&P 500
+- code: PWR.US
+  name: Quanta Services
+  tags:
+  - S&P 500
+- code: QCOM.US
+  name: Qualcomm
+  tags:
+  - S&P 500
+- code: DGX.US
+  name: Quest Diagnostics
+  tags:
+  - S&P 500
+- code: Q.US
+  name: Qnity Electronics
+  tags:
+  - S&P 500
+- code: RL.US
+  name: Ralph Lauren Corporation
+  tags:
+  - S&P 500
+- code: RJF.US
+  name: Raymond James Financial
+  tags:
+  - S&P 500
+- code: RTX.US
+  name: RTX Corporation
+  tags:
+  - S&P 500
+- code: O.US
+  name: Realty Income
+  tags:
+  - S&P 500
+- code: REG.US
+  name: Regency Centers
+  tags:
+  - S&P 500
+- code: REGN.US
+  name: Regeneron Pharmaceuticals
+  tags:
+  - S&P 500
+- code: RF.US
+  name: Regions Financial Corporation
+  tags:
+  - S&P 500
+- code: RSG.US
+  name: Republic Services
+  tags:
+  - S&P 500
+- code: RMD.US
+  name: ResMed
+  tags:
+  - S&P 500
+- code: RVTY.US
+  name: Revvity
+  tags:
+  - S&P 500
+- code: HOOD.US
+  name: Robinhood Markets
+  tags:
+  - S&P 500
+- code: ROK.US
+  name: Rockwell Automation
+  tags:
+  - S&P 500
+- code: ROL.US
+  name: Rollins, Inc.
+  tags:
+  - S&P 500
+- code: ROP.US
+  name: Roper Technologies
+  tags:
+  - S&P 500
+- code: ROST.US
+  name: Ross Stores
+  tags:
+  - S&P 500
+- code: RCL.US
+  name: Royal Caribbean Group
+  tags:
+  - S&P 500
+- code: SPGI.US
+  name: S&P Global
+  tags:
+  - S&P 500
+- code: CRM.US
+  name: Salesforce
+  tags:
+  - S&P 500
+- code: SNDK.US
+  name: Sandisk
+  tags:
+  - S&P 500
+- code: SBAC.US
+  name: SBA Communications
+  tags:
+  - S&P 500
+- code: SLB.US
+  name: Schlumberger
+  tags:
+  - S&P 500
+- code: STX.US
+  name: Seagate Technology
+  tags:
+  - S&P 500
+- code: SRE.US
+  name: Sempra
+  tags:
+  - S&P 500
+- code: NOW.US
+  name: ServiceNow
+  tags:
+  - S&P 500
+- code: SHW.US
+  name: Sherwin-Williams
+  tags:
+  - S&P 500
+- code: SPG.US
+  name: Simon Property Group
+  tags:
+  - S&P 500
+- code: SWKS.US
+  name: Skyworks Solutions
+  tags:
+  - S&P 500
+- code: SJM.US
+  name: J.M. Smucker Company (The)
+  tags:
+  - S&P 500
+- code: SW.US
+  name: Smurfit Westrock
+  tags:
+  - S&P 500
+- code: SNA.US
+  name: Snap-on
+  tags:
+  - S&P 500
+- code: SOLV.US
+  name: Solventum
+  tags:
+  - S&P 500
+- code: SO.US
+  name: Southern Company
+  tags:
+  - S&P 500
+- code: LUV.US
+  name: Southwest Airlines
+  tags:
+  - S&P 500
+- code: SWK.US
+  name: Stanley Black & Decker
+  tags:
+  - S&P 500
+- code: SBUX.US
+  name: Starbucks
+  tags:
+  - S&P 500
+- code: STT.US
+  name: State Street Corporation
+  tags:
+  - S&P 500
+- code: STLD.US
+  name: Steel Dynamics
+  tags:
+  - S&P 500
+- code: STE.US
+  name: Steris
+  tags:
+  - S&P 500
+- code: SYK.US
+  name: Stryker Corporation
+  tags:
+  - S&P 500
+- code: SMCI.US
+  name: Supermicro
+  tags:
+  - S&P 500
+- code: SYF.US
+  name: Synchrony Financial
+  tags:
+  - S&P 500
+- code: SNPS.US
+  name: Synopsys
+  tags:
+  - S&P 500
+- code: SYY.US
+  name: Sysco
+  tags:
+  - S&P 500
+- code: TMUS.US
+  name: T-Mobile US
+  tags:
+  - S&P 500
+- code: TROW.US
+  name: T. Rowe Price
+  tags:
+  - S&P 500
+- code: TTWO.US
+  name: Take-Two Interactive
+  tags:
+  - S&P 500
+- code: TPR.US
+  name: Tapestry, Inc.
+  tags:
+  - S&P 500
+- code: TRGP.US
+  name: Targa Resources
+  tags:
+  - S&P 500
+- code: TGT.US
+  name: Target Corporation
+  tags:
+  - S&P 500
+- code: TEL.US
+  name: TE Connectivity
+  tags:
+  - S&P 500
+- code: TDY.US
+  name: Teledyne Technologies
+  tags:
+  - S&P 500
+- code: TER.US
+  name: Teradyne
+  tags:
+  - S&P 500
+- code: TSLA.US
+  name: Tesla, Inc.
+  tags:
+  - S&P 500
+- code: TXN.US
+  name: Texas Instruments
+  tags:
+  - S&P 500
+- code: TPL.US
+  name: Texas Pacific Land Corporation
+  tags:
+  - S&P 500
+- code: TXT.US
+  name: Textron
+  tags:
+  - S&P 500
+- code: TMO.US
+  name: Thermo Fisher Scientific
+  tags:
+  - S&P 500
+- code: TJX.US
+  name: TJX Companies
+  tags:
+  - S&P 500
+- code: TKO.US
+  name: TKO Group Holdings
+  tags:
+  - S&P 500
+- code: TTD.US
+  name: Trade Desk (The)
+  tags:
+  - S&P 500
+- code: TSCO.US
+  name: Tractor Supply
+  tags:
+  - S&P 500
+- code: TT.US
+  name: Trane Technologies
+  tags:
+  - S&P 500
+- code: TDG.US
+  name: TransDigm Group
+  tags:
+  - S&P 500
+- code: TRV.US
+  name: Travelers Companies (The)
+  tags:
+  - S&P 500
+- code: TRMB.US
+  name: Trimble Inc.
+  tags:
+  - S&P 500
+- code: TFC.US
+  name: Truist Financial
+  tags:
+  - S&P 500
+- code: TYL.US
+  name: Tyler Technologies
+  tags:
+  - S&P 500
+- code: TSN.US
+  name: Tyson Foods
+  tags:
+  - S&P 500
+- code: USB.US
+  name: U.S. Bancorp
+  tags:
+  - S&P 500
+- code: UBER.US
+  name: Uber
+  tags:
+  - S&P 500
+- code: UDR.US
+  name: UDR, Inc.
+  tags:
+  - S&P 500
+- code: ULTA.US
+  name: Ulta Beauty
+  tags:
+  - S&P 500
+- code: UNP.US
+  name: Union Pacific Corporation
+  tags:
+  - S&P 500
+- code: UAL.US
+  name: United Airlines Holdings
+  tags:
+  - S&P 500
+- code: UPS.US
+  name: United Parcel Service
+  tags:
+  - S&P 500
+- code: URI.US
+  name: United Rentals
+  tags:
+  - S&P 500
+- code: UNH.US
+  name: UnitedHealth Group
+  tags:
+  - S&P 500
+- code: UHS.US
+  name: Universal Health Services
+  tags:
+  - S&P 500
+- code: VLO.US
+  name: Valero Energy
+  tags:
+  - S&P 500
+- code: VTR.US
+  name: Ventas
+  tags:
+  - S&P 500
+- code: VLTO.US
+  name: Veralto
+  tags:
+  - S&P 500
+- code: VRSN.US
+  name: Verisign
+  tags:
+  - S&P 500
+- code: VRSK.US
+  name: Verisk Analytics
+  tags:
+  - S&P 500
+- code: VZ.US
+  name: Verizon
+  tags:
+  - S&P 500
+- code: VRTX.US
+  name: Vertex Pharmaceuticals
+  tags:
+  - S&P 500
+- code: VRT.US
+  name: Vertiv
+  tags:
+  - S&P 500
+- code: VTRS.US
+  name: Viatris
+  tags:
+  - S&P 500
+- code: VICI.US
+  name: Vici Properties
+  tags:
+  - S&P 500
+- code: V.US
+  name: Visa Inc.
+  tags:
+  - S&P 500
+- code: VST.US
+  name: Vistra Corp.
+  tags:
+  - S&P 500
+- code: VMC.US
+  name: Vulcan Materials Company
+  tags:
+  - S&P 500
+- code: WRB.US
+  name: W. R. Berkley Corporation
+  tags:
+  - S&P 500
+- code: GWW.US
+  name: W. W. Grainger
+  tags:
+  - S&P 500
+- code: WAB.US
+  name: Wabtec
+  tags:
+  - S&P 500
+- code: WMT.US
+  name: Walmart
+  tags:
+  - S&P 500
+- code: DIS.US
+  name: Walt Disney Company (The)
+  tags:
+  - S&P 500
+- code: WBD.US
+  name: Warner Bros. Discovery
+  tags:
+  - S&P 500
+- code: WM.US
+  name: Waste Management
+  tags:
+  - S&P 500
+- code: WAT.US
+  name: Waters Corporation
+  tags:
+  - S&P 500
+- code: WEC.US
+  name: WEC Energy Group
+  tags:
+  - S&P 500
+- code: WFC.US
+  name: Wells Fargo
+  tags:
+  - S&P 500
+- code: WELL.US
+  name: Welltower
+  tags:
+  - S&P 500
+- code: WST.US
+  name: West Pharmaceutical Services
+  tags:
+  - S&P 500
+- code: WDC.US
+  name: Western Digital
+  tags:
+  - S&P 500
+- code: WY.US
+  name: Weyerhaeuser
+  tags:
+  - S&P 500
+- code: WSM.US
+  name: Williams-Sonoma, Inc.
+  tags:
+  - S&P 500
+- code: WMB.US
+  name: Williams Companies
+  tags:
+  - S&P 500
+- code: WTW.US
+  name: Willis Towers Watson
+  tags:
+  - S&P 500
+- code: WDAY.US
+  name: Workday, Inc.
+  tags:
+  - S&P 500
+- code: WYNN.US
+  name: Wynn Resorts
+  tags:
+  - S&P 500
+- code: XEL.US
+  name: Xcel Energy
+  tags:
+  - S&P 500
+- code: XYL.US
+  name: Xylem Inc.
+  tags:
+  - S&P 500
+- code: YUM.US
+  name: Yum! Brands
+  tags:
+  - S&P 500
+- code: ZBRA.US
+  name: Zebra Technologies
+  tags:
+  - S&P 500
+- code: ZBH.US
+  name: Zimmer Biomet
+  tags:
+  - S&P 500
+- code: ZTS.US
+  name: Zoetis
+  tags:
+  - S&P 500

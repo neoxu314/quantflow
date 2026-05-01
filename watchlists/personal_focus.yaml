@@ -1,0 +1,120 @@
+name: Personal_Focus
+description: Personal watchlist filtered from stock-watchlist.md, excluding DJIA,
+  Nasdaq 100 and S&P 500 components.
+items:
+- code: 000977.SZ
+  name: 浪潮信息
+  tags:
+  - Personal
+- code: 002245.SZ
+  name: 蔚蓝锂芯
+  tags:
+  - Personal
+- code: 002475.SZ
+  name: 立讯精密
+  tags:
+  - Personal
+- code: 002594.SZ
+  name: 比亚迪
+  tags:
+  - Personal
+- code: 300866.SZ
+  name: 安克创新
+  tags:
+  - Personal
+- code: 300204.SZ
+  name: 舒泰神
+  tags:
+  - Personal
+- code: 603019.SH
+  name: 中科曙光
+  tags:
+  - Personal
+- code: 600219.SH
+  name: 南山铝业
+  tags:
+  - Personal
+- code: 300383.SZ
+  name: 光环新网
+  tags:
+  - Personal
+- code: 300782.SZ
+  name: 卓胜微
+  tags:
+  - Personal
+- code: 002074.SZ
+  name: 国轩高科
+  tags:
+  - Personal
+- code: 09660.HK
+  name: 地平线机器人-W
+  tags:
+  - Personal
+- code: 06869.HK
+  name: 长飞光纤
+  tags:
+  - Personal
+- code: 09988.HK
+  name: 阿里巴巴-W
+  tags:
+  - Personal
+- code: 00700.HK
+  name: 腾讯控股
+  tags:
+  - Personal
+- code: 01810.HK
+  name: 小米集团-W
+  tags:
+  - Personal
+- code: BHP.US
+  name: 必和必拓
+  tags:
+  - Personal
+- code: TSM.US
+  name: 台积电
+  tags:
+  - Personal
+- code: IONQ.US
+  name: IonQ
+  tags:
+  - Personal
+- code: QUBT.US
+  name: Quantum Computing
+  tags:
+  - Personal
+- code: CRWV.US
+  name: CoreWeave
+  tags:
+  - Personal
+- code: SOXL.US
+  name: 三倍做多半导体ETF
+  tags:
+  - Personal
+- code: SMR.US
+  name: NuScale Power
+  tags:
+  - Personal
+- code: 000660.KS
+  name: SK 海力士
+  tags:
+  - Personal
+- code: 005930.KS
+  name: 三星电子
+  tags:
+  - Personal
+- code: 5706.T
+  name: 三井金属
+  tags:
+  - Personal
+- code: 8035.T
+  name: 东京电子
+  tags:
+  - Personal
+- code: 6857.T
+  name: 爱德万测试
+  tags:
+  - Personal
+- code: 4063.T
+  name: 信越化学
+  tags:
+  - Personal

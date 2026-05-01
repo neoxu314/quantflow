@@ -1,0 +1,202 @@
+Metadata-Version: 2.4
+Name: quantflow
+Version: 0.1.0
+Summary: Stock Quantitative Analysis System
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: baostock>=0.8.9
+Requires-Dist: tushare>=1.3.0
+Requires-Dist: akshare>=1.10.0
+Requires-Dist: yfinance>=0.2.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Provides-Extra: viz
+Requires-Dist: matplotlib>=3.7.0; extra == "viz"
+Requires-Dist: mplfinance>=0.12.10; extra == "viz"
+
+# Quantflow
+
+Stock Quantitative Analysis System - A layered architecture for stock analysis with data, indicators, strategies, and monitoring.
+
+## Features
+
+- **Data Layer**: Unified multi-source data fetching (BaoStock, Tushare, YFinance, AKShare)
+- **Indicator Layer**: Technical indicators (KDJ, MACD, RSI, BOLL, Dual-Line)
+- **Strategy Layer**: Trading signal generation with composite strategies
+- **Monitoring Layer**: Watchlist management and scheduled monitoring
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+Or install with dependencies:
+
+```bash
+pip install pandas numpy baostock tushare akshare yfinance pyyaml
+```
+
+## Quick Start
+
+### Single Stock Scan
+
+```bash
+python -m quantflow.cli scan --code 600000.SH --start 2024-01-01 --end 2024-12-31
+```
+
+### Monitor Watchlist
+
+```bash
+python -m quantflow.cli monitor --watchlist watchlist.yaml --output ./output
+```
+
+## Architecture
+
+```
+src/quantflow/
+├── data/               # Data layer
+│   ├── adapters/       # BaoStock, Tushare, YFinance, AKShare
+│   ├── factory.py      # Data source factory with fallback
+│   └── config.py       # Market data source configuration
+│
+├── indicators/         # Indicator layer
+│   ├── standard/       # KDJ, MACD, RSI, BOLL, VOL_MA
+│   ├── custom/         # Dual-Line, Brick-Chart
+│   └── composer.py     # Indicator combination
+│
+├── strategies/         # Strategy layer
+│   ├── buy/            # KDJ golden cross, Dual-line bull zone
+│   ├── sell/           # KDJ dead cross, Dual-line bear zone
+│   └── composite.py    # Strategy combination (all/any mode)
+│
+├── monitoring/         # Monitoring layer
+│   ├── watchlist.py    # Stock list management
+│   ├── runner.py       # Monitor execution
+│   └── storage.py      # Result storage
+│
+├── backtest/           # Reserved for backtesting
+├── risk/               # Reserved for risk management
+│
+└── cli.py              # Command-line interface
+```
+
+## Data Source Configuration
+
+| Market | Primary | Fallback | Notes |
+|--------|---------|----------|-------|
+| A股 (CN) | BaoStock | Tushare | Free, stable |
+| 港股 (HK) | YFinance | AKShare | Global market |
+| 美股 (US) | YFinance | - | No fallback |
+| 日股 (JP) | YFinance | - | No fallback |
+| 韣股 (KR) | YFinance | - | No fallback |
+| Sector | AKShare | - | Industry/concept data |
+
+## Configuration
+
+### Tushare Token 配置
+
+Tushare 数据源需要 API Token。获取方式：
+1. 注册账号：https://tushare.pro/register
+2. 获取 Token：https://tushare.pro/user/token
+
+**配置方式（按优先级）：**
+
+| 方式 | 优先级 | 说明 |
+|------|--------|------|
+| 环境变量 | 最高 | `export TUSHARE_TOKEN="your_token"` |
+| .env 文件 | 中 | 复制 `.env.example` 为 `.env`，填入 token |
+| 配置文件 | 低 | 在 `config/quantflow.yaml` 中设置 |
+
+**推荐使用环境变量或 .env 文件**（避免 token 写入代码）：
+
+```bash
+# 方式1: 环境变量（推荐）
+export TUSHARE_TOKEN="your_token_here"
+
+# 方式2: .env 文件
+cp .env.example .env
+# 编辑 .env 文件，填入你的 token
+```
+
+### 数据源配置
+
+编辑 `config/quantflow.yaml`:
+
+```yaml
+data:
+  markets:
+    cn:
+      primary: baostock
+      fallback: tushare    # 需要 TUSHARE_TOKEN
+    hk:
+      primary: yfinance
+  defaults:
+    adjust: qfq
+    period: d
+```
+
+## Example Watchlist
+
+Create `watchlist.yaml`:
+
+```yaml
+name: my_watchlist
+description: My stock monitoring list
+items:
+  - code: 600000.SH
+    name: 浦发银行
+    tags: [银行]
+    weight: 1.0
+  - code: 600519.SH
+    name: 贵州茅台
+    tags: [白酒]
+    weight: 1.0
+```
+
+## API Usage
+
+```python
+from quantflow.data import DataSourceFactory, StockCode
+from quantflow.indicators.standard import KDJIndicator
+from quantflow.indicators.custom import DualLineIndicator
+from quantflow.indicators.composer import IndicatorComposer
+from quantflow.strategies.buy import KDJGoldenCrossBuy
+from quantflow.strategies.composite import CompositeStrategy
+
+# Fetch data
+factory = DataSourceFactory()
+code = StockCode.from_standard("600000.SH")
+df, source = factory.fetch_ohlcv(code, "2024-01-01", "2024-12-31")
+
+# Calculate indicators
+composer = IndicatorComposer([
+    KDJIndicator(n=9),
+    DualLineIndicator(ema_period=10),
+])
+df = composer.compose(df)
+
+# Generate signals
+strategy = CompositeStrategy([
+    KDJGoldenCrossBuy(),
+], mode="any")
+df = strategy.generate_signals(df)
+
+# Get buy signals
+buy_signals = df[df["buy_signal"] == True]
+```
+
+## Testing
+
+```bash
+pytest tests/
+```
+
+## License
+
+MIT
