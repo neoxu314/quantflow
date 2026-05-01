@@ -44,8 +44,8 @@ class YFinanceDataSource(DataSourceBase):
     
     MARKET_SUFFIX = {
         "HK": ".HK",
-        "JP": ".T",
-        "KR": ".KS",
+        "T": ".T",
+        "KS": ".KS",
         "US": "",
     }
     
