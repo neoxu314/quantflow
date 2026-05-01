@@ -1,0 +1,21 @@
+tasks:
+  - name: "djia"
+    watchlist: "watchlists/djia.yaml"
+    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
+    output: "/Users/neo/Desktop/stock-monitor/djia"
+
+  - name: "nasdaq"
+    watchlist: "watchlists/nasdaq_100.yaml"
+    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
+    output: "/Users/neo/Desktop/stock-monitor/nasdaq"  
+
+  - name: "sp500"
+    watchlist: "watchlists/sp_500.yaml"
+    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
+    output: "/Users/neo/Desktop/stock-monitor/sp500"  
+
+  - name: "personal_focus_us"
+    watchlist: "watchlists/personal_focus_us.yaml"
+    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
+    output: "/Users/neo/Desktop/stock-monitor/personal_focus"
+
