@@ -1,0 +1,31 @@
+name: Personal_Focus_US
+description: Personal watchlist - US stocks only
+items:
+- code: BHP.US
+  name: 必和必拓
+  tags:
+  - Personal
+- code: TSM.US
+  name: 台积电
+  tags:
+  - Personal
+- code: IONQ.US
+  name: IonQ
+  tags:
+  - Personal
+- code: QUBT.US
+  name: Quantum Computing
+  tags:
+  - Personal
+- code: CRWV.US
+  name: CoreWeave
+  tags:
+  - Personal
+- code: SOXL.US
+  name: 三倍做多半导体ETF
+  tags:
+  - Personal
+- code: SMR.US
+  name: NuScale Power
+  tags:
+  - Personal

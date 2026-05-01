@@ -1,6 +1,5 @@
-name: Personal_Focus
-description: Personal watchlist filtered from stock-watchlist.md, excluding DJIA,
-  Nasdaq 100 and S&P 500 components.
+name: Personal_Focus_Asia
+description: Personal watchlist - Asia stocks (A-share, HK, KR, JP)
 items:
 - code: 000977.SZ
   name: 浪潮信息
@@ -64,34 +63,6 @@ items:
   - Personal
 - code: 01810.HK
   name: 小米集团-W
-  tags:
-  - Personal
-- code: BHP.US
-  name: 必和必拓
-  tags:
-  - Personal
-- code: TSM.US
-  name: 台积电
-  tags:
-  - Personal
-- code: IONQ.US
-  name: IonQ
-  tags:
-  - Personal
-- code: QUBT.US
-  name: Quantum Computing
-  tags:
-  - Personal
-- code: CRWV.US
-  name: CoreWeave
-  tags:
-  - Personal
-- code: SOXL.US
-  name: 三倍做多半导体ETF
-  tags:
-  - Personal
-- code: SMR.US
-  name: NuScale Power
   tags:
   - Personal
 - code: 000660.KS
