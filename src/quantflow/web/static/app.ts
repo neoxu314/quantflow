@@ -57,8 +57,8 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function init() {
-    await Promise.all([loadStrategies(), loadWatchlists(), loadTasks(), loadConfig()]);
     setupEventListeners();
+    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTasks(), loadConfig()]);
     window.addEventListener("beforeunload", (e) => {
         if (state.watchlistDirty) {
             e.preventDefault();
