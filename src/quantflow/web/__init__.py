@@ -1,1 +1,1 @@
-"""QuantFlow Web UI - optional web interface for watchlist and task management."""
+"""Web module for runtime web config and service exposure."""
