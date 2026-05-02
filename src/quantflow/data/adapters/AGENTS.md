@@ -24,10 +24,10 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 
 ## YFINANCE SPECIAL
 
-- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 30/ticker** to avoid 429.
-- `YFinanceDataSource.__init__(chunk_size, sleep_between_chunks)` — values passed from `DataSourceFactory` via `yfinance_config`.
+- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 50/ticker** with jittered sleep to avoid 429.
+- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max)` — values passed from `DataSourceFactory` via `yfinance_config`.
 - `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)`.
-- Internal chunking: splits N tickers into batches of `chunk_size`, sleeps `sleep_between_chunks` between batches.
+- Internal chunking: splits N tickers into batches of `chunk_size`, sleeps `random(sleep_min, sleep_max)` between batches.
 - Returns `Dict[str, DataFrame]` with same column format as single-stock `fetch_ohlcv`.
 - Uses `curl_cffi` for Chrome TLS fingerprint bypass
 - Hong Kong: `hk` prefix handling, USD conversion needed for `total_mv`

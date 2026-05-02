@@ -22,10 +22,10 @@ execution/
 
 - `Executor`: Main class. Loads `ConfigLoader` at init, dispatches yFinance items to batch fetch, processes sequential items individually. `execute(job)` order:
   1. Partition items by primary data source.
-  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking to avoid 429).
+  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking: 50/batch, jitter sleep 5–12s to avoid 429).
   3. yFinance signals processed in-memory.
   4. Other items (A-share) → sequential `fetch_ohlcv()`.
-  - **Progress Logging**: Emits batch chunk progress and `Processing [x/y]: ...`.
+  - **Progress Logging**: Emits chunk progress with success/fail counts and timing, and `Processing [x/y]: ...`.
   - **Helper**: `_process_single()` for indicator + signal generation per stock.
   - **Enrichment**: Extracts `matched_*_strategies` lists and passes `name` from `WatchlistItem`.
 

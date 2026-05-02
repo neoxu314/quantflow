@@ -1,6 +1,7 @@
 """YFinance data source adapter for global markets."""
 
 import time
+import random
 import pandas as pd
 import logging
 from typing import Optional, List, Dict
@@ -50,12 +51,14 @@ class YFinanceDataSource(DataSourceBase):
     def __init__(
         self,
         chunk_size: Optional[int] = None,
-        sleep_between_chunks: Optional[int] = None,
+        sleep_min: Optional[float] = None,
+        sleep_max: Optional[float] = None,
     ):
         if YFinanceDataSource._session is None:
             YFinanceDataSource._session = _get_chrome_session()
-        self._chunk_size = chunk_size or 30
-        self._sleep_between_chunks = sleep_between_chunks or 15
+        self._chunk_size = chunk_size or 50
+        self._sleep_min = sleep_min if sleep_min is not None else 5
+        self._sleep_max = sleep_max if sleep_max is not None else 12
 
     def get_name(self) -> str:
         return "YFinance"
@@ -152,6 +155,11 @@ class YFinanceDataSource(DataSourceBase):
             chunk_results[yf_sym] = single
         return chunk_results
 
+    def _jitter_sleep(self) -> float:
+        duration = random.uniform(self._sleep_min, self._sleep_max)
+        time.sleep(duration)
+        return duration
+
     def fetch_batch_ohlcv(
         self,
         codes: List["StockCode"],
@@ -182,7 +190,7 @@ class YFinanceDataSource(DataSourceBase):
 
         logger.info(
             f"Batch fetching {total} tickers (chunk_size={chunk_size}, "
-            f"sleep={self._sleep_between_chunks}s): "
+            f"sleep=[{self._sleep_min}-{self._sleep_max}]s): "
             f"{', '.join(yf_symbols[:3])}{'...' if total > 3 else ''}"
         )
 
@@ -193,15 +201,23 @@ class YFinanceDataSource(DataSourceBase):
             batch = yf_symbols[i:i + chunk_size]
             chunk_num = (i // chunk_size) + 1
 
-            logger.info(f"  Chunk {chunk_num}/{num_chunks} ({len(batch)} tickers)")
+            t0 = time.time()
             chunk_result = self._download_chunk(batch, start_date, end_date, interval)
+            elapsed = time.time() - t0
+            success_count = len(chunk_result)
+            fail_count = len(batch) - success_count
+
+            logger.info(
+                f"  Chunk {chunk_num}/{num_chunks} "
+                f"({len(batch)} tickers, {success_count} ok, {fail_count} fail | {elapsed:.1f}s)"
+            )
 
             for yf_sym, df in chunk_result.items():
                 all_results[symbol_to_code[yf_sym]] = df
 
             if i + chunk_size < total:
-                logger.info(f"  Sleeping {self._sleep_between_chunks}s between chunks...")
-                time.sleep(self._sleep_between_chunks)
+                sleep_duration = self._jitter_sleep()
+                logger.info(f"  Sleep {sleep_duration:.1f}s...")
 
         logger.info(
             f"Batch complete: {len(all_results)}/{total} tickers with data"

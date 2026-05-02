@@ -47,7 +47,7 @@ quantflow/
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: Data fetch days derived from indicator `lookback_bars` → aggregated by strategy → max computed in orchestration, multiplied by `calendar_multiplier` + `buffer_days` from `config/quantflow.yaml`
-- **YFinance batch**: Auto-chunked (30 tickers/chunk, 15s sleep) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
+- **YFinance batch**: Auto-chunked (50 tickers/chunk, jitter sleep 5–12s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 
 ## ANTI-PATTERNS
 
@@ -79,4 +79,4 @@ ruff check src/
 - `backtest/` and `risk/` are reserved, currently empty stubs
 - Sector data: SW (申万) works fully, THS has list-only API, EM blocked by network
 - Tushare requires token: env `TUSHARE_TOKEN`, `.env` file, or `config/quantflow.yaml`
-- YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint; batch auto-chunks via `yfinance.batch` config
+- YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint; batch auto-chunks via `yfinance.batch` config (jitter sleep)

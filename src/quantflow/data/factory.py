@@ -49,7 +49,8 @@ class DataSourceFactory:
         elif source_name == "yfinance":
             adapter = adapter_cls(
                 chunk_size=self._yfinance.get("chunk_size"),
-                sleep_between_chunks=self._yfinance.get("sleep_between_chunks"),
+                sleep_min=self._yfinance.get("sleep_min"),
+                sleep_max=self._yfinance.get("sleep_max"),
             )
         else:
             adapter = adapter_cls()

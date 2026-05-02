@@ -35,5 +35,6 @@ lookback:
 
 yfinance:
   batch:
-    chunk_size: 30
-    sleep_between_chunks: 15
+    chunk_size: 50
+    sleep_min: 5
+    sleep_max: 12

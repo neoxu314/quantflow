@@ -126,10 +126,8 @@ class TestYFinanceVersionCheck:
 
 
 class TestYFinanceChunking:
-    """Tests for batch chunking behavior."""
 
     def test_chunk_size_respected(self, monkeypatch):
-        """When tickers > chunk_size, download() should be called multiple times."""
         import yfinance
 
         download_calls = []
@@ -147,8 +145,7 @@ class TestYFinanceChunking:
         from quantflow.data.adapters.yfinance import YFinanceDataSource
 
         codes = [StockCode(code=f"TICKER{i:03d}", exchange="US") for i in range(8)]
-        # chunk_size=3, 8 tickers => 3 calls: [3, 3, 2]
-        source = YFinanceDataSource(chunk_size=3, sleep_between_chunks=0)
+        source = YFinanceDataSource(chunk_size=3, sleep_min=0, sleep_max=0)
         result = source.fetch_batch_ohlcv(codes, "2025-01-01", "2025-12-31")
 
         assert len(download_calls) == 3
@@ -158,7 +155,6 @@ class TestYFinanceChunking:
         assert len(result) == 8
 
     def test_single_chunk_when_below_threshold(self, monkeypatch):
-        """When tickers <= chunk_size, download() should be called once."""
         import yfinance
 
         download_calls = []
@@ -179,16 +175,14 @@ class TestYFinanceChunking:
             StockCode(code="AAPL", exchange="US"),
             StockCode(code="MSFT", exchange="US"),
         ]
-        source = YFinanceDataSource(chunk_size=10, sleep_between_chunks=0)
+        source = YFinanceDataSource(chunk_size=10, sleep_min=0, sleep_max=0)
         result = source.fetch_batch_ohlcv(codes, "2025-01-01", "2025-12-31")
 
         assert len(download_calls) == 1
         assert len(result) == 2
 
-    def test_default_chunk_size_fallback(self, monkeypatch):
-        """Default chunk_size should be 30 when not provided."""
+    def test_default_params(self, monkeypatch):
         import yfinance
-
         monkeypatch.setattr(yfinance, "download", lambda **kw: _make_multi_index_df({
             t: SAMPLE_ROWS for t in kw["tickers"]
         }))
@@ -197,13 +191,12 @@ class TestYFinanceChunking:
         from quantflow.data.adapters.yfinance import YFinanceDataSource
 
         source = YFinanceDataSource()
-        assert source._chunk_size == 30
-        assert source._sleep_between_chunks == 15
+        assert source._chunk_size == 50
+        assert source._sleep_min == 5
+        assert source._sleep_max == 12
 
     def test_timeout_parameter_passed(self, monkeypatch):
-        """yf.download() should receive timeout=30."""
         import yfinance
-
         captured_timeout = None
 
         def mock_download(**kw):
@@ -220,7 +213,13 @@ class TestYFinanceChunking:
         from quantflow.data.adapters.yfinance import YFinanceDataSource
 
         codes = [StockCode(code="AAPL", exchange="US")]
-        source = YFinanceDataSource(chunk_size=10, sleep_between_chunks=0)
+        source = YFinanceDataSource(chunk_size=10, sleep_min=0, sleep_max=0)
         source.fetch_batch_ohlcv(codes, "2025-01-01", "2025-12-31")
 
         assert captured_timeout == 30
+
+    def test_jitter_sleep_range(self):
+        from quantflow.data.adapters.yfinance import YFinanceDataSource
+        source = YFinanceDataSource(sleep_min=3, sleep_max=8)
+        dur = source._jitter_sleep()
+        assert 2.9 <= dur <= 8.1
