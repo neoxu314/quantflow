@@ -34,6 +34,11 @@ interface StrategyInfo {
     type: string;
 }
 
+interface TaskFileInfo {
+    filename: string;
+    taskCount: number;
+}
+
 const state = {
     watchlists: [] as WatchlistSummary[],
     selectedWatchlist: null as string | null,
@@ -41,7 +46,8 @@ const state = {
     watchlistDirty: false,
     tasks: [] as TaskData[],
     strategies: [] as StrategyInfo[],
-    configFiles: [] as string[],
+    taskFiles: [] as TaskFileInfo[],
+    selectedTaskFile: "" as string,
 };
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -58,7 +64,8 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 async function init() {
     setupEventListeners();
-    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTasks(), loadConfig()]);
+    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig()]);
+    selectTaskFile("");
     window.addEventListener("beforeunload", (e) => {
         if (state.watchlistDirty) {
             e.preventDefault();
@@ -77,10 +84,49 @@ async function loadWatchlists() {
     renderWatchlistSidebar();
 }
 
-async function loadTasks() {
-    state.tasks = await api<TaskData[]>("/api/tasks");
+async function loadTasks(filename?: string) {
+    const url = filename ? `/api/tasks?filename=${encodeURIComponent(filename)}` : "/api/tasks";
+    state.tasks = await api<TaskData[]>(url);
     renderTaskTable();
-    state.configFiles = [...new Set(state.tasks.map(t => t.filename))];
+    loadTaskFiles();
+}
+
+async function loadTaskFiles() {
+    state.taskFiles = await api<TaskFileInfo[]>("/api/task-files");
+    renderTaskFileSelect();
+}
+
+function renderTaskFileSelect() {
+    const sel = document.getElementById("task-file-select") as HTMLSelectElement;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">-- Choose file --</option>';
+    for (const tf of state.taskFiles) {
+        sel.innerHTML += `<option value="${tf.filename}">${tf.filename} (${tf.taskCount} tasks)</option>`;
+    }
+    if (state.selectedTaskFile && [...sel.options].some(o => o.value === state.selectedTaskFile)) {
+        sel.value = state.selectedTaskFile;
+    } else if (prev && [...sel.options].some(o => o.value === prev)) {
+        sel.value = prev;
+    }
+}
+
+function selectTaskFile(filename: string) {
+    state.selectedTaskFile = filename;
+    const deleteBtn = document.getElementById("btn-delete-task-file")!;
+    const emptyMsg = document.getElementById("task-file-empty")!;
+    const listArea = document.getElementById("task-list-area")!;
+    const header = document.getElementById("task-file-header")!;
+    if (!filename) {
+        deleteBtn.classList.add("hidden");
+        emptyMsg.classList.remove("hidden");
+        listArea.classList.add("hidden");
+        return;
+    }
+    deleteBtn.classList.remove("hidden");
+    emptyMsg.classList.add("hidden");
+    listArea.classList.remove("hidden");
+    header.innerHTML = `<h3 class="font-medium text-gray-900">${filename}</h3>`;
+    loadTasks(filename);
 }
 
 async function loadConfig() {
@@ -274,10 +320,16 @@ function confirmBatchImport() {
 
 function renderTaskTable() {
     const tbody = document.getElementById("task-table")!;
-    const empty = document.getElementById("task-empty")!;
     tbody.innerHTML = "";
-    if (state.tasks.length === 0) { empty.classList.remove("hidden"); return; }
-    empty.classList.add("hidden");
+    const emptyMsg = document.getElementById("task-file-empty")!;
+    const listArea = document.getElementById("task-list-area")!;
+    if (state.tasks.length === 0) {
+        emptyMsg.classList.remove("hidden");
+        listArea.classList.add("hidden");
+        return;
+    }
+    emptyMsg.classList.add("hidden");
+    listArea.classList.remove("hidden");
     for (const task of state.tasks) {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-gray-50";
@@ -286,7 +338,6 @@ function renderTaskTable() {
             <td class="px-4 py-2 text-sm text-gray-600">${task.watchlist}</td>
             <td class="px-4 py-2 text-sm text-gray-600">${task.strategies.join(", ")}</td>
             <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs">${task.output}</td>
-            <td class="px-4 py-2 text-sm text-gray-500 font-mono text-xs">${task.filename}</td>
             <td class="px-4 py-2 text-sm">
                 <button data-id="${task.id}" class="text-blue-600 hover:text-blue-800 mr-2 edit-task-btn">Edit</button>
                 <button data-id="${task.id}" class="text-red-600 hover:text-red-800 delete-task-btn">Delete</button>
@@ -303,7 +354,8 @@ function renderTaskTable() {
             if (confirm(`Delete "${name}"?`)) {
                 await api(`/api/tasks/${id}`, { method: "DELETE" });
                 toast(`Task "${name}" deleted`);
-                loadTasks();
+                loadTasks(state.selectedTaskFile);
+                loadTaskFiles();
             }
         });
     });
@@ -367,12 +419,13 @@ async function openTaskModal(taskId?: string) {
                 await api(`/api/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(payload) });
                 toast("Task updated");
             } else {
-                const file = (document.getElementById("task-config-file") as HTMLSelectElement).value;
+                const file = state.selectedTaskFile;
                 await api(`/api/tasks?filename=${encodeURIComponent(file)}`, { method: "POST", body: JSON.stringify(payload) });
                 toast("Task created");
             }
             closeModal("modal-task");
-            loadTasks();
+            loadTasks(state.selectedTaskFile);
+            loadTaskFiles();
         } catch (e: any) {
             alert(`Failed: ${e.message}`);
         }
@@ -424,6 +477,28 @@ function setupEventListeners() {
     document.getElementById("btn-confirm-batch")!.addEventListener("click", confirmBatchImport);
     document.getElementById("btn-cancel-task")!.addEventListener("click", () => closeModal("modal-task"));
     document.getElementById("btn-new-task")!.addEventListener("click", () => openTaskModal());
+    document.getElementById("task-file-select")!.addEventListener("change", (e) => {
+        selectTaskFile((e.target as HTMLSelectElement).value);
+    });
+    document.getElementById("btn-new-task-file")!.addEventListener("click", async () => {
+        const name = prompt("New task file name (without extension):");
+        if (!name) return;
+        const filename = name.startsWith("tasks") ? name + ".yaml" : "tasks_" + name.replace(/\s+/g, "_") + ".yaml";
+        await api("/api/task-files", { method: "POST", body: JSON.stringify({ filename }) });
+        toast(`Created ${filename}`);
+        loadTaskFiles();
+    });
+    document.getElementById("btn-delete-task-file")!.addEventListener("click", async () => {
+        const f = state.selectedTaskFile;
+        if (!f) return;
+        if (confirm(`Delete all tasks in "${f}" and the file itself?`)) {
+            await api(`/api/task-files/${encodeURIComponent(f)}`, { method: "DELETE" });
+            toast(`Deleted ${f}`);
+            state.selectedTaskFile = "";
+            loadTaskFiles();
+            selectTaskFile("");
+        }
+    });
     document.getElementById("search-input")!.addEventListener("input", () => {
         if (searchTimeout) clearTimeout(searchTimeout);
         searchTimeout = setTimeout(handleSearch, 300);

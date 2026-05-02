@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Tasks"])
@@ -21,13 +21,18 @@ class TaskModel(BaseModel):
 
 
 class TaskResponse(BaseModel):
-    id: str  # format: filename:task_name
+    id: str
     filename: str
     name: str
     watchlist: str
     strategies: List[str]
     output: str
     days_back: Optional[int]
+
+
+class TaskFileInfo(BaseModel):
+    filename: str
+    taskCount: int
 
 
 def _find_task_files() -> List[Path]:
@@ -75,9 +80,65 @@ def _write_task_file(filename: str, data: dict):
 
 
 @router.get("/tasks")
-def list_tasks():
-    """List all tasks across all config files."""
-    return load_all_tasks()
+def list_tasks(filename: Optional[str] = Query(None)):
+    """List all tasks or filter by config file."""
+    all_tasks = load_all_tasks()
+    if filename:
+        return [t for t in all_tasks if t.filename == filename]
+    return all_tasks
+
+
+@router.get("/task-files")
+def list_task_files():
+    """List all task config files with their task counts."""
+    files = []
+    for yfile in _find_task_files():
+        with open(yfile, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not data or "tasks" not in data:
+            count = 0
+        else:
+            count = len(data["tasks"])
+        files.append(TaskFileInfo(filename=yfile.name, taskCount=count))
+    return files
+
+
+class TaskFileModel(BaseModel):
+    filename: str
+
+
+@router.post("/task-files", status_code=201)
+def create_task_file(model: TaskFileModel):
+    """Create a new task config file."""
+    filename = model.filename
+    if not filename.endswith(".yaml"):
+        filename += ".yaml"
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not filename.startswith("tasks"):
+        filename = "tasks_" + filename
+
+    filepath = CONFIG_DIR / filename
+    if filepath.exists():
+        raise HTTPException(status_code=409, detail=f"File already exists: {filename}")
+
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    _write_task_file(filename, {"tasks": []})
+    return {"filename": filename}
+
+
+@router.delete("/task-files/{filename}")
+def delete_task_file(filename: str):
+    """Delete a task config file."""
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    filepath = CONFIG_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+    filepath.unlink()
+    return {"filename": filename, "deleted": True}
 
 
 @router.post("/tasks", status_code=201)
