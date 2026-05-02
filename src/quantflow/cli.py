@@ -93,6 +93,16 @@ def tasks():
         logger.error(f"Orchestration failed: {e}")
 
 
+def web():
+    """Launch QuantFlow Web UI."""
+    # Late import to avoid circular deps
+    from quantflow.web.server import start_server
+    from quantflow.web.config import WebConfig
+
+    config = WebConfig.load()
+    print(f"Starting QuantFlow Web UI on {config.host}:{config.port}...")
+    start_server(config)
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
@@ -101,7 +111,8 @@ if __name__ == "__main__":
         if command == "scan": scan()
         elif command == "monitor": monitor()
         elif command == "tasks": tasks()
+        elif command == "web": web()
         else: print(f"Unknown command: {command}")
     else:
         print("Usage: python -m quantflow.cli <command>")
-        print("Commands: scan, monitor, tasks")
+        print("Commands: scan, monitor, tasks, web")
