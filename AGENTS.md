@@ -20,6 +20,7 @@ quantflow/
 │   ├── config/          # YAML loader + defaults
 │   ├── backtest/        # Reserved - empty
 │   ├── risk/            # Reserved - empty
+│   ├── web/             # Web UI server (FastAPI + frontend)
 │   └── cli.py           # Entry: `python -m quantflow.cli`
 ├── config/tasks.yaml    # Orchestration task config
 ...
@@ -72,7 +73,16 @@ pytest tests/ --cov=quantflow        # coverage
 
 # Lint
 ruff check src/
+
+# Start Web UI
+python -m quantflow.cli web
 ```
+
+## WEB UI
+- **Path**: `src/quantflow/web/`
+- **Endpoints**: `/api/watchlists/...`, `/api/tasks/...`, `/api/task-files/...`
+- **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
+- **Config**: `config/quantflow.yaml` → `web: { port, host }`
 
 ## NOTES
 

@@ -13,6 +13,7 @@ src/quantflow/
 ├── strategies/         # Signal generation (Buy/Sell logic)
 ├── execution/          # Execution layer: runs jobs and saves results
 ├── orchestration/      # Orchestration layer: manages tasks via YAML
+├── web/                # Web UI server (FastAPI + frontend)
 └── reports/            # Report layer: generates human-readable Markdown reports
 ```
 
@@ -231,3 +232,33 @@ reports/
     ├── Combined_Results.json
     └── Daily_Report.md
 ```
+
+## 5. Web UI
+
+QuantFlow provides an optional web UI for managing watchlists and tasks visually.
+
+```bash
+# Install dependencies (includes fastapi, uvicorn)
+pip install -e .
+
+# Start the Web UI
+python -m quantflow.cli web
+```
+
+- **Default URL**: http://127.0.0.1:8080 (auto-opens in browser)
+- **Configuration**: Set port/host in `config/quantflow.yaml` under `web:` section
+
+### UI Features
+
+1. **Watchlists Management**:
+   - CRUD on `watchlists/*.yaml` files
+   - Search stocks across all watchlists
+   - Batch import
+
+2. **Tasks Management** (Two-Level Navigation):
+   - **Level 1**: Manage task config files (`config/tasks_*.yaml`).
+   - **Level 2**: Manage sub-tasks within a selected config file.
+   - Create, edit, and delete tasks via a simplified form.
+
+3. **Settings**:
+   - View system configuration (read-only).
