@@ -100,6 +100,23 @@ actual_days = ceil(max_indicators_bars × calendar_multiplier) + buffer_days
 
 These values are configured in **`config/quantflow.yaml`** (defaults: `calendar_multiplier: 2`, `buffer_days: 30`). You can override per-task by setting `days_back` in your `tasks.yaml`.
 
+### Rate Limit Protection (YFinance)
+Yahoo Finance enforces strict rate limits (60 req/min, 360/hr). The system automatically protects against 429 errors by chunking batch requests:
+
+```yaml
+# config/quantflow.yaml
+yfinance:
+  batch:
+    chunk_size: 30           # tickers per yf.download() call
+    sleep_between_chunks: 15 # seconds between batches
+```
+
+For a watchlist of 700 mixed stocks, the system partitions by data source:
+- **yFinance stocks** (HK/US/JP/KR): fetched in batches of 30 with 15s sleep between batches.
+- **BaoStock stocks** (A-share): fetched sequentially (unchanged).
+
+This means a 700-stock list with 200 yFinance stocks takes ~8-10 minutes instead of triggering a rate-limit ban.
+
 ## 2. Execution (Commands)
 
 You can run scans manually or via automation. Run these from the project root directory (`quantflow/`).

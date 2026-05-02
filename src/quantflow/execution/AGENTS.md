@@ -20,9 +20,14 @@ execution/
 
 ## KEY CLASSES
 
-- `Executor`: Main class. Method `execute(job)` processes all items in the job. Uses `job.days_back` (computed by orchestrator) for data fetch range.
-  - **Progress Logging**: Emits `Processing [x/y]: ...` for visibility.
-  - **Enrichment**: Extracts `matched_*_strategies` lists for report grouping and passes `name` from `WatchlistItem`.
+- `Executor`: Main class. Loads `ConfigLoader` at init, dispatches yFinance items to batch fetch, processes sequential items individually. `execute(job)` order:
+  1. Partition items by primary data source.
+  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking to avoid 429).
+  3. yFinance signals processed in-memory.
+  4. Other items (A-share) → sequential `fetch_ohlcv()`.
+  - **Progress Logging**: Emits batch chunk progress and `Processing [x/y]: ...`.
+  - **Helper**: `_process_single()` for indicator + signal generation per stock.
+  - **Enrichment**: Extracts `matched_*_strategies` lists and passes `name` from `WatchlistItem`.
 
 - `ExecutionJob`: Dataclass containing list of stocks, strategies, config, and `days_back`.
 

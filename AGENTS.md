@@ -30,12 +30,12 @@ quantflow/
 | Task | Location | Notes |
 |------|----------|-------|
 | Run scan | `cli.py` | `scan`, `monitor`, or `tasks` subcommands |
-| Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()` |
+| Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()` |
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
 | Task orchestration | `orchestration/app.py` | Parses `tasks.yaml` |
-| Execution engine | `execution/executor.py` | Processes jobs and saves results |
+| Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
 | Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` |
 ...
 
@@ -47,6 +47,7 @@ quantflow/
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: Data fetch days derived from indicator `lookback_bars` → aggregated by strategy → max computed in orchestration, multiplied by `calendar_multiplier` + `buffer_days` from `config/quantflow.yaml`
+- **YFinance batch**: Auto-chunked (30 tickers/chunk, 15s sleep) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 
 ## ANTI-PATTERNS
 
@@ -78,4 +79,4 @@ ruff check src/
 - `backtest/` and `risk/` are reserved, currently empty stubs
 - Sector data: SW (申万) works fully, THS has list-only API, EM blocked by network
 - Tushare requires token: env `TUSHARE_TOKEN`, `.env` file, or `config/quantflow.yaml`
-- YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint
+- YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint; batch auto-chunks via `yfinance.batch` config

@@ -27,11 +27,11 @@ data/
 
 | Task | Location | Key Classes/Methods |
 |------|----------|---------------------|
-| Fetch OHLCV | `factory.py` | `DataSourceFactory.fetch_ohlcv()` |
+| Fetch OHLCV | `factory.py` | `DataSourceFactory.fetch_ohlcv()` single stock, `fetch_batch_ohlcv()` yFinance batch |
 | Fetch fundamental | `factory.py` | `DataSourceFactory.fetch_fundamental()` |
 | Generate Watchlists | `fetch_indices.py` | `fetch_and_save()` - Downloads index components (S&P500, Nasdaq100) |
 | BaoStock adapter | `adapters/baostock.py` | `BaoStockDataSource` - `adjust_map = {"qfq": "2", "hfq": "1", "none": "3"}` |
-| YFinance adapter | `adapters/yfinance.py` | `YFinanceDataSource` - handles `hk` prefix, USD conversion |
+| YFinance adapter | `adapters/yfinance.py` | `YFinanceDataSource` - handles `hk` prefix, **batch fetch with chunking** (chunk_size=30, sleep=15s) |
 | Tushare adapter | `adapters/tushare.py` | `TushareDataSource` - token required, `daily()` API |
 | AKShare adapter | `adapters/akshare.py` | `AKShareDataSource` - `get_industry_list()`, `get_industry_constituents()` |
 | Sector classification | `adapters/akshare.py` | `SectorClassification` enum: em, ths, sw_l1, sw_l2, sw_l3 |
@@ -62,6 +62,7 @@ data/
 ## NOTES
 
 - Sector constituents: SW works fully, THS list-only, EM blocked by network
-- YFinance: 60 req/min rate limit, uses `curl_cffi` for TLS fingerprint bypass
+- YFinance: 60 req/min rate limit, **batch fetch uses chunking** (30 tickers/batch, 15s sleep) configured in `quantflow.yaml`
 - Tushare: Token required - `TUSHARE_TOKEN` env var or config file
+- `DataSourceFactory` accepts `yfinance_config` dict to pass chunk size/sleep to adapter
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.

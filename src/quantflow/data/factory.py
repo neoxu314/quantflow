@@ -2,7 +2,7 @@
 
 import logging
 import pandas as pd
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from quantflow.data.base import DataSourceBase, SectorDataSource, StockCode, FundamentalData
 from quantflow.data.config import MarketDataSourceConfig, DEFAULT_CONFIG
@@ -28,10 +28,12 @@ class DataSourceFactory:
     def __init__(
         self,
         config: Optional[MarketDataSourceConfig] = None,
-        tushare_token: Optional[str] = None
+        tushare_token: Optional[str] = None,
+        yfinance_config: Optional[dict] = None,
     ):
         self.config = config or DEFAULT_CONFIG
         self.tushare_token = tushare_token
+        self._yfinance = yfinance_config or {}
         self._adapters: Dict[str, DataSourceBase] = {}
     
     def _get_adapter(self, source_name: str) -> DataSourceBase:
@@ -44,6 +46,11 @@ class DataSourceFactory:
         
         if source_name == "tushare":
             adapter = adapter_cls(token=self.tushare_token)
+        elif source_name == "yfinance":
+            adapter = adapter_cls(
+                chunk_size=self._yfinance.get("chunk_size"),
+                sleep_between_chunks=self._yfinance.get("sleep_between_chunks"),
+            )
         else:
             adapter = adapter_cls()
         
@@ -93,6 +100,35 @@ class DataSourceFactory:
         logger.error(f"All data sources failed for {code.standard}")
         return pd.DataFrame(), None
     
+    def fetch_batch_ohlcv(
+        self,
+        codes: List[StockCode],
+        start_date: str,
+        end_date: str,
+        period: str = "d",
+        adjust: str = "qfq",
+    ) -> Dict[str, tuple[pd.DataFrame, Optional[str]]]:
+        if not codes:
+            return {}
+
+        yf_codes: List[StockCode] = []
+        yf_adapter = self._get_adapter("yfinance")
+
+        for code_obj in codes:
+            market = self._detect_market(code_obj)
+            primary = self.config.get_primary(market)
+            if primary == "yfinance" and yf_adapter.supports_market(market):
+                yf_codes.append(code_obj)
+
+        if not yf_codes:
+            return {}
+
+        batch_result = yf_adapter.fetch_batch_ohlcv(
+            yf_codes, start_date, end_date, period, adjust
+        )
+
+        return {code_str: (df, "yfinance") for code_str, df in batch_result.items()}
+
     def fetch_fundamental(self, code: StockCode, market: Optional[str] = None) -> Optional[FundamentalData]:
         if market is None:
             market = self._detect_market(code)

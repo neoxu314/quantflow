@@ -62,6 +62,10 @@ class ConfigLoader:
         config = self.load()
         return config.get("tushare", {}).get("token")
     
+    def get_yfinance_config(self) -> dict:
+        config = self.load()
+        return config.get("yfinance", {}).get("batch", {})
+    
     def _get_defaults(self) -> dict:
         return {
             "data": {

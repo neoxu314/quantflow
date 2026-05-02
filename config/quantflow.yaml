@@ -32,3 +32,8 @@ logging:
 lookback:
   calendar_multiplier: 2
   buffer_days: 30
+
+yfinance:
+  batch:
+    chunk_size: 30
+    sleep_between_chunks: 15

@@ -12,7 +12,7 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 |---------|------|---------|------|-------------|
 | BaoStock | `baostock.py` | A-share CN | None | `login()`, `query()`, `logout()` |
 | Tushare | `tushare.py` | A-share CN | Token required | `pro_api()`, `daily()` |
-| YFinance | `yfinance.py` | Global (HK/US/JP/KR) | None | `Ticker()`, `history()` |
+| YFinance | `yfinance.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(chunked)**, `check_version()` |
 | AKShare | `akshare.py` | Sectors (EM/THS/SW) | None | `get_industry_list()`, `get_industry_constituents()` |
 
 ## CONVENTIONS
@@ -24,7 +24,11 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 
 ## YFINANCE SPECIAL
 
-- Rate limits: 60/min, 360/hr, 8000/day
+- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 30/ticker** to avoid 429.
+- `YFinanceDataSource.__init__(chunk_size, sleep_between_chunks)` — values passed from `DataSourceFactory` via `yfinance_config`.
+- `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)`.
+- Internal chunking: splits N tickers into batches of `chunk_size`, sleeps `sleep_between_chunks` between batches.
+- Returns `Dict[str, DataFrame]` with same column format as single-stock `fetch_ohlcv`.
 - Uses `curl_cffi` for Chrome TLS fingerprint bypass
 - Hong Kong: `hk` prefix handling, USD conversion needed for `total_mv`
 - Fundamental data: `pe_ttm`, `pb`, `total_mv` (ps_ttm not available)
