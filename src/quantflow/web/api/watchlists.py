@@ -7,7 +7,7 @@ from typing import List, Optional
 
 router = APIRouter(prefix="/api", tags=["Watchlists"])
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 WATCHLISTS_DIR = PROJECT_ROOT / "watchlists"
 
 

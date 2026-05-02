@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["Config"])
 # Compute project root robustly (repo root). This file lives at:
 # quantflow/src/quantflow/web/api/config.py
 # Parents sequence from this file upwards leads to the repo root.
-PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[4]
 CONFIG_PATH: Path = PROJECT_ROOT / "config" / "quantflow.yaml"
 
 

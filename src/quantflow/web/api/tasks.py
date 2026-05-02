@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Tasks"])
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 CONFIG_DIR = PROJECT_ROOT / "config"
 
 
