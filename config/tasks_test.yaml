@@ -1,6 +1,6 @@
 tasks:
-  - name: "nasdaq"
-    watchlist: "watchlists/nasdaq_100.yaml"
+  - name: "sp500"
+    watchlist: "watchlists/sp_500.yaml"
     strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/Users/neo/Desktop/stock-monitor/nasdaq"  
+    output: "/Users/neo/Desktop/stock-monitor/sp500"  
 
