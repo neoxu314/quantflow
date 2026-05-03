@@ -31,7 +31,9 @@ tests/web/
 ├── test_static_serving.py   # Static file serving + 404 + security tests
 └── e2e/
     ├── conftest.py          # Playwright browser fixture (Chrome for Testing)
-    └── test_web_ui.py       # 11 Playwright E2E browser UI tests
+    └── test_web_ui.py       # 15 Playwright E2E browser UI tests
+        # (watchlist/task create → YAML disk verification,
+        #  Settings round-trip + restart persistence)
 ```
 
 ## Fixtures
@@ -51,11 +53,19 @@ tests/web/
 | `web_server` | session | `e2e/test_web_ui.py` |
 | `page` | function | pytest-playwright builtin |
 
-### Cleanup
+## Production Safety
 
-Each e2e test has `cleanup_test_data` autouse fixture that deletes:
-- `watchlists/_test_e2e_wl.yaml`
-- `config/tasks_e2e_test.yaml`
+### API + Integration tests
+**Zero risk.** All file operations target `tmp_path` via monkey-patched module constants (`CONFIG_PATH`, `CONFIG_DIR`, `WATCHLISTS_DIR`). Temp dirs are destroyed by pytest after each test.
+
+### E2E tests
+Three-layer protection via `cleanup_test_data` autouse fixture in `e2e/test_web_ui.py`:
+
+1. **Before each test**: `shutil.copy2(config/quantflow.yaml, config/quantflow.yaml.bak)`
+2. **After each test**: `shutil.move(config/quantflow.yaml.bak, config/quantflow.yaml)` — atomic restore to exact pre-test state
+3. **Always cleanup**: Deletes `watchlists/_test_e2e_wl.yaml` and `config/tasks_e2e_test.yaml`
+
+This guarantees production config is byte-identical to pre-test state even if the test is interrupted (SIGKILL, power loss, etc.).
 
 ## Add New Test
 

@@ -180,6 +180,50 @@ def test_delete_watchlist_via_api(page: Page, base_url):
     )
 
 
+def test_new_watchlist_yaml_created(page: Page, base_url):
+    """Create watchlist via UI, then verify the underlying YAML file on disk."""
+    import yaml
+
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+
+    def handle_dialog(dialog):
+        dialog.accept(TEST_WATCHLIST_NAME)
+
+    page.once("dialog", handle_dialog)
+    page.get_by_role("button", name="+ New").click()
+
+    page.get_by_role("button", name=TEST_WATCHLIST_NAME).wait_for(
+        state="visible", timeout=5000
+    )
+
+    wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+    assert wl_path.exists()
+    data = yaml.safe_load(wl_path.read_text())
+    assert data["name"] == TEST_WATCHLIST_NAME
+    assert data.get("items") == [] or data.get("items") is None
+
+
+def test_new_task_file_yaml_created(page: Page, base_url):
+    """Create task file via UI, then verify the underlying YAML file on disk."""
+    import yaml, httpx
+
+    httpx.post(
+        f"{base_url}/api/task-files",
+        json={"filename": TEST_TASK_FILE},
+    )
+
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Tasks").click()
+    page.get_by_text(TEST_TASK_FILE).wait_for(state="visible", timeout=5000)
+
+    tf_path = PROJECT_ROOT / "config" / TEST_TASK_FILE
+    assert tf_path.exists()
+    data = yaml.safe_load(tf_path.read_text())
+    assert data == {"tasks": []}
+
+
 def test_tasks_page_loads(page: Page, base_url):
     page.goto(base_url)
     page.wait_for_load_state("networkidle")
