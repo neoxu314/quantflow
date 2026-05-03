@@ -87,6 +87,10 @@ pytest tests/
 pytest tests/ -m "not integration"  # skip network tests
 pytest tests/ --cov=quantflow        # coverage
 
+# Frontend unit tests (Vitest)
+cd tests/web/frontend && npm install  # install deps
+cd tests/web/frontend && npm test     # run tests
+
 # Lint
 ruff check src/
 
@@ -104,6 +108,7 @@ python -m quantflow.cli web
   - `/api/strategies` (read-only)
   - `/api/library/*` (library catalog: strategies + indicators + param updates)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
+- **Frontend tests**: `tests/web/frontend/` (Vitest unit tests for pure functions in `utils.ts`)
 - **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`
 
 ## NOTES

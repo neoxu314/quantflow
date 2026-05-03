@@ -3,12 +3,18 @@
 ## Run
 
 ```bash
+# Python tests
 pytest tests/web/ -v                          # All tests (API + Integration + E2E)
 pytest tests/web/ -v --ignore=tests/web/e2e/  # API + Integration only (fast)
 pytest tests/web/e2e/ -v                      # E2E browser tests only (slow)
 pytest tests/web/e2e/test_data_boundary.py -v # Data boundary tests only
 pytest tests/web/e2e/test_yaml_sync.py -v     # YAML sync tests only
 pytest tests/web/test_config_api.py -v        # Single file
+
+# Frontend TypeScript unit tests (Vitest)
+cd tests/web/frontend && npm install   # Install dependencies
+cd tests/web/frontend && npm test      # Run all frontend tests
+cd tests/web/frontend && npm run test:watch  # Watch mode
 ```
 
 ## Prerequisites
@@ -17,6 +23,12 @@ E2E tests require:
 ```bash
 pip install pytest-playwright
 playwright install chromium
+```
+
+Frontend unit tests require:
+```bash
+cd src/quantflow/web/static
+npm install
 ```
 
 Unit + Integration tests have no extra dependencies.
@@ -32,15 +44,25 @@ tests/web/
 ├── test_integration.py      # API→filesystem→API round-trip integration tests
 ├── test_static_serving.py   # Static file serving + 404 + security tests
 ├── test_library_api.py      # Library API unit tests (strategies + indicators + params)
+├── frontend/                # Frontend TypeScript unit tests (Vitest)
+│   ├── utils.test.ts        # 49 unit tests for pure functions
+│   ├── vitest.config.ts     # Vitest configuration with @utils alias
+│   ├── tsconfig.json        # TypeScript configuration
+│   └── package.json         # npm dependencies (vitest, typescript)
 └── e2e/
     ├── conftest.py          # Shared E2E fixtures: web_server, base_url, protect_production_configs
     ├── test_web_ui.py       # 22 basic UI tests (page load, create, navigation)
     ├── test_data_boundary.py # 8 data boundary tests (cancel without save, switch tab, refresh)
     ├── test_yaml_sync.py    # 11 YAML sync tests (edit→YAML consistency, format preservation)
     └── test_error_handling.py # 7 error handling tests (500 error, network fail, validation)
+
+src/quantflow/web/static/
+├── app.ts                   # Main frontend app (imports from utils.ts)
+├── utils.ts                 # Pure utility functions module
+└── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 48 E2E tests + 11 API test files**
+**Total: 48 E2E tests + 11 API test files + 49 frontend unit tests**
 
 ## Test Categories
 
@@ -50,6 +72,17 @@ tests/web/
 | Data Boundary | `test_data_boundary.py` | 8 | Cancel without save, switch tab mid-edit, sequential saves |
 | YAML Sync | `test_yaml_sync.py` | 11 | Edit→YAML round-trip, unicode, field order preservation |
 | Error Handling | `test_error_handling.py` | 7 | Server 500, network disconnect, invalid input |
+| Frontend Utils | `utils.test.ts` | 49 | Pure function unit tests (MARKET_SUFFIX, getNestedValue, setNestedValue, formatStockCode) |
+
+### Frontend Unit Tests (utils.test.ts)
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| `MARKET_SUFFIX` | 8 | All 6 markets + unknown market handling |
+| `SETTINGS_FIELD_MAP` | 8 | All 16 field path mappings |
+| `getNestedValue` | 12 | Single/multi-level paths, undefined cases, type handling |
+| `setNestedValue` | 11 | Path creation, value overwrite, field preservation |
+| `formatStockCode` | 10 | All markets, already-formatted codes, edge cases |
 
 ## Fixtures
 
@@ -106,3 +139,4 @@ This guarantees production configs are byte-identical to pre-test state even if 
 5. **YAML sync issue?** → Add to `e2e/test_yaml_sync.py`
 6. **Error handling?** → Add to `e2e/test_error_handling.py`
 7. **New static file?** → Add test to `test_static_serving.py`
+8. **New frontend utility function?** → Add to `src/quantflow/web/static/utils.ts` + `tests/web/frontend/utils.test.ts`

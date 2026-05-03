@@ -1,3 +1,11 @@
+import { 
+    MARKET_SUFFIX, 
+    SETTINGS_FIELD_MAP, 
+    getNestedValue, 
+    setNestedValue,
+    formatStockCode 
+} from "./utils.js";
+
 interface WatchlistItem {
     code: string;
     name?: string;
@@ -34,7 +42,6 @@ interface StrategyInfo {
     type: string;
 }
 
-// Library data structures (for /api/library/* endpoints)
 interface LibraryStrategyInfo {
     id: string;
     name: string;
@@ -57,15 +64,6 @@ interface TaskFileInfo {
     filename: string;
     taskCount: number;
 }
-
-const MARKET_SUFFIX: Record<string, string> = {
-    "US": ".US",
-    "HK": ".HK",
-    "SH": ".SH",
-    "SZ": ".SZ",
-    "JP": ".T",
-    "KR": ".KS",
-};
 
 const state = {
     watchlists: [] as WatchlistSummary[],
@@ -459,7 +457,7 @@ function updateAddStockPreview() {
     const previewCode = document.getElementById("add-stock-preview-code")!;
 
     if (market && code) {
-        previewCode.textContent = code.includes(".") ? code : `${code}${MARKET_SUFFIX[market] || ""}`;
+        previewCode.textContent = formatStockCode(code, market);
         preview.classList.remove("hidden");
     } else {
         preview.classList.add("hidden");
@@ -485,7 +483,7 @@ async function confirmAddStock() {
     if (!market && !rawCode.includes(".")) { alert("Please select a market"); return; }
     if (!rawCode) { alert("Code is required"); return; }
 
-    const code = rawCode.includes(".") || !market ? rawCode : `${rawCode}${MARKET_SUFFIX[market] || ""}`;
+    const code = formatStockCode(rawCode, market);
     const name = (document.getElementById("add-stock-name") as HTMLInputElement).value.trim();
     const tagsStr = (document.getElementById("add-stock-tags") as HTMLInputElement).value.trim();
 
@@ -636,41 +634,7 @@ async function openTaskModal(taskId?: string) {
     openModal("modal-task");
 }
 
-const SETTINGS_FIELD_MAP: Record<string, string> = {
-    "cfg-cn-primary": "data.markets.cn.primary",
-    "cfg-hk-primary": "data.markets.hk.primary",
-    "cfg-us-primary": "data.markets.us.primary",
-    "cfg-jp-primary": "data.markets.jp.primary",
-    "cfg-kr-primary": "data.markets.kr.primary",
-    "cfg-sector-primary": "data.markets.sector.primary",
-    "cfg-adjust": "data.defaults.adjust",
-    "cfg-lookback-multiplier": "lookback.calendar_multiplier",
-    "cfg-lookback-buffer": "lookback.buffer_days",
-    "cfg-yf-chunk": "yfinance.batch.chunk_size",
-    "cfg-yf-min": "yfinance.batch.sleep_min",
-    "cfg-yf-max": "yfinance.batch.sleep_max",
-    "cfg-web-host": "web.host",
-    "cfg-web-port": "web.port",
-    "cfg-tushare-token": "tushare.token",
-    "cfg-log-level": "logging.level",
-};
 
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    return path.split(".").reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), obj);
-}
-
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
-    const parts = path.split(".");
-    let current: Record<string, unknown> = obj;
-    for (let i = 0; i < parts.length - 1; i++) {
-        const key = parts[i];
-        if (!(key in current) || typeof current[key] !== "object") {
-            current[key] = {};
-        }
-        current = current[key] as Record<string, unknown>;
-    }
-    current[parts[parts.length - 1]] = value;
-}
 
 function populateSettingsForm(raw: Record<string, unknown>): void {
     for (const [fieldId, dataPath] of Object.entries(SETTINGS_FIELD_MAP)) {
