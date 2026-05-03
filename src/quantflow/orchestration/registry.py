@@ -4,7 +4,6 @@ from quantflow.strategies.base import StrategyBase
 from quantflow.strategies.buy import (
     DailyBullishMidRangeBuy,
     DailyBullishOversoldBuy,
-    KDJGoldenCrossBuy
 )
 from quantflow.strategies.sell import (
     KDJDeadCrossSell,
@@ -14,7 +13,6 @@ from quantflow.strategies.sell import (
 STRATEGY_REGISTRY: Dict[str, Type[StrategyBase]] = {
     "daily_bull_mid_range": DailyBullishMidRangeBuy,
     "daily_bull_oversold": DailyBullishOversoldBuy,
-    "kdj_golden_cross": KDJGoldenCrossBuy,
     "kdj_dead_cross": KDJDeadCrossSell,
     "dual_line_bear": DualLineBearZoneSell,
 }
