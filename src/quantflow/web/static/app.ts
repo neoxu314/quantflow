@@ -348,6 +348,10 @@ function selectRunType(type: string) {
     document.getElementById("btn-back-run")!.classList.remove("hidden");
     document.getElementById("btn-check-run")!.classList.remove("hidden");
     document.getElementById("btn-execute-run")!.classList.remove("hidden");
+    // Hide all config sections first, then show the selected one
+    ["stock_scan", "watchlist_run", "task_run"].forEach(t => {
+        document.getElementById(`run-config-${t}`)!.classList.add("hidden");
+    });
     document.getElementById(`run-config-${type}`)!.classList.remove("hidden");
     populateRunFormFields(type);
     updateCliPreview();
