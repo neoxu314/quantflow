@@ -125,8 +125,126 @@
         </div>
 
         <div id="panel-settings" class="hidden bg-white shadow rounded-b-lg p-6 mt-0">
-            <h3 class="font-medium text-gray-900 mb-4">System Configuration (Read-Only)</h3>
-            <pre id="config-display" class="bg-gray-50 p-4 rounded-lg text-sm overflow-auto max-h-[600px] font-mono"></pre>
+            <form id="settings-form" class="space-y-6 max-w-2xl">
+                <!-- Data Sources -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">📡 Data Sources</legend>
+                    <div class="space-y-3 mt-2">
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">CN A-Share</label>
+                            <input id="cfg-cn-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.cn.primary" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">HK Stocks</label>
+                            <input id="cfg-hk-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.hk.primary" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">US Stocks</label>
+                            <input id="cfg-us-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.us.primary" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">JP Stocks</label>
+                            <input id="cfg-jp-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.jp.primary" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">KR Stocks</label>
+                            <input id="cfg-kr-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.kr.primary" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sector Data</label>
+                            <input id="cfg-sector-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.sector.primary" />
+                        </div>
+                        <hr class="my-2"/>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Default Adjust</label>
+                            <select id="cfg-adjust" class="col-span-1 border rounded px-2 py-1" data-path="data.defaults.adjust">
+                                <option value="qfq">前复权 (qfq)</option>
+                                <option value="hfq">后复权 (hfq)</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Lookback -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">⏱️ Lookback Period</legend>
+                    <div class="space-y-3 mt-2">
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Calendar Multiplier</label>
+                            <input id="cfg-lookback-multiplier" type="number" min="1" max="10" class="col-span-1 border rounded px-2 py-1" data-path="lookback.calendar_multiplier" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Buffer Days</label>
+                            <input id="cfg-lookback-buffer" type="number" min="1" max="180" class="col-span-1 border rounded px-2 py-1" data-path="lookback.buffer_days" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- YFinance -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">🔄 YFinance Batch</legend>
+                    <div class="space-y-3 mt-2">
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Chunk Size</label>
+                            <input id="cfg-yf-chunk" type="number" min="10" max="100" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.chunk_size" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sleep Min</label>
+                            <input id="cfg-yf-min" type="number" min="1" max="30" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_min" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sleep Max</label>
+                            <input id="cfg-yf-max" type="number" min="1" max="60" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_max" />
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Web Server -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">🌐 Web Server</legend>
+                    <div class="space-y-3 mt-2">
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Host</label>
+                            <input id="cfg-web-host" class="col-span-1 border rounded px-2 py-1" data-path="web.host" />
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Port</label>
+                            <input id="cfg-web-port" type="number" min="1024" max="65535" class="col-span-1 border rounded px-2 py-1" data-path="web.port" />
+                        </div>
+                        <div class="text-xs text-yellow-600 bg-yellow-50 p-2 rounded col-span-4">⚠️ 修改后需重启 Web 服务</div>
+                    </div>
+                </fieldset>
+
+                <!-- Tushare Token -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">🔐 Tushare Token</legend>
+                    <div class="flex items-center gap-2 mt-2">
+                        <input id="cfg-tushare-token" type="password" class="flex-1 border rounded px-2 py-1" placeholder="留空表示未配置" data-path="tushare.token" />
+                        <button type="button" id="btn-toggle-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">👁️</button>
+                        <button type="button" id="btn-copy-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">📋</button>
+                    </div>
+                </fieldset>
+
+                <!-- Logging -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">📝 Logging Level</legend>
+                    <div class="mt-2">
+                        <select id="cfg-log-level" class="border rounded px-2 py-1" data-path="logging.level">
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
+                </fieldset>
+
+                <!-- Save Button -->
+                <div id="settings-save-area" class="hidden flex items-center gap-3">
+                    <span id="settings-save-status" class="text-sm"></span>
+                    <button type="button" id="btn-save-settings" class="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">💾 Save Settings</button>
+                    <button type="button" id="btn-reset-settings" class="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">Reset</button>
+                </div>
+            </form>
         </div>
     </div>
 

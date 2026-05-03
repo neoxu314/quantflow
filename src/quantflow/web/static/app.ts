@@ -48,6 +48,7 @@ const state = {
     strategies: [] as StrategyInfo[],
     taskFiles: [] as TaskFileInfo[],
     selectedTaskFile: "" as string,
+    rawConfig: {} as Record<string, unknown>,
 };
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -137,9 +138,10 @@ function selectTaskFile(filename: string) {
     loadTasks(filename);
 }
 
-async function loadConfig() {
-    const config = await api("/api/config");
-    document.getElementById("config-display")!.textContent = JSON.stringify(config, null, 2);
+async function loadConfig(): Promise<void> {
+    const config = await api<Record<string, unknown>>("/api/config");
+    state.rawConfig = (config.raw ?? {}) as Record<string, unknown>;
+    populateSettingsForm(state.rawConfig);
 }
 
 function switchTab(tab: string) {
@@ -434,6 +436,100 @@ async function openTaskModal(taskId?: string) {
     openModal("modal-task");
 }
 
+const SETTINGS_FIELD_MAP: Record<string, string> = {
+    "cfg-cn-primary": "data.markets.cn.primary",
+    "cfg-hk-primary": "data.markets.hk.primary",
+    "cfg-us-primary": "data.markets.us.primary",
+    "cfg-jp-primary": "data.markets.jp.primary",
+    "cfg-kr-primary": "data.markets.kr.primary",
+    "cfg-sector-primary": "data.markets.sector.primary",
+    "cfg-adjust": "data.defaults.adjust",
+    "cfg-lookback-multiplier": "lookback.calendar_multiplier",
+    "cfg-lookback-buffer": "lookback.buffer_days",
+    "cfg-yf-chunk": "yfinance.batch.chunk_size",
+    "cfg-yf-min": "yfinance.batch.sleep_min",
+    "cfg-yf-max": "yfinance.batch.sleep_max",
+    "cfg-web-host": "web.host",
+    "cfg-web-port": "web.port",
+    "cfg-tushare-token": "tushare.token",
+    "cfg-log-level": "logging.level",
+};
+
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split(".").reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), obj);
+}
+
+function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+    const parts = path.split(".");
+    let current: Record<string, unknown> = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        if (!(key in current) || typeof current[key] !== "object") {
+            current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
+    }
+    current[parts[parts.length - 1]] = value;
+}
+
+function populateSettingsForm(raw: Record<string, unknown>): void {
+    for (const [fieldId, dataPath] of Object.entries(SETTINGS_FIELD_MAP)) {
+        const el = document.getElementById(fieldId) as HTMLInputElement | HTMLSelectElement;
+        if (!el) continue;
+        const val = getNestedValue(raw, dataPath);
+        if (val !== undefined) {
+            el.value = String(val);
+        }
+    }
+}
+
+function collectFormValues(): Record<string, unknown> {
+    const result = { ...state.rawConfig };
+    for (const [, dataPath] of Object.entries(SETTINGS_FIELD_MAP)) {
+        const els = document.querySelectorAll(`[data-path="${dataPath}"]`);
+        if (els.length === 0) continue;
+        const rawVal = (els[0] as HTMLInputElement | HTMLSelectElement).value;
+        let parsed: unknown = rawVal;
+        if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer")) {
+            const num = Number(rawVal);
+            if (!isNaN(num)) parsed = num;
+        }
+        setNestedValue(result, dataPath, parsed);
+    }
+    return result;
+}
+
+async function saveSettings(): Promise<void> {
+    try {
+        await api<{ success: boolean }>("/api/config", {
+            method: "PUT",
+            body: JSON.stringify({ raw: collectFormValues() }),
+        });
+        state.rawConfig = collectFormValues();
+        const status = document.getElementById("settings-save-status")!;
+        status.textContent = "✅ Saved successfully";
+        status.className = "text-sm text-green-600";
+        setTimeout(() => {
+            status.textContent = "";
+            hideSaveSettings();
+        }, 3000);
+    } catch (e: unknown) {
+        const status = document.getElementById("settings-save-status")!;
+        status.textContent = `❌ Failed: ${(e as Error).message}`;
+        status.className = "text-sm text-red-600";
+    }
+}
+
+function markSettingsDirty(): void {
+    document.getElementById("settings-save-area")!.classList.remove("hidden");
+    document.getElementById("btn-save-settings")!.classList.remove("hidden");
+}
+
+function hideSaveSettings(): void {
+    document.getElementById("settings-save-area")!.classList.add("hidden");
+    document.getElementById("btn-save-settings")!.classList.add("hidden");
+}
+
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 async function handleSearch() {
@@ -572,6 +668,35 @@ function setupEventListeners() {
             }
         });
     }
+
+    const saveBtn = document.getElementById("btn-save-settings");
+    if (saveBtn) saveBtn.addEventListener("click", saveSettings);
+
+    const resetBtn = document.getElementById("btn-reset-settings");
+    if (resetBtn) resetBtn.addEventListener("click", () => {
+        populateSettingsForm(state.rawConfig);
+        hideSaveSettings();
+    });
+
+    document.querySelectorAll("#settings-form input, #settings-form select").forEach(el => {
+        el.addEventListener("input", markSettingsDirty);
+        el.addEventListener("change", markSettingsDirty);
+    });
+
+    const toggleBtn = document.getElementById("btn-toggle-token");
+    if (toggleBtn) toggleBtn.addEventListener("click", () => {
+        const input = document.getElementById("cfg-tushare-token") as HTMLInputElement;
+        const isPassword = input.type === "password";
+        input.type = isPassword ? "text" : "password";
+        toggleBtn.textContent = isPassword ? "🙈" : "👁️";
+    });
+
+    const copyBtn = document.getElementById("btn-copy-token");
+    if (copyBtn) copyBtn.addEventListener("click", () => {
+        const token = (document.getElementById("cfg-tushare-token") as HTMLInputElement).value;
+        if (!token) { toast("Token is empty"); return; }
+        navigator.clipboard.writeText(token).then(() => toast("Token copied to clipboard"));
+    });
 }
 
 init();

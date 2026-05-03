@@ -1,8 +1,9 @@
 """Web API routes for config and strategies."""
 from __future__ import annotations
 
+import yaml
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from typing import Any, Dict
 
 # Router for API endpoints under /api
@@ -22,27 +23,52 @@ def get_system_config() -> Dict[str, Any]:
     Returns a dictionary payload. On error, returns an object with an "error" field
     and may include additional diagnostics.
     """
-    import yaml
-
     if not CONFIG_PATH.exists():
         return {"error": "Config file not found", "path": str(CONFIG_PATH)}
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-    except Exception as exc:  # pragma: no cover - defensive error handling
+    except Exception as exc:
         return {"error": "Invalid config file", "detail": str(exc), "path": str(CONFIG_PATH)}
 
     # Build a stable, documented subset of the config payload
     return {
+        "raw": data,
         "markets": data.get("data", {}).get("markets", {}),
         "defaults": data.get("data", {}).get("defaults", {}),
         "lookback": data.get("lookback", {}),
         "yfinance": data.get("yfinance", {}),
         "web": data.get("web", {}),
-        # Display a user-friendly path; prefer a path relative to PROJECT_ROOT when possible
+        "tushare": data.get("tushare", {"token": ""}),
+        "logging": data.get("logging", {"level": "INFO", "format": ""}),
         "filePath": _display_config_path(CONFIG_PATH, PROJECT_ROOT),
     }
+
+
+@router.put("/config")
+def update_system_config(payload: Dict[str, Any]):
+    """Update system configuration - writes to quantflow.yaml."""
+    if not CONFIG_PATH.exists():
+        raise HTTPException(status_code=404, detail="Config file not found")
+
+    raw = payload.get("raw", {})
+    config = {
+        "version": raw.get("version", "0.1.0"),
+        "data": raw.get("data", {}),
+        "tushare": raw.get("tushare", {"token": ""}),
+        "logging": raw.get("logging", {"level": "INFO", "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"}),
+        "lookback": raw.get("lookback", {}),
+        "yfinance": raw.get("yfinance", {}),
+        "web": raw.get("web", {}),
+    }
+
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        return {"success": True, "message": "Config saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
 
 
 @router.get("/strategies")
