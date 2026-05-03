@@ -39,6 +39,15 @@ interface TaskFileInfo {
     taskCount: number;
 }
 
+const MARKET_SUFFIX: Record<string, string> = {
+    "US": ".US",
+    "HK": ".HK",
+    "SH": ".SH",
+    "SZ": ".SZ",
+    "JP": ".T",
+    "KR": ".KS",
+};
+
 const state = {
     watchlists: [] as WatchlistSummary[],
     selectedWatchlist: null as string | null,
@@ -273,22 +282,43 @@ async function openNewWatchlist() {
     loadWatchlists();
 }
 
+function updateAddStockPreview() {
+    const market = (document.getElementById("add-stock-market") as HTMLSelectElement).value;
+    const code = (document.getElementById("add-stock-code") as HTMLInputElement).value.trim();
+    const preview = document.getElementById("add-stock-preview")!;
+    const previewCode = document.getElementById("add-stock-preview-code")!;
+
+    if (market && code) {
+        previewCode.textContent = code.includes(".") ? code : `${code}${MARKET_SUFFIX[market] || ""}`;
+        preview.classList.remove("hidden");
+    } else {
+        preview.classList.add("hidden");
+    }
+}
+
 function openModal(id: string) { document.getElementById(id)!.classList.remove("hidden"); }
 function closeModal(id: string) { document.getElementById(id)!.classList.add("hidden"); }
 
 function openAddStockModal() {
+    (document.getElementById("add-stock-market") as HTMLSelectElement).value = "";
     document.getElementById("add-stock-code")!.value = "";
     document.getElementById("add-stock-name")!.value = "";
     document.getElementById("add-stock-tags")!.value = "";
     document.getElementById("add-stock-warning")!.classList.add("hidden");
+    document.getElementById("add-stock-preview")!.classList.add("hidden");
     openModal("modal-add-stock");
 }
 
 async function confirmAddStock() {
-    const code = (document.getElementById("add-stock-code") as HTMLInputElement).value.trim();
+    const market = (document.getElementById("add-stock-market") as HTMLSelectElement).value;
+    const rawCode = (document.getElementById("add-stock-code") as HTMLInputElement).value.trim();
+    if (!market && !rawCode.includes(".")) { alert("Please select a market"); return; }
+    if (!rawCode) { alert("Code is required"); return; }
+
+    const code = rawCode.includes(".") || !market ? rawCode : `${rawCode}${MARKET_SUFFIX[market] || ""}`;
     const name = (document.getElementById("add-stock-name") as HTMLInputElement).value.trim();
     const tagsStr = (document.getElementById("add-stock-tags") as HTMLInputElement).value.trim();
-    if (!code) { alert("Code is required"); return; }
+
     try {
         const res = await api("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code }) });
         if (res.found) {
@@ -570,6 +600,8 @@ function setupEventListeners() {
     document.getElementById("btn-save-watchlist")!.addEventListener("click", saveWatchlist);
     document.getElementById("btn-cancel-add")!.addEventListener("click", () => closeModal("modal-add-stock"));
     document.getElementById("btn-confirm-add")!.addEventListener("click", confirmAddStock);
+    document.getElementById("add-stock-market")!.addEventListener("change", updateAddStockPreview);
+    document.getElementById("add-stock-code")!.addEventListener("input", updateAddStockPreview);
     document.getElementById("btn-cancel-batch")!.addEventListener("click", () => closeModal("modal-batch"));
     document.getElementById("btn-confirm-batch")!.addEventListener("click", confirmBatchImport);
     document.getElementById("btn-cancel-task")!.addEventListener("click", () => closeModal("modal-task"));

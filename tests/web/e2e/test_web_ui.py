@@ -314,6 +314,102 @@ def test_settings_modify_and_save(page: Page, base_url):
     assert saved["logging"]["level"] == "WARNING"
 
 
+def test_add_stock_with_market_selector(page: Page, base_url):
+    """Add stock via UI using market selector, then verify YAML on disk has correct suffix."""
+    import yaml, httpx
+
+    wl_name = "_test_market_selector"
+
+    def handle_dialog(dialog):
+        dialog.accept(wl_name)
+
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+
+    page.once("dialog", handle_dialog)
+    page.get_by_role("button", name="+ New").click()
+
+    page.get_by_role("button", name=wl_name).wait_for(state="visible", timeout=5000)
+
+    page.get_by_role("button", name="+ Add Stock").click()
+
+    page.locator("#modal-add-stock").wait_for(state="visible", timeout=5000)
+
+    page.locator("#add-stock-market").select_option(label="🇺🇸 US (美国)")
+
+    page.locator("#add-stock-code").fill("AAPL")
+
+    page.locator("#add-stock-preview").wait_for(state="visible", timeout=3000)
+    preview_text = page.locator("#add-stock-preview-code").text_content()
+    assert preview_text.strip() == "AAPL.US"
+
+    page.locator("#add-stock-name").fill("Apple Inc")
+
+    page.get_by_role("button", name="Add").click()
+
+    page.locator("#stock-table").get_by_text("AAPL.US").wait_for(state="visible", timeout=5000)
+
+    wl_path = PROJECT_ROOT / "watchlists" / f"{wl_name}.yaml"
+    assert wl_path.exists()
+    data = yaml.safe_load(wl_path.read_text())
+    assert any(item["code"] == "AAPL.US" for item in data.get("items", []))
+
+    httpx.delete(f"{base_url}/api/watchlists/{wl_name}.yaml")
+    if wl_path.exists():
+        wl_path.unlink()
+
+
+def test_add_stock_multiple_markets(page: Page, base_url):
+    """Verify adding stocks from different markets produces correct suffixes in YAML."""
+    import yaml, httpx
+
+    wl_name = "_test_multi_market"
+
+    def handle_dialog(dialog):
+        dialog.accept(wl_name)
+
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+
+    page.once("dialog", handle_dialog)
+    page.get_by_role("button", name="+ New").click()
+    page.get_by_role("button", name=wl_name).wait_for(state="visible", timeout=5000)
+
+    test_cases = [
+        ("HK", "00700", "00700.HK"),
+        ("JP", "7203", "7203.T"),
+        ("KR", "005930", "005930.KS"),
+    ]
+
+    for market_opt, raw_code, expected_code in test_cases:
+        page.get_by_role("button", name="+ Add Stock").click()
+        page.locator("#modal-add-stock").wait_for(state="visible", timeout=5000)
+
+        page.locator("#add-stock-market").select_option(value=market_opt)
+        page.locator("#add-stock-code").fill(raw_code)
+
+        page.locator("#add-stock-preview").wait_for(state="visible", timeout=3000)
+        preview_text = page.locator("#add-stock-preview-code").text_content().strip()
+        assert preview_text == expected_code
+
+        page.locator("#add-stock-name").fill(f"Stock {raw_code}")
+        page.get_by_role("button", name="Add").click()
+
+        page.locator("#stock-table").get_by_text(expected_code).wait_for(state="visible", timeout=5000)
+
+    wl_path = PROJECT_ROOT / "watchlists" / f"{wl_name}.yaml"
+    assert wl_path.exists()
+    data = yaml.safe_load(wl_path.read_text())
+    codes = [item["code"] for item in data.get("items", [])]
+    assert "00700.HK" in codes
+    assert "7203.T" in codes
+    assert "005930.KS" in codes
+
+    httpx.delete(f"{base_url}/api/watchlists/{wl_name}.yaml")
+    if wl_path.exists():
+        wl_path.unlink()
+
+
 def test_settings_survive_server_restart(page: Page, base_url):
     """Modify a config, restart server, and confirm changes persist."""
     import httpx, subprocess, time, socket, os

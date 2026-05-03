@@ -249,21 +249,51 @@
     </div>
 
     <div id="modal-add-stock" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-96">
+        <div class="bg-white rounded-lg p-6 w-[420px]">
             <h3 class="text-lg font-medium mb-4">Add Stock</h3>
+
+            <!-- Market selector -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">Market</label>
+                <select id="add-stock-market" class="w-full border border-gray-300 rounded px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500">
+                    <option value="">Please select a market...</option>
+                    <option value="US">🇺🇸 US (美国)</option>
+                    <option value="HK">🇭🇰 Hong Kong (港股)</option>
+                    <option value="SH">🇨🇳 Shanghai (上海)</option>
+                    <option value="SZ">🇨🇳 Shenzhen (深圳)</option>
+                    <option value="JP">🇯🇵 Japan (日本)</option>
+                    <option value="KR">🇰🇷 Korea (韩国)</option>
+                </select>
+            </div>
+
+            <!-- Stock code -->
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700">Stock Code</label>
-                <input id="add-stock-code" type="text" placeholder="e.g. NVDA.US" class="w-full border border-gray-300 rounded px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500">
+                <input id="add-stock-code" type="text" placeholder="e.g. NVDA, 00700, 600519" class="w-full border border-gray-300 rounded px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-500">
             </div>
+
+            <!-- Name -->
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700">Name</label>
                 <input id="add-stock-name" type="text" placeholder="e.g. Nvidia" class="w-full border border-gray-300 rounded px-3 py-2 mt-1">
             </div>
+
+            <!-- Tags -->
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700">Tags (comma-separated)</label>
                 <input id="add-stock-tags" type="text" placeholder="e.g. Personal, AI" class="w-full border border-gray-300 rounded px-3 py-2 mt-1">
             </div>
-            <div id="add-stock-warning" class="hidden mb-4 text-sm text-yellow-600 bg-yellow-50 p-2 rounded"></div>
+
+            <!-- Live preview -->
+            <div id="add-stock-preview" class="hidden mb-4 p-2 bg-blue-50 rounded text-sm border border-blue-200">
+                <span class="text-gray-500">Preview: </span>
+                <span id="add-stock-preview-code" class="font-mono font-semibold text-blue-700"></span>
+            </div>
+
+            <!-- Warning -->
+            <div id="add-stock-warning" class="hidden mb-4 text-sm text-yellow-600 bg-yellow-50 p-2 rounded border border-yellow-200"></div>
+
+            <!-- Buttons -->
             <div class="flex justify-end gap-2">
                 <button id="btn-cancel-add" class="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
                 <button id="btn-confirm-add" class="px-4 py-2 text-white bg-blue-500 rounded hover:bg-blue-600">Add</button>
