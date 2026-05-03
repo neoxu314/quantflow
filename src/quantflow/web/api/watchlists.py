@@ -107,7 +107,7 @@ def save_watchlist(filename: str, watchlist: WatchlistModel):
 
     _ensure_watchlists_dir()
     with open(filepath, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     return {"filename": filename, "itemCount": len(watchlist.items)}
 

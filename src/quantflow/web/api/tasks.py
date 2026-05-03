@@ -76,7 +76,7 @@ def _write_task_file(filename: str, data: dict):
     """Write back a task config file."""
     filepath = CONFIG_DIR / filename
     with open(filepath, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 @router.get("/tasks")

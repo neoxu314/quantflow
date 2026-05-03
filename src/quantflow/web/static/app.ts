@@ -155,12 +155,14 @@ function renderWatchlistSidebar() {
         const li = document.createElement("li");
         const isSelected = state.selectedWatchlist === wl.filename;
         li.innerHTML = `
-            <button data-filename="${wl.filename}" class="w-full text-left px-3 py-2 rounded text-sm transition-colors
-                ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "hover:bg-gray-100 text-gray-700"}">
+            <div class="flex items-center justify-between">
+              <button data-filename="${wl.filename}" class="watchlist-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
+                  ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "hover:bg-gray-100 text-gray-700"}">
                 <div class="truncate">${wl.name}</div>
                 <div class="text-xs text-gray-400">${wl.itemCount} stocks</div>
-            </button>`;
-        li.querySelector("button")!.addEventListener("click", () => selectWatchlist(wl.filename));
+              </button>
+              <button class="wl-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${wl.filename}">×</button>
+            </div>`;
         list.appendChild(li);
     }
 }
@@ -321,15 +323,18 @@ function confirmBatchImport() {
 function renderTaskTable() {
     const tbody = document.getElementById("task-table")!;
     tbody.innerHTML = "";
-    const emptyMsg = document.getElementById("task-file-empty")!;
     const listArea = document.getElementById("task-list-area")!;
+    const emptyMsg = document.getElementById("task-file-empty")!;
+    
+    // Always show the list area if a file is selected, even if empty
+    listArea.classList.remove("hidden");
+    emptyMsg.classList.add("hidden");
+
     if (state.tasks.length === 0) {
-        emptyMsg.classList.remove("hidden");
-        listArea.classList.add("hidden");
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">No tasks yet. Click "+ New Task" to add.</td></tr>`;
         return;
     }
-    emptyMsg.classList.add("hidden");
-    listArea.classList.remove("hidden");
+
     for (const task of state.tasks) {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-gray-50";
@@ -364,7 +369,9 @@ function renderTaskTable() {
 async function openTaskModal(taskId?: string) {
     const isEdit = !!taskId;
     document.getElementById("task-modal-title")!.textContent = isEdit ? "Edit Task" : "New Task";
-    (document.getElementById("task-config-select") as HTMLElement).style.display = isEdit ? "none" : "block";
+    // Use the globally selected file
+    const targetFile = state.selectedTaskFile;
+    if (!targetFile) { toast("Please select a config file first."); return; }
     const wlSelect = document.getElementById("task-watchlist") as HTMLSelectElement;
     wlSelect.innerHTML = "";
     for (const wl of state.watchlists) {
@@ -380,18 +387,6 @@ async function openTaskModal(taskId?: string) {
         label.className = "flex items-center gap-2";
         label.innerHTML = `<input type="checkbox" value="${s.id}" class="task-strategy-cb"><span class="text-sm">${s.name} (${s.type})</span>`;
         stratContainer.appendChild(label);
-    }
-    const fileSelect = document.getElementById("task-config-file") as HTMLSelectElement;
-    fileSelect.innerHTML = "";
-    const configFiles = [
-        ...new Set(state.tasks.map(t => t.filename)),
-        "tasks.yaml",
-    ];
-    for (const f of configFiles) {
-        const opt = document.createElement("option");
-        opt.value = f;
-        opt.textContent = f;
-        fileSelect.appendChild(opt);
     }
     if (isEdit) {
         const task = state.tasks.find(t => t.id === taskId);
@@ -419,8 +414,7 @@ async function openTaskModal(taskId?: string) {
                 await api(`/api/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(payload) });
                 toast("Task updated");
             } else {
-                const file = state.selectedTaskFile;
-                await api(`/api/tasks?filename=${encodeURIComponent(file)}`, { method: "POST", body: JSON.stringify(payload) });
+                await api(`/api/tasks?filename=${encodeURIComponent(targetFile)}`, { method: "POST", body: JSON.stringify(payload) });
                 toast("Task created");
             }
             closeModal("modal-task");
@@ -508,6 +502,46 @@ function setupEventListeners() {
         const si = document.getElementById("search-input")!;
         if (!sr.contains(e.target as Node) && e.target !== si) sr.classList.add("hidden");
     });
+    // Event delegation for watchlist actions: delete and select
+    const watchlistList = document.getElementById("watchlist-list");
+    if (watchlistList) {
+        watchlistList.addEventListener("click", async (e) => {
+            const target = e.target as HTMLElement;
+            // Delete button pressed?
+            const delBtn = target.closest(".wl-delete-btn");
+            if (delBtn) {
+                e.stopPropagation();
+                const filename = delBtn.dataset.filename;
+                if (!filename) return;
+                const wl = state.watchlists.find(w => w.filename === filename);
+                const name = wl?.name ?? filename;
+                if (!confirm(`Delete watchlist '${name}'? This cannot be undone.`)) return;
+                try {
+                    await api(`/api/watchlists/${filename}`, { method: "DELETE" });
+                    toast(`Deleted ${name}`);
+                    await loadWatchlists();
+                    if (state.selectedWatchlist === filename) {
+                        state.selectedWatchlist = null;
+                        const content = document.getElementById("watchlist-content");
+                        const empty = document.getElementById("watchlist-empty");
+                        if (content) content.classList.add("hidden");
+                        if (empty) empty.classList.remove("hidden");
+                    }
+                } catch (err) {
+                    alert("Failed to delete watchlist");
+                }
+                return;
+            }
+            // Selection: clicking anywhere on the watchlist item (button area)
+            const btn = target.closest('[data-filename]');
+            if (btn) {
+                const filename = (btn as HTMLElement).dataset.filename;
+                if (filename) {
+                    selectWatchlist(filename);
+                }
+            }
+        });
+    }
 }
 
 init();
