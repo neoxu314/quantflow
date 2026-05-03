@@ -18,11 +18,12 @@ quantflow/
 │   ├── execution/       # Execution layer (formerly monitoring)
 │   ├── orchestration/   # Task orchestration layer
 │   ├── config/          # YAML loader + defaults
-│   ├── backtest/        # Reserved - empty
-│   ├── risk/            # Reserved - empty
+│   ├── backtest/        # Reserved - stub (__init__.py only)
+│   ├── risk/            # Reserved - stub (__init__.py only)
 │   ├── web/             # Web UI server (FastAPI + frontend)
-│   └── cli.py           # Entry: `python -m quantflow.cli`
-├── config/tasks.yaml    # Orchestration task config
+│   ├── reports/         # Markdown report generation
+│   └── cli.py           # Entry: `python -m quantflow.cli` (scan, monitor, tasks, web)
+├── config/tasks_*.yaml  # Orchestration task configs (tasks_asia_mac.yaml, tasks_us_mac.yaml, etc.)
 ...
 ```
 
@@ -35,10 +36,15 @@ quantflow/
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
-| Task orchestration | `orchestration/app.py` | Parses `tasks.yaml` |
+| Task orchestration | `orchestration/app.py` | Parses `tasks_*.yaml` |
+| Web UI - watchlists | `web/api/watchlists.py` | CRUD + search + inline delete |
+| Web UI - tasks | `web/api/tasks.py` | Multi-file task CRUD |
+| Web UI - task-files | `web/api/tasks.py` | List/create/delete task config files |
+| Web UI - config | `web/api/config.py` | GET (read) + PUT (write) system config |
+| Web UI - settings | `web/static/app.ts` | Settings form logic, token toggle/copy |
 | Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
 | Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` |
-...
+| Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
 
 ## CONVENTIONS
 
@@ -49,6 +55,7 @@ quantflow/
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: Data fetch days derived from indicator `lookback_bars` → aggregated by strategy → max computed in orchestration, multiplied by `calendar_multiplier` + `buffer_days` from `config/quantflow.yaml`
 - **YFinance batch**: Auto-chunked (50 tickers/chunk, jitter sleep 5–12s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
+- **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
 
 ## ANTI-PATTERNS
 
@@ -80,9 +87,14 @@ python -m quantflow.cli web
 
 ## WEB UI
 - **Path**: `src/quantflow/web/`
-- **Endpoints**: `/api/watchlists/...`, `/api/tasks/...`, `/api/task-files/...`
+- **Endpoints**: 
+  - `/api/watchlists/...` (CRUD)
+  - `/api/tasks/...` (CRUD, multi-file)
+  - `/api/task-files/...` (list/create/delete)
+  - `/api/config` (GET + PUT system config)
+  - `/api/strategies` (read-only)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
-- **Config**: `config/quantflow.yaml` → `web: { port, host }`
+- **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`
 
 ## NOTES
 

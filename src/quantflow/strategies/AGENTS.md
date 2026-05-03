@@ -10,15 +10,15 @@ Trading signal generation layer. Buy strategies (golden cross, bull channel) + s
 
 ```
 strategies/
-├── base.py            # StrategyBase abstract class
+├── base.py            # StrategyBase abstract class (BuyStrategy, SellStrategy)
 ├── buy/               # Entry signal generators
-│   ├── kdj_golden_cross.py  # Placeholder template
-│   ├── dual_line_bull.py    # Daily Bullish Mid-Range Buy Strategy
-│   └── ...
+│   ├── kdj_golden_cross.py    # KDJ Golden Cross Buy Strategy
+│   ├── dual_line_bull.py      # Daily Bullish Mid-Range Buy Strategy
+│   └── oversold_rebound.py    # Daily Bullish Oversold Buy Strategy
 ├── sell/              # Exit signal generators
-│   ├── kdj_dead_cross.py
-│   ├── dual_line_bear.py
-│   └── ...
+│   ├── kdj_dead_cross.py      # KDJ Dead Cross Sell Strategy
+│   ├── dual_line_bear.py      # DualLine Bear Zone Sell Strategy
+│   └── stop_loss.py           # Stop Loss Sell Strategy
 ├── composite.py       # CompositeStrategy - combine strategies (mode="any"|"all")
 └── __init__.py
 ```
@@ -28,8 +28,8 @@ strategies/
 | Task | Location | Notes |
 |------|----------|-------|
 | Strategy interface | `base.py` | `StrategyBase.generate_signals(df)`, `get_conditions()` |
-| Buy signals | `buy/` | KDJ golden cross, DailyBullishMidRange (channel pullback) |
-| Sell signals | `sell/` | KDJ dead cross, dual-line bear zone exit |
+| Buy signals | `buy/` | KDJGoldenCrossBuy, DailyBullishMidRangeBuy, DailyBullishOversoldBuy |
+| Sell signals | `sell/` | KDJDeadCrossSell, DualLineBearZoneSell, StopLossSell |
 | Composition | `composite.py` | `mode="any"` (OR logic) or `"all"` (AND logic) |
 
 ## CONVENTIONS

@@ -41,7 +41,7 @@ It is recommended to store your input files as follows:
 ```text
 quantflow/
 ├── config/              # System configs
-│   ├── tasks.yaml       # Task orchestration files
+│   ├── tasks_*.yaml     # Task orchestration files (e.g., tasks_asia_mac.yaml, tasks_us_mac.yaml)
 │   └── quantflow.yaml   # Global settings (lookback, etc.)
 ├── watchlists/          # 👈 Stock lists go here
 │   ├── us_tech.yaml
@@ -91,6 +91,8 @@ tasks:
 - `daily_bull_oversold`: Buy when KDJ(J)<20 in a bullish channel.
 - `daily_bull_mid_range`: Buy when price stabilizes between trend lines in a bull channel.
 - `kdj_golden_cross`: Standard KDJ Golden Cross.
+- `kdj_dead_cross`: KDJ Dead Cross (sell signal).
+- `dual_line_bear`: DualLine Bear Zone Exit (sell signal).
 
 ### Data Lookback (Auto-Calculation)
 The system automatically calculates how many calendar days of historical data to fetch based on each indicator's `lookback_bars` requirement:
@@ -99,7 +101,7 @@ The system automatically calculates how many calendar days of historical data to
 actual_days = ceil(max_indicators_bars × calendar_multiplier) + buffer_days
 ```
 
-These values are configured in **`config/quantflow.yaml`** (defaults: `calendar_multiplier: 2`, `buffer_days: 30`). You can override per-task by setting `days_back` in your `tasks.yaml`.
+These values are configured in **`config/quantflow.yaml`** (defaults: `calendar_multiplier: 2`, `buffer_days: 30`). You can override per-task by setting `days_back` in your task config file.
 
 ### Rate Limit Protection (YFinance)
 Yahoo Finance enforces strict rate limits (60 req/min, 360/hr). The system automatically protects against 429 errors by chunking batch requests with randomized jitter sleep:
@@ -134,28 +136,28 @@ python -m quantflow.cli scan --code NVDA.US
 - `--indicator`: Indicators to calculate (default: `kdj,dual_line`).
 
 ### Command 2: Run Orchestration Tasks (Recommended)
-This runs the strategies defined in your `tasks.yaml` file, producing both **per-task** and **combined** outputs.
+This runs the strategies defined in your `tasks_*.yaml` file, producing both **per-task** and **combined** outputs.
 ```bash
-# Default: outputs per-task to paths defined in tasks.yaml
-python -m quantflow.cli tasks --config config/tasks.yaml
+# Default: outputs per-task to paths defined in tasks_*.yaml
+python -m quantflow.cli tasks --config config/tasks_us_mac.yaml
 
 # Combined: specify a combined-report base directory
-python -m quantflow.cli tasks --config config/tasks.yaml --output ./summary
+python -m quantflow.cli tasks --config config/tasks_us_mac.yaml --output ./summary
 
 # Daily Archive: inject today's date into ALL output paths
-python -m quantflow.cli tasks --config config/tasks.yaml --output ./summary --daily
+python -m quantflow.cli tasks --config config/tasks_us_mac.yaml --output ./summary --daily
 ```
 
 **Parameters:**
 
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
-| `--config` | Yes | Path to your task orchestration YAML file. |
+| `--config` | Yes | Path to your task orchestration YAML file (e.g., `config/tasks_asia_mac.yaml`). |
 | `--output` | No | Base directory for combined report. Default: `reports`. |
 | `--daily` | No | **Auto-archive**: appends today's date (`YYYY-MM-DD`) to all output paths (both sub-task and combined). |
 | `-h` | No | Display help information. |
 
-*Note: If your `tasks.yaml` contains multiple tasks, this command will run them sequentially. A combined Markdown report is generated at the end of all tasks.*
+*Note: If your tasks config file contains multiple tasks, this command will run them sequentially. A combined Markdown report is generated at the end of all tasks.*
 
 ### Command 3: Run Single Watchlist
 For running a specific watchlist with default strategies.
@@ -164,14 +166,15 @@ python -m quantflow.cli monitor --watchlist watchlists/us_tech.yaml --output ./o
 ```
 - `--watchlist`: Path to specific watchlist file.
 - `--output`: Directory to save results.
+- **Default strategies loaded**: `DailyBullishMidRangeBuy`, `DailyBullishOversoldBuy`, `KDJGoldenCrossBuy`.
 
 ## 3. Output & Results
 
 The system produces **two tiers** of output for each run:
 
 ### Tier 1: Per-Task Output (Sub-task level)
-Each task in `tasks.yaml` generates its own JSON + Markdown report to its configured `output` path.
-*   **Path**: `{tasks.yaml output}/{task_name}.json` (or `output/{date}/` if `--daily`)
+Each task in your config file generates its own JSON + Markdown report to its configured `output` path.
+*   **Path**: `{tasks output}/{task_name}.json` (or `{output}/{date}/` if `--daily`)
 *   **Contains**: Raw results + individual Markdown report for that specific task.
 
 ### Tier 2: Combined Output (Aggregated level)
@@ -218,7 +221,7 @@ To monitor daily with automatic date-based archiving:
 1. **Crontab entry** (`crontab -e`):
 ```bash
 # Run A-shares at 20:00 (Beijing Time) — auto-archives by date
-00 20 * * * cd /path/to/quantflow && python -m quantflow.cli tasks --config config/tasks.yaml --output ./reports --daily >> /var/log/quantflow.log 2>&1
+00 20 * * * cd /path/to/quantflow && python -m quantflow.cli tasks --config config/tasks_asia_mac.yaml --output ./reports --daily >> /var/log/quantflow.log 2>&1
 ```
 
 2. **Resulting structure** (each day creates a new folder):
@@ -235,7 +238,7 @@ reports/
 
 ## 5. Web UI
 
-QuantFlow provides an optional web UI for managing watchlists and tasks visually.
+QuantFlow provides an optional web UI for managing watchlists, tasks, and system settings visually.
 
 ```bash
 # Install dependencies (includes fastapi, uvicorn)
@@ -254,11 +257,29 @@ python -m quantflow.cli web
    - CRUD on `watchlists/*.yaml` files
    - Search stocks across all watchlists
    - Batch import
+   - **Inline delete button** (×) on each watchlist in the left sidebar
 
-2. **Tasks Management** (Two-Level Navigation):
-   - **Level 1**: Manage task config files (`config/tasks_*.yaml`).
-   - **Level 2**: Manage sub-tasks within a selected config file.
-   - Create, edit, and delete tasks via a simplified form.
+2. **Tasks Management** (Left-Right Layout):
+   - **Left sidebar**: List of task config files (`config/tasks_*.yaml`) with inline delete (×)
+   - **Right panel**: Tasks table for the selected file
+   - Create, edit, and delete tasks via a simplified form
+   - Auto-select first task file on page load
+   - Fixed-width table columns with text wrapping/truncation
 
-3. **Settings**:
-   - View system configuration (read-only).
+3. **Settings** (Interactive Form):
+   - **Editable sections**: Data Sources, Lookback Period, YFinance Batch, Web Server, Tushare Token, Logging Level
+   - **Read-only display**: Config file path
+   - **Token management**: Toggle visibility (👁️) and copy (📋)
+   - **Save/Reset**: Save button appears on modification; requires restart for Web/Port changes
+   - **API**: `GET /api/config` (read), `PUT /api/config` (update YAML)
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/watchlists/` | GET, POST, PUT, DELETE | Watchlist CRUD |
+| `/api/watchlists/search` | POST | Search stock across all lists |
+| `/api/tasks` | GET, POST, PUT, DELETE | Task CRUD |
+| `/api/task-files` | GET, POST, DELETE | Task file management |
+| `/api/config` | GET, **PUT** | System configuration (read + **write**) |
+| `/api/strategies` | GET | Available strategy list |

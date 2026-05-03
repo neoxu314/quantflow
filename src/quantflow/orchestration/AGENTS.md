@@ -12,7 +12,7 @@ The brain of the monitoring system. Determines **what** to run (watchlists), **w
 orchestration/
 ├── app.py           # Orchestrator - loops through tasks and dispatches jobs
 ├── registry.py      # Strategy Registry - maps string names to Strategy objects
-├── loader.py        # TaskConfig loader - parses `tasks.yaml`
+├── loader.py        # TaskConfig loader - parses `tasks_*.yaml`
 └── __init__.py
 ```
 
@@ -25,7 +25,7 @@ orchestration/
 
 ## DEPENDENCIES
 
-- Reads `config/tasks.yaml` to determine execution parameters. Optional `days_back` field can override auto-computed value.
+- Reads `config/tasks_*.yaml` to determine execution parameters. Optional `days_back` field can override auto-computed value.
 - Calls `Executor.execute(job)` from the Execution Layer.
 - Uses `MarkdownReporter` to generate both per-task and combined reports.
 - Uses `Storage` to save `Combined_Results.json`.

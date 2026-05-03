@@ -77,7 +77,7 @@ def monitor():
 
 def tasks():
     parser = argparse.ArgumentParser(description="Run scheduled tasks via Orchestration")
-    parser.add_argument("--config", required=True, help="Path to tasks.yaml")
+    parser.add_argument("--config", required=True, help="Path to tasks config (e.g., config/tasks_us_mac.yaml)")
     parser.add_argument("--output", default=None, help="Base output directory override")
     parser.add_argument("--daily", action="store_true", help="Auto-append date to output path")
     args = parser.parse_args()
