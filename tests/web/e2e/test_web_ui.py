@@ -531,3 +531,39 @@ def test_library_indicator_param_edit(page: Page, base_url):
     toast_el = page.locator("#toast")
     toast_el.wait_for(state="visible", timeout=5000)
     assert "save" in toast_el.text_content().lower()
+
+def test_indicator_params_visible_on_reopen(page: Page, base_url):
+    """Edit indicator params, save, reopen modal, verify new value persists."""
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
+    page.get_by_role("button", name="Indicators").click()
+    page.locator("#library-indicators-panel").wait_for(state="visible", timeout=5000)
+    page.locator("#library-indicators-table").wait_for(state="visible", timeout=5000)
+    page.locator(".indicator-config-btn").first.click()
+    page.locator("#modal-indicator-params").wait_for(state="visible", timeout=5000)
+    
+    # Get the initial value of the first input
+    first_input = page.locator(".indicator-param-input").first
+    initial_val = first_input.input_value()
+    
+    # Change it
+    first_input.fill(str(int(initial_val) + 1))
+    
+    # Save
+    page.locator("#btn-save-params").click()
+    page.locator("#modal-indicator-params").wait_for(state="hidden", timeout=5000)
+    page.wait_for_timeout(1000)
+    
+    # Reopen modal for the same indicator
+    page.locator(".indicator-config-btn").first.click()
+    page.locator("#modal-indicator-params").wait_for(state="visible", timeout=5000)
+    
+    # Verify the value changed
+    new_val = first_input.input_value()
+    assert new_val == str(int(initial_val) + 1), f"Expected {int(initial_val)+1}, got {new_val}"
+    
+    # Close
+    page.locator("#btn-cancel-params").click()
+    page.locator("#modal-indicator-params").wait_for(state="hidden", timeout=5000)

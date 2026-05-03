@@ -74,6 +74,14 @@ def get_library_indicators():
     indicators: List[Dict[str, Any]] = []
     seen = set()
 
+    # Load YAML config once per request (if present) for overrides
+    config: Dict[str, Any] = {}
+    if INDICATORS_YAML.exists():
+        with open(INDICATORS_YAML, "r", encoding="utf-8") as f:
+            ydata = yaml.safe_load(f) or {}
+        if isinstance(ydata, dict) and "indicators" in ydata:
+            config = ydata.get("indicators", {})
+
     # Helper to process a module's indicators
     def process_module(module, category: str):
         nonlocal indicators, seen
@@ -87,10 +95,17 @@ def get_library_indicators():
             except Exception:
                 # If cannot instantiate with defaults, skip metadata collection
                 continue
+
+            # Start with class defaults, then apply YAML overrides if present
+            params = getattr(inst, "params", {})
+            ind_config = config.get(name, {})
+            if isinstance(ind_config, dict) and isinstance(ind_config.get("params"), dict):
+                params = {**params, **ind_config["params"]}
+
             indicators.append({
                 "name": inst.name,
                 "category": category,
-                "params": getattr(inst, "params", {}),
+                "params": params,
                 "required_fields": inst.get_required_fields(),
                 "output_fields": inst.get_output_fields(),
                 "lookback_bars": getattr(inst, "lookback_bars", 0),
@@ -138,6 +153,10 @@ def update_indicator_params(payload: Dict[str, Any]):
             data["indicators"][name] = {"enabled": True, "params": params}
         with open(INDICATORS_YAML, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        # Invalidate IndicatorFactory cache lazily to reflect new overrides
+        from quantflow.indicators.factory import IndicatorFactory
+        IndicatorFactory._config = None
+        IndicatorFactory._class_map.clear()
         return {"success": True, "message": "指标参数已更新"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update indicator params: {str(e)}")

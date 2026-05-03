@@ -104,3 +104,23 @@ class TestIndicatorFactory:
         ind = IndicatorFactory.create("KDJ")
         assert ind is not None
         assert ind.__class__.__name__ == "KDJIndicator"
+
+    def test_factory_refresh_after_config_change(self):
+        """
+        Simulate: config written externally (e.g. via API PUT),
+        factory should reflect changes on next create() call.
+        """
+        initial = {"KDJ": {"enabled": True, "params": {"n": 9, "m1": 3, "m2": 3}}}
+        with patch.object(IndicatorFactory, "_load_config", return_value=initial):
+            IndicatorFactory._config = None
+            IndicatorFactory._class_map.clear()
+            ind1 = IndicatorFactory.create("KDJ")
+        assert ind1.n == 9
+
+        # Simulate API writing new config
+        updated = {"KDJ": {"enabled": True, "params": {"n": 15, "m1": 3, "m2": 3}}}
+        with patch.object(IndicatorFactory, "_load_config", return_value=updated):
+            IndicatorFactory._config = None
+            IndicatorFactory._class_map.clear()
+            ind2 = IndicatorFactory.create("KDJ")
+        assert ind2.n == 15
