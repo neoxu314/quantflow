@@ -26,12 +26,19 @@ indicators:
   VolumeMA:
     enabled: true
     params:
-      periods: [5, 10, 20]
+      periods:
+      - 5
+      - 10
+      - 20
   DualLine:
     enabled: true
     params:
       ema_period: 10
-      ma_periods: [14, 28, 57, 114]
+      ma_periods:
+      - 14
+      - 28
+      - 57
+      - 114
   BrickChart:
     enabled: true
     params:
