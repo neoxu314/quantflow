@@ -846,5 +846,7 @@ function setupEventListeners() {
     document.querySelectorAll('[data-subtab]').forEach(btn => {
         btn.addEventListener("click", () => switchLibrarySubTab(btn.dataset.subtab));
     });
+    document.getElementById("btn-save-params").addEventListener("click", saveIndicatorParams);
+    document.getElementById("btn-cancel-params").addEventListener("click", () => closeModal("modal-indicator-params"));
 }
 init();
