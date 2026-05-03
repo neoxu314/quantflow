@@ -2,111 +2,25 @@
 
 Requires: pip install pytest-playwright
 Usage: playwright install chromium && pytest tests/web/e2e/test_web_ui.py -v
+
+Note: Shared fixtures (web_server, base_url, protect_production_configs) are
+      defined in conftest.py and automatically applied to all E2E tests.
 """
-import os
-import shutil
-import subprocess
-import time
-import socket
 import pytest
 from pathlib import Path
 
 from playwright.sync_api import Page
 
-TEST_WATCHLIST_NAME = "_test_e2e_wl"
-TEST_TASK_FILE = "tasks_e2e_test.yaml"
-WEB_PORT = 8080
+from tests.web.e2e.conftest import (
+    PROJECT_ROOT,
+    SERVER_URL,
+    TEST_WATCHLIST_NAME,
+    TEST_TASK_FILE,
+)
 
-PROJECT_ROOT = Path(__file__).parents[3]
-SERVER_URL = f"http://127.0.0.1:{WEB_PORT}"
-
-
-def _wait_for_server(host, port, timeout=30):
-    for _ in range(timeout * 2):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.5)
-            if s.connect_ex((host, port)) == 0:
-                s.close()
-                return True
-            s.close()
-        except OSError:
-            pass
-        time.sleep(0.5)
-    return False
-
-
-@pytest.fixture(scope="session")
-def web_server():
-    env = os.environ.copy()
-    proc = subprocess.Popen(
-        ["python3", "-m", "quantflow.cli", "web"],
-        cwd=str(PROJECT_ROOT),
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    if not _wait_for_server("127.0.0.1", WEB_PORT):
-        proc.kill()
-        raise RuntimeError(f"Web server did not start on port {WEB_PORT}")
-
-    yield proc
-
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
-@pytest.fixture(scope="session")
-def base_url(web_server):
-    return SERVER_URL
-
-
-CFG_BACKUP = PROJECT_ROOT / "config" / "quantflow.yaml.bak"
-
-
-@pytest.fixture(autouse=True)
-def cleanup_test_data(base_url):
-    """Delete leftover test data and protect production config."""
-    _backup_production_config()
-    yield
-    _restore_production_config()
-    _remove_test_watchlist(base_url)
-    _remove_test_task_file(base_url)
-
-
-def _backup_production_config():
-    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
-    if cfg.exists():
-        shutil.copy2(cfg, CFG_BACKUP)
-
-
-def _restore_production_config():
-    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
-    if CFG_BACKUP.exists():
-        shutil.move(str(CFG_BACKUP), str(cfg))
-    elif cfg.exists():
-        cfg.unlink()
-
-
-def _remove_test_watchlist(base_url):
-    import httpx
-    try:
-        httpx.delete(f"{base_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml")
-    except Exception:
-        pass
-
-
-def _remove_test_task_file(base_url):
-    import httpx
-    try:
-        httpx.delete(f"{base_url}/api/task-files/{TEST_TASK_FILE}")
-    except Exception:
-        pass
+# Page fixture is provided by pytest-playwright
+# web_server and base_url fixtures are in conftest.py (session scope)
+# protect_production_configs fixture is in conftest.py (autouse=True)
 
 
 def test_watchlist_page_loads(page: Page, base_url):
