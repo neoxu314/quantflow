@@ -29,9 +29,10 @@ tests/web/
 ├── test_watchlist_api.py    # Watchlist API unit tests (CRUD + search)
 ├── test_integration.py      # API→filesystem→API round-trip integration tests
 ├── test_static_serving.py   # Static file serving + 404 + security tests
+├── test_library_api.py       # Library API unit tests (strategies + indicators + params)
 └── e2e/
     ├── conftest.py          # Playwright browser fixture (Chrome for Testing)
-    └── test_web_ui.py       # 15 Playwright E2E browser UI tests
+    └── test_web_ui.py       # 18 Playwright E2E browser UI tests
         # (watchlist/task create → YAML disk verification,
         #  Settings round-trip + restart persistence)
 ```

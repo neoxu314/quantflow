@@ -278,15 +278,40 @@ def test_settings_values_populated(page: Page, base_url):
     assert port_field.input_value() == "8080"
 
 
-def test_tab_navigation_roundtrip(page: Page, base_url):
+def test_library_panel_loads_strategies(page: Page, base_url):
+    """Library tab appears, strategies load, and strategy cards display."""
     page.goto(base_url)
     page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
+    page.locator("#library-strategies-list").wait_for(state="visible", timeout=5000)
+    strategy_count = page.locator("#library-strategies-list > div").count()
+    assert strategy_count >= 4
+
+
+def test_library_panel_indicators_tab(page: Page, base_url):
+    """Library indicators sub-tab shows indicator table."""
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
+    page.get_by_role("button", name="Indicators").click()
+    page.locator("#library-indicators-panel").wait_for(state="visible", timeout=5000)
+    page.locator("#library-indicators-table").wait_for(state="visible", timeout=5000)
+    row_count = page.locator("#library-indicators-table > tr").count()
+    assert row_count == 8
+
+
+def test_tab_navigation_includes_library(page: Page, base_url):
+    """Tab navigation round-trip includes Library tab."""
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
     page.get_by_role("button", name="Tasks").click()
-    page.wait_for_selector("#task-file-list", timeout=5000)
-    page.get_by_role("button", name="Settings").click()
-    page.wait_for_selector("#settings-form", timeout=5000)
-    page.get_by_role("button", name="Watchlists").click()
-    page.wait_for_selector("#watchlist-list", timeout=5000)
+    page.locator("#task-file-list").wait_for(state="visible", timeout=5000)
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
 
 
 def test_settings_modify_and_save(page: Page, base_url):
@@ -469,3 +494,40 @@ def test_settings_survive_server_restart(page: Page, base_url):
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_library_strategy_descriptions_visible(page: Page, base_url):
+    """Strategy cards in Library tab show non-empty descriptions."""
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
+    page.locator("#library-strategies-list").wait_for(state="visible", timeout=5000)
+    desc_paragraphs = page.locator("#library-strategies-list > div p")
+    count = desc_paragraphs.count()
+    assert count >= 2, f"Expected at least 2 description paragraphs, got {count}"
+    for i in range(count):
+        text = desc_paragraphs.nth(i).text_content()
+        assert text and len(text.strip()) > 10, f"Description {i} is too short or empty: {text}"
+
+
+def test_library_indicator_param_edit(page: Page, base_url):
+    """Indicator params modal opens, edit saves, toast appears."""
+    page.goto(base_url)
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Library").click()
+    page.locator("#panel-library").wait_for(state="visible", timeout=5000)
+    page.get_by_role("button", name="Indicators").click()
+    page.locator("#library-indicators-panel").wait_for(state="visible", timeout=5000)
+    page.locator("#library-indicators-table").wait_for(state="visible", timeout=5000)
+    page.locator(".indicator-config-btn").first.click()
+    page.locator("#modal-indicator-params").wait_for(state="visible", timeout=5000)
+    title = page.locator("#indicator-params-title")
+    assert "Configure" in title.text_content()
+    first_input = page.locator(".indicator-param-input").first
+    first_input.fill("99")
+    page.locator("#btn-save-params").click()
+    page.locator("#modal-indicator-params").wait_for(state="hidden", timeout=5000)
+    toast_el = page.locator("#toast")
+    toast_el.wait_for(state="visible", timeout=5000)
+    assert "save" in toast_el.text_content().lower()
