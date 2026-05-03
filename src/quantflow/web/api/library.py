@@ -98,7 +98,8 @@ def get_library_indicators():
 
             # Start with class defaults, then apply YAML overrides if present
             params = getattr(inst, "params", {})
-            ind_config = config.get(name, {})
+            ind_key = getattr(inst, "name", name)
+            ind_config = config.get(ind_key, {})
             if isinstance(ind_config, dict) and isinstance(ind_config.get("params"), dict):
                 params = {**params, **ind_config["params"]}
 

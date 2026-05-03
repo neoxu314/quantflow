@@ -158,3 +158,38 @@ class TestLibraryIndicatorParamsEndpoint:
             periods = data["indicators"]["VolumeMA"]["params"]["periods"]
             assert isinstance(periods, list)
             assert periods == [10, 20, 30]
+
+    def test_indicator_params_read_after_write(self, tmp_path):
+        """GET after PUT reflects updated params immediately."""
+        from quantflow.web.api import library as library_module
+        test_yaml = tmp_path / "indicators.yaml"
+        test_yaml.write_text(
+            "indicators:\n  KDJ:\n    enabled: true\n    params:\n      n: 9\n      m1: 3\n      m2: 3\n"
+        )
+
+        with patch.object(library_module, "INDICATORS_YAML", test_yaml):
+            app = FastAPI()
+            app.include_router(library_module.router)
+            client = TestClient(app)
+
+            # Step 1: GET confirms initial params
+            resp = client.get("/api/library/indicators").json()
+            kdj = next(i for i in resp["indicators"] if i["name"] == "KDJ")
+            assert kdj["params"]["n"] == 9
+
+            # Step 2: PUT to change n from 9 to 15
+            resp = client.put("/api/library/indicators/params", json={
+                "name": "KDJ",
+                "params": {"n": 15, "m1": 3, "m2": 3},
+            })
+            assert resp.status_code == 200
+
+            # Step 3: GET again - params must reflect the new value
+            resp = client.get("/api/library/indicators").json()
+            kdj = next(i for i in resp["indicators"] if i["name"] == "KDJ")
+            assert kdj["params"]["n"] == 15
+
+            # Step 4: Verify YAML file has the updated value
+            with open(test_yaml) as f:
+                data = yaml.safe_load(f)
+            assert data["indicators"]["KDJ"]["params"]["n"] == 15
