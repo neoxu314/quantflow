@@ -10,6 +10,9 @@
         .tab-active { border-color: #3b82f6; color: #2563eb; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
         .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        /* Tooltip: hidden by default, shown on group hover */
+        .tip { display: none; }
+        .group:hover .tip { display: block; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -131,32 +134,95 @@
                     <legend class="text-sm font-semibold text-gray-700 px-2">📡 Data Sources</legend>
                     <div class="space-y-3 mt-2">
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">CN A-Share</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                CN A-Share
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    A股数据源。可选 <code class="bg-gray-700 px-1 rounded">baostock</code>（免费无需token）、<code class="bg-gray-700 px-1 rounded">tushare</code>（需配置token）、<code class="bg-gray-700 px-1 rounded">yfinance</code>。不同数据源的数据质量、延迟和字段完整性有差异。
+                                    <br><span class="text-gray-400">A-share data source. Options: <code class="bg-gray-700 px-1 rounded">baostock</code> (free, no token), <code class="bg-gray-700 px-1 rounded">tushare</code> (requires token), <code class="bg-gray-700 px-1 rounded">yfinance</code>. Data quality and fields vary by source.</span>
+                                </span>
+                            </label>
                             <input id="cfg-cn-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.cn.primary" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">HK Stocks</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                HK Stocks
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    港股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>，备选 <code class="bg-gray-700 px-1 rounded">akshare</code>。修改后影响港股行情获取方式。
+                                    <br><span class="text-gray-400">HK stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>, fallback: <code class="bg-gray-700 px-1 rounded">akshare</code>. Changes affect how HK market data is fetched.</span>
+                                </span>
+                            </label>
                             <input id="cfg-hk-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.hk.primary" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">US Stocks</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                US Stocks
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    美股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>，数据覆盖最全。受Yahoo反爬策略影响，可能需要配合调整Batch参数。
+                                    <br><span class="text-gray-400">US stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code> (most comprehensive). May need to adjust Batch settings due to Yahoo anti-scraping.</span>
+                                </span>
+                            </label>
                             <input id="cfg-us-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.us.primary" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">JP Stocks</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                JP Stocks
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    日股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>。
+                                    <br><span class="text-gray-400">JP stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>.</span>
+                                </span>
+                            </label>
                             <input id="cfg-jp-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.jp.primary" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">KR Stocks</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                KR Stocks
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    韩股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>。
+                                    <br><span class="text-gray-400">KR stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>.</span>
+                                </span>
+                            </label>
                             <input id="cfg-kr-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.kr.primary" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Sector Data</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Sector Data
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    板块分类数据来源。推荐 <code class="bg-gray-700 px-1 rounded">akshare</code>，获取申万/同花顺板块信息，用于策略信号分类展示。
+                                    <br><span class="text-gray-400">Sector classification data source. Recommended: <code class="bg-gray-700 px-1 rounded">akshare</code> for SW/THS sector info, used in signal grouping.</span>
+                                </span>
+                            </label>
                             <input id="cfg-sector-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.sector.primary" />
                         </div>
                         <hr class="my-2"/>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Default Adjust</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Default Adjust
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    K线复权方式。<code class="bg-gray-700 px-1 rounded">前复权(qfq)</code>：以当前价格为基准调整历史数据，适合技术分析和策略回测。<code class="bg-gray-700 px-1 rounded">后复权(hfq)</code>：以上市价格为基准，反映真实收益率。
+                                    <br><span class="text-gray-400">Candlestick price adjustment. <code class="bg-gray-700 px-1 rounded">qfq</code> (forward-adjusted): current-price baseline, good for technical analysis. <code class="bg-gray-700 px-1 rounded">hfq</code> (backward-adjusted): IPO-price baseline, reflects real returns.</span>
+                                </span>
+                            </label>
                             <select id="cfg-adjust" class="col-span-1 border rounded px-2 py-1" data-path="data.defaults.adjust">
                                 <option value="qfq">前复权 (qfq)</option>
                                 <option value="hfq">后复权 (hfq)</option>
@@ -170,11 +236,29 @@
                     <legend class="text-sm font-semibold text-gray-700 px-2">⏱️ Lookback Period</legend>
                     <div class="space-y-3 mt-2">
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Calendar Multiplier</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Calendar Multiplier
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    历史数据回看倍数。系统根据各指标所需K线数（<code class="bg-gray-700 px-1 rounded">lookback_bars</code>）计算最大交易日数，乘以该倍数得到日历日数。公式：<code class="bg-gray-700 px-1 rounded">实际天数 = max(所需K线数) × 倍数 + 缓冲天数</code>。倍数设越大，拉取历史数据越长，策略判断依据越充分，但增加数据请求耗时和内存消耗。默认值 2。
+                                    <br><span class="text-gray-400">Historical data lookback multiplier. System calculates max trading days needed by indicators (<code class="bg-gray-700 px-1 rounded">lookback_bars</code>), then multiplies by this value for calendar days. Formula: <code class="bg-gray-700 px-1 rounded">actual_days = max(lookback_bars) × multiplier + buffer_days</code>. Higher = more history = better strategy analysis, but slower and more memory. Default: 2.</span>
+                                </span>
+                            </label>
                             <input id="cfg-lookback-multiplier" type="number" min="1" max="10" class="col-span-1 border rounded px-2 py-1" data-path="lookback.calendar_multiplier" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Buffer Days</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Buffer Days
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    额外缓冲天数。在计算出的回看天数基础上额外增加的天数，用于应对节假日、停牌等特殊情况导致的日历日与交易日差异。设太大会增加不必要的数据拉取量，设太小可能在节假日后数据不足。默认值 30。
+                                    <br><span class="text-gray-400">Extra buffer days added to the calculated lookback period. Accounts for holidays, trading suspensions, and calendar-vs-trading-day differences. Too high = unnecessary data fetch; too low = insufficient data after holidays. Default: 30.</span>
+                                </span>
+                            </label>
                             <input id="cfg-lookback-buffer" type="number" min="1" max="180" class="col-span-1 border rounded px-2 py-1" data-path="lookback.buffer_days" />
                         </div>
                     </div>
@@ -185,15 +269,42 @@
                     <legend class="text-sm font-semibold text-gray-700 px-2">🔄 YFinance Batch</legend>
                     <div class="space-y-3 mt-2">
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Chunk Size</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Chunk Size
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    每批请求的股票数量。Yahoo Finance 限制 60次/分钟、360次/小时、8000次/天。系统自动将股票按此大小分块并随机延迟。批次越大请求次数越少（速度快），但单次负载越高易触发限流。700只股票（约200只yFinance标的）通常耗时5-8分钟。默认值 50。
+                                    <br><span class="text-gray-400">Number of stocks per batch request. Yahoo Finance limits: 60 req/min, 360 req/hr, 8000 req/day. System auto-chunks stocks and adds random delays. Larger chunks = fewer requests (faster), but higher per-request load risks rate-limiting. ~700 stocks (~200 yFinance targets) typically take 5-8 minutes. Default: 50.</span>
+                                </span>
+                            </label>
                             <input id="cfg-yf-chunk" type="number" min="10" max="100" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.chunk_size" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Sleep Min</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Sleep Min
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    批次请求间最小等待秒数。系统使用 <code class="bg-gray-700 px-1 rounded">[min, max]</code> 范围的随机延迟（jitter），模拟人类访问行为避免触发反爬检测。设太小（&lt;3秒）易被封禁，设太大会显著拖慢扫描速度。需与 Sleep Max 配合使用。默认值 5。
+                                    <br><span class="text-gray-400">Minimum wait (seconds) between batch requests. System uses random jitter in <code class="bg-gray-700 px-1 rounded">[min, max]</code> range to simulate human behavior and avoid anti-scraping detection. Too low (&lt;3s) risks banning; too high significantly slows scanning. Must be paired with Sleep Max. Default: 5.</span>
+                                </span>
+                            </label>
                             <input id="cfg-yf-min" type="number" min="1" max="30" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_min" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Sleep Max</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Sleep Max
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    批次请求间最大等待秒数。与 Sleep Min 组成随机等待区间 <code class="bg-gray-700 px-1 rounded">[min, max]</code>。建议 Min 和 Max 之间保持一定差距（如5-12），随机性更好，更像人类访问模式。差距过小则接近固定延迟。默认值 12。
+                                    <br><span class="text-gray-400">Maximum wait (seconds) between batch requests. Together with Sleep Min, forms the random jitter range <code class="bg-gray-700 px-1 rounded">[min, max]</code>. Recommended: keep a gap between Min and Max (e.g., 5-12) for better randomness — mimics human access patterns better. Too narrow a gap ≈ fixed delay. Default: 12.</span>
+                                </span>
+                            </label>
                             <input id="cfg-yf-max" type="number" min="1" max="60" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_max" />
                         </div>
                     </div>
@@ -204,11 +315,29 @@
                     <legend class="text-sm font-semibold text-gray-700 px-2">🌐 Web Server</legend>
                     <div class="space-y-3 mt-2">
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Host</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Host
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    Web UI 监听地址。<code class="bg-gray-700 px-1 rounded">127.0.0.1</code>：仅本机可访问（安全推荐）。<code class="bg-gray-700 px-1 rounded">0.0.0.0</code>：允许所有网卡访问，局域网内其他设备可访问。修改后需重启 Web 服务生效。
+                                    <br><span class="text-gray-400">Web UI listen address. <code class="bg-gray-700 px-1 rounded">127.0.0.1</code>: localhost only (recommended for security). <code class="bg-gray-700 px-1 rounded">0.0.0.0</code>: all network interfaces, accessible from LAN. Requires Web server restart to take effect.</span>
+                                </span>
+                            </label>
                             <input id="cfg-web-host" class="col-span-1 border rounded px-2 py-1" data-path="web.host" />
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium">Port</label>
+                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
+                                Port
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    Web UI 端口号。默认 8080。如需在同一机器运行多个 QuantFlow 实例（如不同配置），可设不同端口。确保端口未被占用且防火墙已开放。修改后需重启。
+                                    <br><span class="text-gray-400">Web UI port number. Default: 8080. To run multiple QuantFlow instances on the same machine (e.g., different configs), use different ports. Ensure port is free and firewall allows access. Requires restart.</span>
+                                </span>
+                            </label>
                             <input id="cfg-web-port" type="number" min="1024" max="65535" class="col-span-1 border rounded px-2 py-1" data-path="web.port" />
                         </div>
                         <div class="text-xs text-yellow-600 bg-yellow-50 p-2 rounded col-span-4">⚠️ 修改后需重启 Web 服务</div>
@@ -218,10 +347,22 @@
                 <!-- Tushare Token -->
                 <fieldset class="border rounded-lg p-4">
                     <legend class="text-sm font-semibold text-gray-700 px-2">🔐 Tushare Token</legend>
-                    <div class="flex items-center gap-2 mt-2">
-                        <input id="cfg-tushare-token" type="password" class="flex-1 border rounded px-2 py-1" placeholder="留空表示未配置" data-path="tushare.token" />
-                        <button type="button" id="btn-toggle-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">👁️</button>
-                        <button type="button" id="btn-copy-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">📋</button>
+                    <div class="mt-2">
+                        <label class="block text-xs text-gray-500 mb-2 flex items-center gap-1 group cursor-help w-fit">
+                            API Key
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                Tushare Pro API 密钥。在 tushare.pro 注册账号后于个人主页获取。配置后可将 Tushare 作为 A 股数据源使用（部分高级数据需积分）。留空时若首选源为 tushare 则自动降级到备选源。
+                                <br><span class="text-gray-400">Tushare Pro API key. Register at tushare.pro and get your token from your profile. Once configured, Tushare becomes available as an A-share data source (some advanced data requires credits). If left blank and primary is tushare, system automatically falls back to secondary source.</span>
+                            </span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <input id="cfg-tushare-token" type="password" class="flex-1 border rounded px-2 py-1" placeholder="留空表示未配置" data-path="tushare.token" />
+                            <button type="button" id="btn-toggle-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">👁️</button>
+                            <button type="button" id="btn-copy-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">📋</button>
+                        </div>
                     </div>
                 </fieldset>
 
@@ -229,6 +370,16 @@
                 <fieldset class="border rounded-lg p-4">
                     <legend class="text-sm font-semibold text-gray-700 px-2">📝 Logging Level</legend>
                     <div class="mt-2">
+                        <label class="block text-xs text-gray-500 mb-1 flex items-center gap-1 group cursor-help w-fit">
+                            Log Level
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                控制台和文件日志的详细程度。<code class="bg-gray-700 px-1 rounded">DEBUG</code>：最详细，记录所有内部操作，排查问题时用。<code class="bg-gray-700 px-1 rounded">INFO</code>：日常使用，记录关键操作和结果（推荐）。<code class="bg-gray-700 px-1 rounded">WARNING</code>：仅记录警告和异常。<code class="bg-gray-700 px-1 rounded">ERROR</code>：仅记录错误信息。日志级别不影响策略运行结果。
+                                <br><span class="text-gray-400">Verbosity of console and file logs. <code class="bg-gray-700 px-1 rounded">DEBUG</code>: most detailed, all internal operations, for troubleshooting. <code class="bg-gray-700 px-1 rounded">INFO</code>: daily use, key operations and results (recommended). <code class="bg-gray-700 px-1 rounded">WARNING</code>: warnings and anomalies only. <code class="bg-gray-700 px-1 rounded">ERROR</code>: errors only. Log level does not affect strategy results.</span>
+                            </span>
+                        </label>
                         <select id="cfg-log-level" class="border rounded px-2 py-1" data-path="logging.level">
                             <option value="DEBUG">DEBUG</option>
                             <option value="INFO">INFO</option>
