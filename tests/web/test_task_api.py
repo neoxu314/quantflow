@@ -69,7 +69,7 @@ def test_add_task(app_with_config):
     resp = app_with_config.post("/api/tasks", json={
         "name": "new_task",
         "watchlist": "watchlists/test.yaml",
-        "strategies": ["kdj_golden_cross"],
+        "strategies": ["daily_bull_oversold"],
         "output": "./output/new",
     }, params={"filename": "tasks_test.yaml"})
 
@@ -99,7 +99,7 @@ def test_update_task(app_with_config):
     resp = app_with_config.put(f"/api/tasks/{task_id}", json={
         "name": "test_task_1",
         "watchlist": "watchlists/updated.yaml",
-        "strategies": ["daily_bull_oversold", "kdj_golden_cross"],
+        "strategies": ["daily_bull_oversold"],
         "output": "./output/updated",
     })
 

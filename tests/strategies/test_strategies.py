@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 warnings.filterwarnings('ignore')
 
 from quantflow.strategies.base import StrategyBase, BuyStrategy
-from quantflow.strategies.buy import KDJGoldenCrossBuy, DailyBullishMidRangeBuy, DailyBullishOversoldBuy
+from quantflow.strategies.buy import DailyBullishMidRangeBuy, DailyBullishOversoldBuy
 from quantflow.strategies.composite import CompositeStrategy
 
 @pytest.fixture
@@ -37,16 +37,7 @@ def sample_df_with_indicators():
     return df
 
 
-class TestKDJGoldenCrossBuy:
-    
-    def test_name(self):
-        strategy = KDJGoldenCrossBuy()
-        assert strategy.name == "CustomBuy_1"
-    
-    def test_generate_signals(self, sample_df_with_indicators):
-        strategy = KDJGoldenCrossBuy()
-        result = strategy.generate_signals(sample_df_with_indicators)
-        assert "buy_signal" in result.columns
+# KDJGoldenCrossBuy tests removed: strategy deleted from codebase
 
 
 class TestStrategyIntegration:
@@ -230,16 +221,16 @@ class TestDualLineStrategyNaNHandling:
 class TestCompositeStrategy:
     
     def test_compose(self, sample_df_with_indicators):
-        b1 = KDJGoldenCrossBuy()
+        b1 = DailyBullishMidRangeBuy()
         b2 = DailyBullishMidRangeBuy()
         comp = CompositeStrategy([b1, b2], mode="any")
         res = comp.generate_signals(sample_df_with_indicators)
         assert "buy_signal" in res.columns
     
     def test_get_names(self):
-        b1 = KDJGoldenCrossBuy()
+        b1 = DailyBullishMidRangeBuy()
         b2 = DailyBullishOversoldBuy()
         comp = CompositeStrategy([b1, b2])
         names = comp.get_strategy_names()
-        assert "CustomBuy_1" in names
+        assert "DailyBullishMidRange" in names
         assert "DailyBullishOversold" in names

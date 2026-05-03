@@ -38,10 +38,20 @@ def test_create_app():
     app = create_app()
     route_paths = {r.path for r in app.routes}
 
-    for expected in ("/api/config", "/api/strategies", "/api/watchlists",
-                     "/api/watchlists/{filename:path}", "/api/watchlists/search",
-                     "/api/tasks", "/api/tasks/{task_id}", "/api/task-files",
-                     "/api/task-files/{filename}"):
+    for expected in (
+        "/api/config",
+        "/api/strategies",
+        "/api/watchlists",
+        "/api/watchlists/{filename:path}",
+        "/api/watchlists/search",
+        "/api/tasks",
+        "/api/tasks/{task_id}",
+        "/api/task-files",
+        "/api/task-files/{filename}",
+        "/api/library/strategies",
+        "/api/library/indicators",
+        "/api/library/indicators/params",
+    ):
         assert expected in route_paths
 
 

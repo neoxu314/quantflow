@@ -137,7 +137,7 @@ def test_task_update_then_disk_matches(task_client):
     client.post("/api/tasks", json={
         "name": "upd_task",
         "watchlist": "watchlists/orig.yaml",
-        "strategies": ["kdj_golden_cross"],
+        "strategies": ["daily_bull_oversold", "daily_bull_mid_range"],
         "output": "./output/orig",
     }, params={"filename": "tasks_update.yaml"})
 
@@ -145,7 +145,7 @@ def test_task_update_then_disk_matches(task_client):
     resp = client.put("/api/tasks/tasks_update.yaml:upd_task", json={
         "name": "upd_task",
         "watchlist": "watchlists/new.yaml",
-        "strategies": ["daily_bull_oversold", "kdj_golden_cross"],
+        "strategies": ["daily_bull_oversold", "daily_bull_mid_range"],
         "output": "./output/new",
     })
     assert resp.status_code == 200
