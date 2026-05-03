@@ -4,6 +4,7 @@ Requires: pip install pytest-playwright
 Usage: playwright install chromium && pytest tests/web/e2e/test_web_ui.py -v
 """
 import os
+import shutil
 import subprocess
 import time
 import socket
@@ -65,11 +66,31 @@ def base_url(web_server):
     return SERVER_URL
 
 
+CFG_BACKUP = PROJECT_ROOT / "config" / "quantflow.yaml.bak"
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_data(base_url):
+    """Delete leftover test data and protect production config."""
+    _backup_production_config()
     yield
+    _restore_production_config()
     _remove_test_watchlist(base_url)
     _remove_test_task_file(base_url)
+
+
+def _backup_production_config():
+    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
+    if cfg.exists():
+        shutil.copy2(cfg, CFG_BACKUP)
+
+
+def _restore_production_config():
+    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
+    if CFG_BACKUP.exists():
+        shutil.move(str(CFG_BACKUP), str(cfg))
+    elif cfg.exists():
+        cfg.unlink()
 
 
 def _remove_test_watchlist(base_url):
@@ -83,11 +104,7 @@ def _remove_test_watchlist(base_url):
 def _remove_test_task_file(base_url):
     import httpx
     try:
-        resp = httpx.delete(f"{base_url}/api/task-files/{TEST_TASK_FILE}")
-        if resp.status_code == 404:
-            path = PROJECT_ROOT / "config" / TEST_TASK_FILE
-            if path.exists():
-                path.unlink()
+        httpx.delete(f"{base_url}/api/task-files/{TEST_TASK_FILE}")
     except Exception:
         pass
 
@@ -237,9 +254,9 @@ def test_settings_modify_and_save(page: Page, base_url):
     page.get_by_role("button", name="Settings").click()
     page.wait_for_selector("#settings-form", timeout=5000)
 
-    logging_select = page.locator("#cfg-log-level")
-    original = logging_select.input_value()
+    cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
 
+    logging_select = page.locator("#cfg-log-level")
     logging_select.select_option(label="WARNING")
 
     page.locator("#btn-save-settings").click()
@@ -248,25 +265,14 @@ def test_settings_modify_and_save(page: Page, base_url):
     verify = httpx.get(f"{base_url}/api/config").json()
     assert verify["logging"]["level"] == "WARNING"
 
-    cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
     with open(cfg_path, "r", encoding="utf-8") as f:
         saved = yaml.safe_load(f)
     assert saved["logging"]["level"] == "WARNING"
 
-    logging_select.select_option(label=original)
-    page.locator("#btn-save-settings").click()
-    page.wait_for_timeout(1000)
-
 
 def test_settings_survive_server_restart(page: Page, base_url):
     """Modify a config, restart server, and confirm changes persist."""
-    import httpx, yaml, subprocess, time, socket, os
-
-    cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        original = yaml.safe_load(f)
-    orig_buffer = original.get("lookback", {}).get("buffer_days", 30)
-    new_buffer = 99
+    import httpx, subprocess, time, socket, os
 
     page.goto(base_url)
     page.wait_for_load_state("networkidle")
@@ -274,13 +280,13 @@ def test_settings_survive_server_restart(page: Page, base_url):
     page.wait_for_selector("#settings-form", timeout=5000)
 
     buffer_field = page.locator("#cfg-lookback-buffer")
-    buffer_field.fill(str(new_buffer))
+    buffer_field.fill("99")
 
     page.locator("#btn-save-settings").click()
     page.wait_for_timeout(1000)
 
     resp = httpx.get(f"{base_url}/api/config")
-    assert resp.json()["lookback"]["buffer_days"] == new_buffer
+    assert resp.json()["lookback"]["buffer_days"] == 99
 
     lsof = subprocess.run(["lsof", "-ti:8080"], capture_output=True, text=True)
     for pid in lsof.stdout.strip().splitlines():
@@ -316,11 +322,8 @@ def test_settings_survive_server_restart(page: Page, base_url):
 
         field = page.locator("#cfg-lookback-buffer")
         field.wait_for(state="visible", timeout=5000)
-        assert field.input_value() == str(new_buffer)
+        assert field.input_value() == "99"
     finally:
-        original["lookback"]["buffer_days"] = orig_buffer
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            yaml.dump(original, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
         proc.terminate()
         try:
             proc.wait(timeout=5)
