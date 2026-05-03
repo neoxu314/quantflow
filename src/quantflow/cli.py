@@ -59,7 +59,7 @@ def monitor():
     from quantflow.execution.job import ExecutionJob
     from quantflow.execution.executor import Executor
     from quantflow.execution.storage import ExecutionResultItem
-from quantflow.strategies.buy import DailyBullishMidRangeBuy, DailyBullishOversoldBuy
+    from quantflow.strategies.buy import DailyBullishMidRangeBuy, DailyBullishOversoldBuy
 
     watchlist = Watchlist.load(args.watchlist)
     
