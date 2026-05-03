@@ -34,6 +34,25 @@ interface StrategyInfo {
     type: string;
 }
 
+// Library data structures (for /api/library/* endpoints)
+interface LibraryStrategyInfo {
+    id: string;
+    name: string;
+    type: string;
+    description: string;
+    min_lookback_days: number;
+    required_indicators: string[];
+}
+
+interface LibraryIndicatorInfo {
+    name: string;
+    category: string;
+    params: Record<string, any>;
+    required_fields: string[];
+    output_fields: string[];
+    lookback_bars: number;
+}
+
 interface TaskFileInfo {
     filename: string;
     taskCount: number;
@@ -58,6 +77,10 @@ const state = {
     taskFiles: [] as TaskFileInfo[],
     selectedTaskFile: "" as string,
     rawConfig: {} as Record<string, unknown>,
+    // Library (new) data
+    libraryStrategies: [] as LibraryStrategyInfo[],
+    libraryIndicators: [] as LibraryIndicatorInfo[],
+    currentIndicatorConfig: null as string | null,
 };
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -74,7 +97,8 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 async function init() {
     setupEventListeners();
-    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig()]);
+    // Load core and library data in parallel
+    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig(), loadLibraryStrategies(), loadLibraryIndicators()]);
     if (state.taskFiles.length > 0) {
         selectTaskFile(state.taskFiles[0].filename);
     } else {
@@ -91,6 +115,19 @@ async function init() {
 async function loadStrategies() {
     const res = await api<{ strategies: StrategyInfo[] }>("/api/strategies");
     state.strategies = res.strategies;
+}
+
+// Library data fetchers
+async function loadLibraryStrategies() {
+    const res = await api<{ strategies: LibraryStrategyInfo[] }>("/api/library/strategies");
+    state.libraryStrategies = res.strategies;
+    renderLibraryStrategies();
+}
+
+async function loadLibraryIndicators() {
+    const res = await api<{ indicators: LibraryIndicatorInfo[] }>("/api/library/indicators");
+    state.libraryIndicators = res.indicators;
+    renderLibraryIndicators();
 }
 
 async function loadWatchlists() {
@@ -154,7 +191,7 @@ async function loadConfig(): Promise<void> {
 }
 
 function switchTab(tab: string) {
-    for (const t of ["watchlists", "tasks", "settings"]) {
+    for (const t of ["watchlists", "tasks", "settings", "library"]) {
         const tabBtn = document.getElementById(`tab-${t}`)!;
         const panel = document.getElementById(`panel-${t}`)!;
         if (t === tab) {
@@ -164,6 +201,139 @@ function switchTab(tab: string) {
             tabBtn.className = "tab-inactive px-6 py-3 border-b-2 font-medium text-sm";
             panel.classList.add("hidden");
         }
+    }
+}
+
+// Library sub-tab switching (strategies / indicators)
+function switchLibrarySubTab(subtab: string) {
+    for (const s of ["strategies", "indicators"]) {
+        const btn = document.getElementById(`subtab-${s}`)!;
+        const panel = document.getElementById(`library-${s}-panel`)!;
+        if (s === subtab) {
+            btn.className = "subtab-active px-4 py-2 border-b-2 text-sm font-medium";
+            btn.style.borderColor = "#3b82f6";
+            btn.style.color = "#2563eb";
+            panel.classList.remove("hidden");
+        } else {
+            btn.className = "subtab-inactive px-4 py-2 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:text-gray-700";
+            btn.style.borderColor = "transparent";
+            btn.style.color = "";
+            panel.classList.add("hidden");
+        }
+    }
+}
+
+// Render library data lists
+function renderLibraryStrategies() {
+    const list = document.getElementById("library-strategies-list")!;
+    const loading = document.getElementById("library-strategies-loading")!;
+    loading.classList.add("hidden");
+    list.innerHTML = "";
+    if (state.libraryStrategies.length === 0) {
+        list.innerHTML = '<p class="text-gray-500 text-center py-8">No strategies available</p>';
+        return;
+    }
+    for (const strat of state.libraryStrategies) {
+        const icon = strat.type === "buy" ? "\uD83D\uDD35" : "\uD83D\uDD34";
+        const div = document.createElement("div");
+        div.className = "border rounded-lg p-4 hover:shadow-md transition-shadow";
+        div.innerHTML = `
+            <div class="flex items-start gap-3">
+                <span class="text-lg">${icon}</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <h4 class="font-semibold text-gray-900">${strat.name}</h4>
+                        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${strat.type === "buy" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}">${strat.type}</span>
+                    </div>
+                    ${strat.description ? `<p class="mt-1.5 text-sm text-gray-600 whitespace-pre-line">${strat.description}</p>` : ""}
+                    <div class="mt-2 flex flex-wrap gap-3 text-xs">
+                        <span class="text-gray-500">Lookback: <span class="font-medium text-gray-700">${strat.min_lookback_days} days</span></span>
+                        ${strat.required_indicators.length > 0 ? `<span class="text-gray-500">Indicators: <span class="font-medium text-gray-700">${strat.required_indicators.join(", ")}</span></span>` : ""}
+                    </div>
+                </div>
+            </div>`;
+        list.appendChild(div);
+    }
+}
+
+function renderLibraryIndicators() {
+    const tbody = document.getElementById("library-indicators-table")!;
+    const loading = document.getElementById("library-indicators-loading")!;
+    if (loading) loading.classList.add("hidden");
+    tbody.innerHTML = "";
+    if (state.libraryIndicators.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-500">No indicators available</td></tr>';
+        return;
+    }
+    for (const ind of state.libraryIndicators) {
+        const paramsStr = Object.entries(ind.params).map(([k, v]) => `${k}=${v}`).join(", ");
+        const catLabel = ind.category === "standard" ? '\uD83D\uDC99' : '\uD83D\uDD27';
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-gray-50";
+        tr.innerHTML = `
+            <td class="px-4 py-2 text-sm font-medium text-gray-900">${ind.name}</td>
+            <td class="px-4 py-2 text-sm text-gray-600">${catLabel} ${ind.category}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs" title="${paramsStr}">${paramsStr}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 text-xs">${ind.required_fields.join(", ") || "-"}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 text-xs">${ind.output_fields.join(", ") || "-"}</td>
+            <td class="px-4 py-2 text-sm text-gray-600">${ind.lookback_bars || "-"}</td>
+            <td class="px-4 py-2 text-sm">
+                <button class="text-blue-600 hover:text-blue-800 text-xs indicator-config-btn" data-indicator="${ind.name}">Edit Params</button>
+            </td>`;
+        tbody.appendChild(tr);
+    }
+    // Wire up edit buttons
+    tbody.querySelectorAll(".indicator-config-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const name = (btn as HTMLElement).dataset.indicator!;
+            openIndicatorParamsModal(name);
+        });
+    });
+}
+
+function openIndicatorParamsModal(indicatorName: string) {
+    if (!state.libraryIndicators) return;
+    const ind = state.libraryIndicators.find(i => i.name === indicatorName);
+    if (!ind) return;
+    state.currentIndicatorConfig = indicatorName;
+    document.getElementById("indicator-params-title")!.textContent = `Configure ${ind.name}`;
+    document.getElementById("indicator-params-desc")!.textContent = `Category: ${ind.category} | Inputs: ${ind.required_fields.join(", ")} | Outputs: ${ind.output_fields.join(", ")}`;
+    const form = document.getElementById("indicator-params-form")!;
+    form.innerHTML = "";
+    for (const [key, value] of Object.entries(ind.params)) {
+        const row = document.createElement("div");
+        row.className = "grid grid-cols-3 gap-2 items-center text-sm";
+        row.innerHTML = `
+            <label class="text-gray-700 font-medium">${key}</label>
+            <input type="number" step="any" value="${value}" data-param-key="${key}" class="indicator-param-input col-span-2 border rounded px-2 py-1" />
+        `;
+        form.appendChild(row);
+    }
+    openModal("modal-indicator-params");
+}
+
+async function saveIndicatorParams() {
+    if (!state.currentIndicatorConfig) return;
+    const form = document.getElementById("indicator-params-form")!;
+    const inputs = form.querySelectorAll(".indicator-param-input");
+    const params: Record<string, any> = {};
+    for (const input of inputs) {
+        const key = (input as HTMLInputElement).dataset.paramKey!;
+        const val = (input as HTMLInputElement).value;
+        const numVal = Number(val);
+        params[key] = isNaN(numVal) ? val : numVal;
+    }
+    try {
+        await api("/api/library/indicators/params", {
+            method: "PUT",
+            body: JSON.stringify({ name: state.currentIndicatorConfig, params }),
+        });
+        toast("Indicator parameters saved");
+        closeModal("modal-indicator-params");
+        // Refresh library indicators to reflect changes
+        await loadLibraryIndicators();
+    } catch (e: unknown) {
+        alert(`Failed to save: ${(e as Error).message}`);
     }
 }
 
@@ -728,6 +898,11 @@ function setupEventListeners() {
         const token = (document.getElementById("cfg-tushare-token") as HTMLInputElement).value;
         if (!token) { toast("Token is empty"); return; }
         navigator.clipboard.writeText(token).then(() => toast("Token copied to clipboard"));
+    });
+
+    // Library sub-tab switching
+    document.querySelectorAll('[data-subtab]').forEach(btn => {
+        btn.addEventListener("click", () => switchLibrarySubTab((btn as HTMLElement).dataset.subtab!));
     });
 }
 

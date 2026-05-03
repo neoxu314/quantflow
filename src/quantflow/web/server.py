@@ -23,10 +23,13 @@ def create_app():
     from quantflow.web.api.config import router as config_router
     from quantflow.web.api.watchlists import router as watchlist_router
     from quantflow.web.api.tasks import router as task_router
+    # Library endpoints (Phase 1)
+    from quantflow.web.api.library import router as library_router
 
     app.include_router(config_router)
     app.include_router(watchlist_router)
     app.include_router(task_router)
+    app.include_router(library_router)
 
     # Serve static files (frontend)
     static_dir = Path(__file__).parent / "static"

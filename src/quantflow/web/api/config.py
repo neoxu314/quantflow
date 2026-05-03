@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import yaml
+import inspect
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from typing import Any, Dict
@@ -81,10 +82,13 @@ def get_strategies():
         for sid, cls in STRATEGY_REGISTRY.items():
             name = cls.__name__
             is_buy = "Buy" in name
+            # Extract docstring description for the frontend/help
+            description = inspect.cleandoc(cls.__doc__ or "")
             strategy_info.append({
                 "id": sid,
                 "name": name,
                 "type": "buy" if is_buy else "sell",
+                "description": description,
             })
 
         return {"strategies": strategy_info}
