@@ -60,6 +60,24 @@ interface LibraryIndicatorInfo {
     lookback_bars: number;
 }
 
+// Run record type for Runs feature
+interface RunRecord {
+    id: string;
+    name: string;
+    run_type: string;
+    config: Record<string, any>;
+    status: string;
+    created_at: string;
+    started_at: string | null;
+    finished_at: string | null;
+    duration_ms: number | null;
+    error: string | null;
+    output_path: string | null;
+    report_path: string | null;
+    signal_count: number;
+    preset_id: string | null;
+}
+
 interface TaskFileInfo {
     filename: string;
     taskCount: number;
@@ -75,6 +93,10 @@ const state = {
     taskFiles: [] as TaskFileInfo[],
     selectedTaskFile: "" as string,
     rawConfig: {} as Record<string, unknown>,
+    // Runs (new)
+    runsList: [] as RunRecord[],
+    selectedRunId: null as string | null,
+    selectedRun: null as RunRecord | null,
     // Library (new) data
     libraryStrategies: [] as LibraryStrategyInfo[],
     libraryIndicators: [] as LibraryIndicatorInfo[],
@@ -96,7 +118,7 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 async function init() {
     setupEventListeners();
     // Load core and library data in parallel
-    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig(), loadLibraryStrategies(), loadLibraryIndicators()]);
+    await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig(), loadLibraryStrategies(), loadLibraryIndicators(), loadRuns()]);
     if (state.taskFiles.length > 0) {
         selectTaskFile(state.taskFiles[0].filename);
     } else {
@@ -132,6 +154,405 @@ async function loadWatchlists() {
     state.watchlists = await api<WatchlistSummary[]>("/api/watchlists");
     renderWatchlistSidebar();
 }
+
+// Runs data fetch
+async function loadRuns() {
+    try {
+        const res = await api<{ runs: RunRecord[] }>("/api/runs/");
+        state.runsList = res.runs || [];
+        renderRunsList();
+    } catch (e) {
+        console.error('Failed to load runs:', e);
+    }
+}
+
+function renderRunsList() {
+    const list = document.getElementById('runs-list')!;
+    if (!list) return;
+    if (!state.runsList || state.runsList.length === 0) {
+        list.innerHTML = '<li class="text-gray-400 text-sm text-center py-8">No runs yet</li>';
+        return;
+    }
+    list.innerHTML = state.runsList.map(r => {
+        const active = state.selectedRunId === r.id ? 'bg-blue-50 border-l-2 border-blue-500' : '';
+        const time = new Date(r.created_at).toLocaleString();
+        return `<li class="px-3 py-2 rounded cursor-pointer hover:bg-gray-100 ${active}" data-run-id="${r.id}">` +
+            `<div class="font-medium text-sm truncate">${r.name}</div>` +
+            `<div class="text-xs text-gray-500">${r.run_type} • ${r.status} • ${time}</div>` +
+            `</li>`;
+    }).join('');
+    list.querySelectorAll('[data-run-id]').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = (el as HTMLElement).dataset.runId!;
+            selectRun(id);
+        });
+    });
+}
+
+async function selectRun(runId: string) {
+    state.selectedRunId = runId;
+    renderRunsList();
+    try {
+        const data = await api<{ run: RunRecord }>(`/api/runs/${runId}`);
+        state.selectedRun = data.run;
+        renderRunsDetail(state.selectedRun);
+    } catch (e) {
+        console.error('Failed to load run details:', e);
+    }
+}
+
+// ---- Runs detail rendering (4 sub-tabs) ----
+
+function renderRunsDetail(run: RunRecord | null) {
+    const emptyState = document.getElementById("runs-empty-state")!;
+    const detail = document.getElementById("runs-detail")!;
+    if (!run) {
+        emptyState.classList.remove("hidden");
+        detail.classList.add("hidden");
+        return;
+    }
+    emptyState.classList.add("hidden");
+    detail.classList.remove("hidden");
+
+    // Render all 4 sub-tab panels
+    renderConfigTab(run);
+    renderProgressTab(run);
+    renderReportTab(run);
+    renderFilesTab(run);
+
+    // Reset to Config tab
+    document.querySelectorAll(".run-subtab").forEach(t => {
+        (t as HTMLElement).style.borderColor = "transparent";
+        (t as HTMLElement).style.color = "#6b7280";
+    });
+    const firstTab = document.querySelector('[data-runtab="config"]') as HTMLElement;
+    if (firstTab) {
+        firstTab.style.borderColor = "#3b82f6";
+        firstTab.style.color = "#2563eb";
+    }
+    document.querySelectorAll(".run-tab-content").forEach(p => p.classList.add("hidden"));
+    document.getElementById("runtab-config")!.classList.remove("hidden");
+}
+
+function renderConfigTab(run: RunRecord) {
+    const panel = document.getElementById("runtab-config")!;
+    let html = `<div class="space-y-2 text-sm">
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+            <span class="text-gray-500">Type:</span><span class="font-mono">${run.run_type}</span>
+            <span class="text-gray-500">Status:</span><span>${run.status}</span>`;
+    if (run.started_at) html += `<span class="text-gray-500">Started:</span><span>${new Date(run.started_at).toLocaleString()}</span>`;
+    if (run.finished_at) html += `<span class="text-gray-500">Finished:</span><span>${new Date(run.finished_at).toLocaleString()}</span>`;
+    if (run.duration_ms) html += `<span class="text-gray-500">Duration:</span><span>${(run.duration_ms / 1000).toFixed(1)}s</span>`;
+    if (run.signal_count) html += `<span class="text-gray-500">Signals:</span><span>${run.signal_count}</span>`;
+    if (run.error) html += `<span class="text-gray-500">Error:</span><span class="text-red-600">${run.error}</span>`;
+    html += `</div></div>`;
+    html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
+        <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(run.config, null, 2)}</pre></details>`;
+    html += `<div class="flex gap-2 mt-4 pt-3 border-t">
+        <button onclick="runAgain('${run.id}')" class="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">▶ Run Again</button>
+    </div>`;
+    panel.innerHTML = html;
+}
+
+function renderProgressTab(run: RunRecord) {
+    const panel = document.getElementById("runtab-progress")!;
+    if (run.status === "completed") {
+        panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">✅</div>
+            <div class="text-lg font-medium">Complete</div>
+            ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} signal(s)</div>` : ""}</div>`;
+    } else if (run.status === "failed") {
+        panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">❌</div>
+            <div class="text-lg font-medium text-red-600">Failed</div>
+            <div class="text-sm text-red-500 mt-1">${run.error || "unknown"}</div></div>`;
+    } else if (run.status === "running") {
+        panel.innerHTML = `<div class="space-y-3">
+            <div class="h-3 bg-gray-200 rounded overflow-hidden">
+                <div id="run-progress-bar" class="h-full bg-blue-500 transition-all" style="width:0%"></div>
+            </div>
+            <div id="run-progress-text" class="text-sm text-gray-600">Starting...</div>
+            <div id="run-log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded h-64 overflow-y-auto"></div>
+        </div>`;
+        connectSSE(run.id);
+    } else {
+        panel.innerHTML = `<div class="text-gray-500 text-center py-8">Status: ${run.status}</div>`;
+    }
+}
+
+function renderReportTab(run: RunRecord) {
+    const panel = document.getElementById("runtab-report")!;
+    if (run.status === "running" || run.status === "queued") {
+        panel.innerHTML = '<div class="text-gray-500 text-center py-8">Report available after completion</div>';
+        return;
+    }
+    if (!run.report_path) {
+        panel.innerHTML = '<div class="text-gray-500 text-center py-8">No report available</div>';
+        return;
+    }
+    panel.innerHTML = '<div class="text-sm text-gray-500 text-center">Loading...</div>';
+    api<{ report: string | null; message?: string }>(`/api/runs/${run.id}/report`)
+        .then(data => {
+            if (data.report) {
+                panel.innerHTML = `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
+            } else {
+                panel.innerHTML = `<div class="text-gray-500 text-center py-8">${data.message || "No content"}</div>`;
+            }
+        }).catch(() => { panel.innerHTML = '<div class="text-red-500 text-center">Failed to load</div>'; });
+}
+
+function renderFilesTab(run: RunRecord) {
+    const panel = document.getElementById("runtab-files")!;
+    if (!run.output_path) {
+        panel.innerHTML = '<div class="text-gray-500 text-center py-8">No output files</div>';
+        return;
+    }
+    api<{ files: { name: string; path: string; size: string; type: string }[] }>(`/api/runs/${run.id}/files`)
+        .then(data => {
+            if (!data.files.length) { panel.innerHTML = '<div class="text-gray-500 text-center py-8">No files</div>'; return; }
+            let html = `<table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">File</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody>`;
+            data.files.forEach(f => {
+                html += `<tr><td class="px-4 py-2 font-mono text-xs">${f.name}</td>
+                    <td class="px-4 py-2 text-gray-500">${f.size}</td>
+                    <td class="px-4 py-2"><button class="text-blue-500 hover:text-blue-700 text-xs"
+                        onclick="copyToClipboard('${f.path}')">📋 Copy Path</button></td></tr>`;
+            });
+            html += "</tbody></table>";
+            panel.innerHTML = html;
+        }).catch(() => { panel.innerHTML = '<div class="text-red-500 text-center">Failed</div>'; });
+}
+
+// ---- New Run modal wizard ----
+
+let selectedRunType = "";
+
+function resetRunModal() {
+    selectedRunType = "";
+    document.getElementById("run-step-type")!.classList.remove("hidden");
+    document.getElementById("run-step-config")!.classList.add("hidden");
+    document.getElementById("run-step-preview")!.classList.add("hidden");
+    document.getElementById("btn-back-run")!.classList.add("hidden");
+    document.getElementById("btn-check-run")!.classList.add("hidden");
+    document.getElementById("btn-execute-run")!.classList.add("hidden");
+    ["stock_scan", "watchlist_run", "task_run"].forEach(t => {
+        document.getElementById(`run-config-${t}`)!.classList.add("hidden");
+    });
+}
+
+function selectRunType(type: string) {
+    selectedRunType = type;
+    document.getElementById("run-step-type")!.classList.add("hidden");
+    document.getElementById("run-step-config")!.classList.remove("hidden");
+    document.getElementById("run-step-preview")!.classList.remove("hidden");
+    document.getElementById("btn-back-run")!.classList.remove("hidden");
+    document.getElementById("btn-check-run")!.classList.remove("hidden");
+    document.getElementById("btn-execute-run")!.classList.remove("hidden");
+    document.getElementById(`run-config-${type}`)!.classList.remove("hidden");
+    populateRunFormFields(type);
+    updateCliPreview();
+}
+
+function populateRunFormFields(type: string) {
+    if (type === "watchlist_run") {
+        const sel = document.getElementById("run-watchlist-select") as HTMLSelectElement;
+        sel.innerHTML = state.watchlists.map(w =>
+            `<option value="${w.path}">${w.name} (${w.itemCount} stocks)</option>`
+        ).join("");
+        const stratDiv = document.getElementById("run-strategy-checkboxes")!;
+        stratDiv.innerHTML = (state.strategies as any[])
+            .filter((s: any) => s.type === "buy")
+            .map((s: any) =>
+                `<label class="flex items-center gap-2"><input type="checkbox" value="${s.id}" checked class="rounded"> ${s.description || s.id}</label>`
+            ).join("");
+    } else if (type === "task_run") {
+        const sel = document.getElementById("run-task-config-select") as HTMLSelectElement;
+        sel.innerHTML = (state as any).taskFiles.map((tf: any) =>
+            `<option value="config/${tf.filename}">${tf.filename} (${tf.taskCount} tasks)</option>`
+        ).join("");
+    }
+}
+
+function updateCliPreview() {
+    const preview = document.getElementById("run-cli-preview")!;
+    if (!preview) return;
+    if (selectedRunType === "stock_scan") {
+        const code = (document.getElementById("run-stock-code") as HTMLInputElement).value || "CODE";
+        const inds = Array.from(document.querySelectorAll(".run-indicator:checked"))
+            .map((el: Element) => (el as HTMLInputElement).value).join(",");
+        preview.textContent = `python -m quantflow.cli scan --code ${code} --indicator ${inds || "kdj,dual_line"}`;
+    } else if (selectedRunType === "watchlist_run") {
+        const wl = (document.getElementById("run-watchlist-select") as HTMLSelectElement)?.value || "WATCHLIST";
+        preview.textContent = `python -m quantflow.cli monitor --watchlist ${wl}`;
+    } else if (selectedRunType === "task_run") {
+        const tc = (document.getElementById("run-task-config-select") as HTMLSelectElement)?.value || "CONFIG";
+        preview.textContent = `python -m quantflow.cli tasks --config ${tc}`;
+    }
+}
+
+async function executeRun() {
+    const body: Record<string, any> = { run_type: selectedRunType };
+    if (selectedRunType === "stock_scan") {
+        body.code = (document.getElementById("run-stock-code") as HTMLInputElement).value;
+        const start = (document.getElementById("run-start-date") as HTMLInputElement).value;
+        const end = (document.getElementById("run-end-date") as HTMLInputElement).value;
+        if (start) body.start_date = start;
+        if (end) body.end_date = end;
+        body.indicators = Array.from(document.querySelectorAll(".run-indicator:checked"))
+            .map((el: Element) => (el as HTMLInputElement).value);
+    } else if (selectedRunType === "watchlist_run") {
+        body.watchlist = (document.getElementById("run-watchlist-select") as HTMLSelectElement).value;
+        body.strategies = Array.from(document.querySelectorAll("#run-strategy-checkboxes input:checked"))
+            .map((el: Element) => (el as HTMLInputElement).value);
+    } else if (selectedRunType === "task_run") {
+        body.task_config = (document.getElementById("run-task-config-select") as HTMLSelectElement).value;
+        body.daily = (document.getElementById("run-daily-mode") as HTMLInputElement).checked;
+    }
+    const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
+    if (output) body.output_path = output;
+
+    const errDiv = document.getElementById("run-validation-errors")!;
+    try {
+        const result = await api<{ ok: boolean; run_id?: string; errors?: string[] }>("/api/runs/", {
+            method: "POST", body: JSON.stringify(body),
+        });
+        errDiv.classList.add("hidden");
+        if (!result.ok) {
+            errDiv.classList.remove("hidden");
+            errDiv.innerHTML = result.errors!.map((e: string) => `• ${e}`).join("<br>");
+            return;
+        }
+        closeModal("modal-new-run");
+        toast("Run started");
+        await loadRuns();
+        if (result.run_id) selectRun(result.run_id);
+    } catch (e: any) {
+        toast(`Error: ${e.message}`);
+    }
+}
+
+async function preflightCheck() {
+    const body: Record<string, any> = { run_type: selectedRunType };
+    if (selectedRunType === "stock_scan") {
+        body.code = (document.getElementById("run-stock-code") as HTMLInputElement).value;
+    } else if (selectedRunType === "watchlist_run") {
+        body.watchlist = (document.getElementById("run-watchlist-select") as HTMLSelectElement).value;
+    } else if (selectedRunType === "task_run") {
+        body.task_config = (document.getElementById("run-task-config-select") as HTMLSelectElement).value;
+    }
+    const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
+    if (output) body.output_path = output;
+    const errDiv = document.getElementById("run-validation-errors")!;
+    try {
+        const result = await api<{ ok: boolean; errors?: string[] }>("/api/runs/", {
+            method: "POST", body: JSON.stringify(body),
+        });
+        if (!result.ok) {
+            errDiv.classList.remove("hidden");
+            errDiv.innerHTML = result.errors!.map((e: string) => `• ${e}`).join("<br>");
+        } else {
+            errDiv.classList.add("hidden");
+            toast("Checks passed");
+        }
+    } catch (e: any) {
+        toast("Validation request sent");
+    }
+}
+
+function formatRelativeTime(isoStr: string): string {
+    const date = new Date(isoStr);
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    return date.toLocaleDateString();
+}
+
+function mdToHtml(md: string): string {
+    let html = md
+        .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-4">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-6">$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-8">$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>');
+    html = html.replace(/((?:\|.+\|\n)+)/g, (match) => {
+        const rows = match.trim().split("\n").filter(r => !r.match(/^\|-+[-| ]+$/));
+        if (rows.length < 2) return match;
+        let t = '<table class="min-w-full divide-y divide-gray-200 text-sm mt-2 mb-4"><tbody>';
+        rows.forEach(row => {
+            const cells = row.split("|").filter(c => c.trim()).map(c => c.trim());
+            t += '<tr class="bg-white">';
+            cells.forEach(cell => { t += `<td class="px-4 py-2 border border-gray-200">${cell}</td>`; });
+            t += "</tr>";
+        });
+        return t + "</tbody></table>";
+    });
+    html = html.replace(/^(?!<[a-z/])((?!$).+)$/gm, '<p class="text-sm text-gray-700 mb-1">$1</p>');
+    return html;
+}
+
+let sseSource: EventSource | null = null;
+
+function connectSSE(runId: string) {
+    if (sseSource) sseSource.close();
+    const logContainer = document.getElementById("run-log-container");
+    if (!logContainer) return;
+    try {
+        sseSource = new EventSource(`/api/runs/${runId}/logs:sse`);
+        sseSource.addEventListener("log", (ev: Event) => {
+            const data = JSON.parse((ev as MessageEvent).data);
+            appendLog(logContainer, data.message, data.level || "info");
+        });
+        sseSource.addEventListener("progress", (ev: Event) => {
+            const data = JSON.parse((ev as MessageEvent).data);
+            const bar = document.getElementById("run-progress-bar");
+            const txt = document.getElementById("run-progress-text");
+            if (bar) bar.style.width = `${data.percentage}%`;
+            if (txt) txt.textContent = `${data.percentage}% (${data.current}/${data.total})`;
+        });
+        sseSource.addEventListener("status", (ev: Event) => {
+            const data = JSON.parse((ev as MessageEvent).data);
+            if (data.status !== "running") {
+                if (sseSource) sseSource.close();
+                if (state.selectedRunId) selectRun(state.selectedRunId);
+            }
+        });
+    } catch (_e) {
+        appendLog(logContainer, "SSE not available", "warning");
+    }
+}
+
+function appendLog(container: HTMLElement, message: string, level: string) {
+    const time = new Date().toLocaleTimeString();
+    const color = level === "error" ? "text-red-400" : level === "warning" ? "text-yellow-400" : "text-green-400";
+    const entry = document.createElement("div");
+    entry.className = `${color} break-all`;
+    entry.textContent = `${time}  ${message}`;
+    container.appendChild(entry);
+    container.scrollTop = container.scrollHeight;
+}
+
+function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => toast("Path copied"));
+}
+
+function runAgain(runId: string) {
+    const orig = state.runsList.find(r => r.id === runId);
+    if (!orig) return;
+    openModal("modal-new-run");
+    resetRunModal();
+    selectRunType(orig.run_type);
+    if (orig.run_type === "stock_scan" && orig.config?.code) {
+        (document.getElementById("run-stock-code") as HTMLInputElement).value = orig.config.code;
+        updateCliPreview();
+    }
+    toast("Pre-filled from previous run");
+}
+
+// ---- End of Runs functions ----
 
 async function loadTasks(filename?: string) {
     const url = filename ? `/api/tasks?filename=${encodeURIComponent(filename)}` : "/api/tasks";
@@ -189,7 +610,7 @@ async function loadConfig(): Promise<void> {
 }
 
 function switchTab(tab: string) {
-    for (const t of ["watchlists", "tasks", "settings", "library"]) {
+    for (const t of ["watchlists", "tasks", "settings", "library", "runs"]) {
         const tabBtn = document.getElementById(`tab-${t}`)!;
         const panel = document.getElementById(`panel-${t}`)!;
         if (t === tab) {
@@ -469,9 +890,9 @@ function closeModal(id: string) { document.getElementById(id)!.classList.add("hi
 
 function openAddStockModal() {
     (document.getElementById("add-stock-market") as HTMLSelectElement).value = "";
-    document.getElementById("add-stock-code")!.value = "";
-    document.getElementById("add-stock-name")!.value = "";
-    document.getElementById("add-stock-tags")!.value = "";
+    (document.getElementById("add-stock-code") as HTMLInputElement).value = "";
+    (document.getElementById("add-stock-name") as HTMLInputElement).value = "";
+    (document.getElementById("add-stock-tags") as HTMLInputElement).value = "";
     document.getElementById("add-stock-warning")!.classList.add("hidden");
     document.getElementById("add-stock-preview")!.classList.add("hidden");
     openModal("modal-add-stock");
@@ -488,7 +909,7 @@ async function confirmAddStock() {
     const tagsStr = (document.getElementById("add-stock-tags") as HTMLInputElement).value.trim();
 
     try {
-        const res = await api("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code }) });
+        const res = await api<{ found: boolean; inLists?: string[] }>("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code }) });
         if (res.found) {
             const warning = document.getElementById("add-stock-warning")!;
             warning.textContent = `Already in: ${res.inLists.join(", ")}`;
@@ -701,7 +1122,7 @@ async function handleSearch() {
     const resultsDiv = document.getElementById("search-results")!;
     const statusDiv = document.getElementById("search-status")!;
     if (input.length < 2) { resultsDiv.classList.add("hidden"); statusDiv.classList.add("hidden"); return; }
-    const res = await api("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code: input }) });
+    const res = await api<{ found: boolean; inLists?: string[]; fuzzyMatches?: { code: string; name?: string }[] }>("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code: input }) });
     resultsDiv.classList.remove("hidden");
     if (res.found) {
         statusDiv.classList.remove("hidden");
@@ -803,9 +1224,9 @@ function setupEventListeners() {
             const delBtn = target.closest(".wl-delete-btn");
             if (delBtn) {
                 e.stopPropagation();
-                const filename = delBtn.dataset.filename;
+                const filename = (delBtn as HTMLElement).dataset.filename;
                 if (!filename) return;
-                const wl = state.watchlists.find(w => w.filename === filename);
+    const wl = state.watchlists.find(w => w.filename === filename);
                 const name = wl?.name ?? filename;
                 if (!confirm(`Delete watchlist '${name}'? This cannot be undone.`)) return;
                 try {
@@ -870,6 +1291,56 @@ function setupEventListeners() {
     });
     document.getElementById("btn-save-params")!.addEventListener("click", saveIndicatorParams);
     document.getElementById("btn-cancel-params")!.addEventListener("click", () => closeModal("modal-indicator-params"));
+
+    // RUNS: tab and modal wiring
+    const runsTab = document.getElementById("tab-runs");
+    if (runsTab) runsTab.addEventListener("click", () => switchTab("runs"));
+    const newRunBtn = document.getElementById("btn-new-run");
+    if (newRunBtn) newRunBtn.addEventListener("click", () => openModal("modal-new-run"));
+
+    // Runs modal: cancel/back/check/execute
+    document.getElementById("btn-cancel-run")?.addEventListener("click", () => closeModal("modal-new-run"));
+    document.getElementById("btn-back-run")?.addEventListener("click", () => {
+        document.getElementById("run-step-type")!.classList.remove("hidden");
+        document.getElementById("run-step-config")!.classList.add("hidden");
+        document.getElementById("run-step-preview")!.classList.add("hidden");
+        document.getElementById("btn-back-run")!.classList.add("hidden");
+        document.getElementById("btn-check-run")!.classList.add("hidden");
+        document.getElementById("btn-execute-run")!.classList.add("hidden");
+        selectedRunType = "";
+    });
+    document.getElementById("btn-check-run")?.addEventListener("click", preflightCheck);
+    document.getElementById("btn-execute-run")?.addEventListener("click", executeRun);
+
+    // Run type select cards
+    document.querySelectorAll('[data-type]').forEach(btn => {
+        btn.addEventListener("click", () => selectRunType((btn as HTMLElement).dataset.type!));
+    });
+
+    // CLI preview on form changes
+    document.getElementById("run-stock-code")?.addEventListener("input", updateCliPreview);
+    document.querySelectorAll(".run-indicator").forEach(el => {
+        el.addEventListener("change", () => updateCliPreview());
+    });
+
+    // Run sub-tab switching
+    document.querySelectorAll('[data-runtab]').forEach(btn => {
+        btn.addEventListener("click", () => {
+            const tab = (btn as HTMLElement).dataset.runtab!;
+            document.querySelectorAll(".run-subtab").forEach(t => {
+                (t as HTMLElement).style.borderColor = "transparent";
+                (t as HTMLElement).style.color = "#6b7280";
+            });
+            (btn as HTMLElement).style.borderColor = "#3b82f6";
+            (btn as HTMLElement).style.color = "#2563eb";
+            document.querySelectorAll(".run-tab-content").forEach(p => p.classList.add("hidden"));
+            document.getElementById(`runtab-${tab}`)?.classList.remove("hidden");
+        });
+    });
+
+    // Global helpers for onclick handlers
+    (window as any).copyToClipboard = copyToClipboard;
+    (window as any).runAgain = runAgain;
 }
 
 init();

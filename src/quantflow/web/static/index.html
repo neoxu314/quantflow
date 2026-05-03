@@ -44,6 +44,9 @@
             <button id="tab-library" class="tab-inactive px-6 py-3 border-b-2 font-medium text-sm" data-tab="library">
                 Library
             </button>
+            <button id="tab-runs" class="tab-inactive px-6 py-3 border-b-2 font-medium text-sm" data-tab="runs">
+                Runs
+            </button>
             <button id="tab-settings" class="tab-inactive px-6 py-3 border-b-2 font-medium text-sm" data-tab="settings">
                 Settings
             </button>
@@ -438,6 +441,25 @@
                 </table>
             </div>
         </div>
+
+        <!-- Runs Panel -->
+        <div id="panel-runs" class="hidden bg-white shadow rounded-b-lg p-6 mt-0">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Runs</h2>
+                <button id="btn-new-run" class="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">+ New Run</button>
+            </div>
+            <div class="flex gap-4">
+                <!-- Left: run history -->
+                <div class="w-72 flex-shrink-0">
+                    <ul id="runs-list" class="space-y-1 max-h-[500px] overflow-y-auto pr-2"></ul>
+                </div>
+                <!-- Right: run details -->
+                <div class="flex-1">
+                    <div id="runs-empty-state" class="text-gray-400 text-center py-8">Select a run to view details</div>
+                    <div id="runs-detail" class="hidden"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="modal-indicator-params" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
@@ -551,6 +573,100 @@
             <div class="flex justify-end gap-2">
                 <button id="btn-confirm-cancel" class="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
                 <button id="btn-confirm-ok" class="px-4 py-2 text-white bg-red-500 rounded hover:bg-red-600">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Run Modal (Runs) -->
+    <div id="modal-new-run" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-[700px] max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-medium mb-4">Create New Run</h3>
+            <p class="text-sm text-gray-500 mb-2">Step 1: select run type</p>
+            <div id="run-step-type" class="space-y-4">
+                <div class="grid grid-cols-3 gap-4">
+                    <button id="run-type-stock" class="p-4 border-2 rounded-lg text-center hover:border-blue-400" data-type="stock_scan">
+                        <div class="text-2xl mb-2">🔍</div>
+                        <div class="font-medium">Stock Scan</div>
+                    </button>
+                    <button id="run-type-watchlist" class="p-4 border-2 rounded-lg text-center hover:border-blue-400" data-type="watchlist_run">
+                        <div class="text-2xl mb-2">📋</div>
+                        <div class="font-medium">Watchlist Run</div>
+                    </button>
+                    <button id="run-type-task" class="p-4 border-2 rounded-lg text-center hover:border-blue-400" data-type="task_run">
+                        <div class="text-2xl mb-2">⚙️</div>
+                        <div class="font-medium">Task Run</div>
+                    </button>
+                </div>
+            </div>
+            <div id="run-step-config" class="hidden mt-4 space-y-4">
+                <!-- Stock Scan Config -->
+                <div id="run-config-stock_scan" class="hidden space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Stock Code</label>
+                    <input id="run-stock-code" type="text" placeholder="e.g. 600519.SH, NVDA.US" class="w-full border rounded px-3 py-2" />
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Start Date</label>
+                            <input id="run-start-date" type="date" class="w-full border rounded px-3 py-2 mt-1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">End Date</label>
+                            <input id="run-end-date" type="date" class="w-full border rounded px-3 py-2 mt-1">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Indicators</label>
+                        <div class="flex flex-wrap gap-3">
+                            <label class="flex items-center gap-1"><input type="checkbox" value="kdj" checked class="run-indicator"> KDJ</label>
+                            <label class="flex items-center gap-1"><input type="checkbox" value="dual_line" checked class="run-indicator"> DualLine</label>
+                            <label class="flex items-center gap-1"><input type="checkbox" value="macd" class="run-indicator"> MACD</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Watchlist Run Config -->
+                <div id="run-config-watchlist_run" class="hidden space-y-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Watchlist</label>
+                        <select id="run-watchlist-select" class="w-full border rounded px-3 py-2"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Strategies</label>
+                        <div id="run-strategy-checkboxes" class="space-y-1"></div>
+                    </div>
+                </div>
+
+                <!-- Task Run Config -->
+                <div id="run-config-task_run" class="hidden space-y-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Task Config File</label>
+                        <select id="run-task-config-select" class="w-full border rounded px-3 py-2"></select>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-2 mt-2">
+                            <input id="run-daily-mode" type="checkbox" class="rounded">
+                            <span class="text-sm font-medium text-gray-700">Daily Archive Mode (--daily)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Shared output path -->
+                <div class="mt-3 pt-3 border-t">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Output Directory (optional)</label>
+                    <input id="run-output-path" type="text" placeholder="Leave blank for default" class="w-full border rounded px-3 py-2">
+                </div>
+
+                <!-- CLI Preview -->
+                <div id="run-step-preview" class="hidden mt-3">
+                    <div class="text-xs text-gray-500 mb-1">Equivalent CLI command:</div>
+                    <div id="run-cli-preview" class="bg-gray-50 p-3 rounded text-sm font-mono text-gray-700"></div>
+                    <div id="run-validation-errors" class="hidden mt-2 text-sm text-red-600 bg-red-50 p-2 rounded"></div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4 pt-4 border-t">
+                <button id="btn-cancel-run" class="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+                <button id="btn-back-run" class="hidden px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">← Back</button>
+                <button id="btn-check-run" class="hidden px-4 py-2 text-yellow-700 bg-yellow-200 rounded hover:bg-yellow-300">Check</button>
+                <button id="btn-execute-run" class="hidden px-4 py-2 text-white bg-green-500 rounded hover:bg-green-600">Run</button>
             </div>
         </div>
     </div>
