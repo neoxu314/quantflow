@@ -197,3 +197,66 @@ class TestPreflightChecker:
         r = PreflightChecker.validate("stock_scan",
             {"code": "NVDA.US", "indicators": ["magic"]})
         assert not r.ok and any("Unknown indicator" in e for e in r.errors)
+
+
+class TestRunEngine:
+    def test_cancellation_flag(self):
+        from quantflow.web.engine.run_engine import CancellationFlag
+        f = CancellationFlag()
+        assert f.is_set is False
+        f.cancel()
+        assert f.is_set is True
+
+    def test_cancel_unknown(self):
+        from quantflow.web.engine import RunEngine, RunQueue, SSEManager
+        from quantflow.web.engine import run_history
+        orig = run_history.DB_PATH
+        run_history.DB_PATH = Path(":memory:")
+        engine = RunEngine(RunQueue(), run_history.RunHistory(), SSEManager())
+        assert engine.cancel("nope") is False
+        run_history.DB_PATH = orig
+
+
+class TestPresetManager:
+    def setup_method(self):
+        import tempfile
+        from quantflow.web.engine import presets
+        self._orig = presets.PRESETS_DIR
+        self._tmp = tempfile.mkdtemp()
+        presets.PRESETS_DIR = Path(self._tmp)
+
+    def teardown_method(self):
+        from quantflow.web.engine import presets
+        presets.PRESETS_DIR = self._orig
+        import shutil
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_create_and_get(self):
+        from quantflow.web.engine.presets import PresetManager
+        pid = PresetManager.create(
+            "My Scan", "stock_scan", {"code": "NVDA.US"})
+        p = PresetManager.get(pid)
+        assert p.name == "My Scan"
+        assert p.config["code"] == "NVDA.US"
+
+    def test_list_presets(self):
+        from quantflow.web.engine.presets import PresetManager
+        PresetManager.create("A", "stock_scan", {})
+        PresetManager.create("B", "watchlist_run", {})
+        assert len(PresetManager.list_presets()) == 2
+
+    def test_update(self):
+        from quantflow.web.engine.presets import PresetManager
+        pid = PresetManager.create("Old", "stock_scan", {})
+        PresetManager.update(pid, "New", "task_run", {"task_config": "x"})
+        assert PresetManager.get(pid).name == "New"
+
+    def test_delete(self):
+        from quantflow.web.engine.presets import PresetManager
+        pid = PresetManager.create("T", "stock_scan", {})
+        assert PresetManager.delete(pid) is True
+        assert PresetManager.get(pid) is None
+
+    def test_delete_nonexistent(self):
+        from quantflow.web.engine.presets import PresetManager
+        assert PresetManager.delete("no-such-preset") is False
