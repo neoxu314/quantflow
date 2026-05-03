@@ -42,7 +42,8 @@ It is recommended to store your input files as follows:
 quantflow/
 ├── config/              # System configs
 │   ├── tasks_*.yaml     # Task orchestration files (e.g., tasks_asia_mac.yaml, tasks_us_mac.yaml)
-│   └── quantflow.yaml   # Global settings (lookback, etc.)
+│   ├── quantflow.yaml   # Global settings (lookback, etc.)
+│   └── indicators.yaml  # Indicator parameter overrides
 ├── watchlists/          # 👈 Stock lists go here
 │   ├── us_tech.yaml
 │   └── a_value.yaml
@@ -50,6 +51,7 @@ quantflow/
 │   ├── a_stocks/
 │   │   └── 2026-05-01/  # Auto-created with --daily
 │   └── us_stocks/
+├── scripts/            # Build verification utilities
 └── reports/             # 👈 Combined daily reports (--output + --daily)
     └── 2026-05-01/
         ├── Daily_Report.md
@@ -86,11 +88,9 @@ tasks:
     output: "output/us_signals"            # Result save path
     # days_back: 300                        # Optional: override auto-calculated lookback
 ```
-
-**Available Strategy IDs:**
+- **Available Strategy IDs:**
 - `daily_bull_oversold`: Buy when KDJ(J)<20 in a bullish channel.
 - `daily_bull_mid_range`: Buy when price stabilizes between trend lines in a bull channel.
-- `kdj_golden_cross`: Standard KDJ Golden Cross.
 - `kdj_dead_cross`: KDJ Dead Cross (sell signal).
 - `dual_line_bear`: DualLine Bear Zone Exit (sell signal).
 
@@ -166,7 +166,7 @@ python -m quantflow.cli monitor --watchlist watchlists/us_tech.yaml --output ./o
 ```
 - `--watchlist`: Path to specific watchlist file.
 - `--output`: Directory to save results.
-- **Default strategies loaded**: `DailyBullishMidRangeBuy`, `DailyBullishOversoldBuy`, `KDJGoldenCrossBuy`.
+- **Default strategies loaded**: `DailyBullishMidRangeBuy`, `DailyBullishOversoldBuy`.
 
 ## 3. Output & Results
 
@@ -272,6 +272,10 @@ python -m quantflow.cli web
    - **Token management**: Toggle visibility (👁️) and copy (📋)
    - **Save/Reset**: Save button appears on modification; requires restart for Web/Port changes
    - **API**: `GET /api/config` (read), `PUT /api/config` (update YAML)
+4. **Library** (Strategy & Indicator Catalog):
+   - **Strategy Library**: View all registered strategies with descriptions, signal types, required indicators, and lookback days
+   - **Indicator Library**: Browse all available indicators with parameters, inputs/outputs, and lookback requirements
+   - **Parameter Editing**: Click "Edit Params" on any indicator to modify its configuration, persisted to `config/indicators.yaml`
 
 ### API Endpoints
 
@@ -283,3 +287,6 @@ python -m quantflow.cli web
 | `/api/task-files` | GET, POST, DELETE | Task file management |
 | `/api/config` | GET, **PUT** | System configuration (read + **write**) |
 | `/api/strategies` | GET | Available strategy list |
+| `/api/library/strategies` | GET | Strategy catalog with descriptions, indicators, lookback |
+| `/api/library/indicators` | GET | Indicator catalog with params, fields, lookback |
+| `/api/library/indicators/params` | PUT | Update indicator parameter configuration |

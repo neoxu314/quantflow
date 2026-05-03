@@ -1,6 +1,6 @@
 # QUANTFLOW PROJECT KNOWLEDGE
 
-**Generated:** 2026-04-25
+**Generated:** 2026-04-25 / Updated: 2026-05-03
 **Scope:** `quantflow/` - Main quant analysis system
 
 ## OVERVIEW
@@ -14,6 +14,8 @@ quantflow/
 ├── src/quantflow/
 │   ├── data/            # Multi-source data layer
 │   ├── indicators/      # Technical indicators
+│   │   ├── factory.py      # IndicatorFactory - config-based instantiation
+│   │   ├── library.py        # Library API endpoints
 │   ├── strategies/      # Buy/sell strategies
 │   ├── execution/       # Execution layer (formerly monitoring)
 │   ├── orchestration/   # Task orchestration layer
@@ -24,6 +26,8 @@ quantflow/
 │   ├── reports/         # Markdown report generation
 │   └── cli.py           # Entry: `python -m quantflow.cli` (scan, monitor, tasks, web)
 ├── config/tasks_*.yaml  # Orchestration task configs (tasks_asia_mac.yaml, tasks_us_mac.yaml, etc.)
+├── config/indicators.yaml  # Indicator parameter defaults
+├── scripts/              # Build verification utilities
 ...
 ```
 
@@ -36,6 +40,11 @@ quantflow/
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
+| Indicator creation | `indicators/factory.py` | `IndicatorFactory.create("KDJ")` merges config with defaults |
+| Indicator discovery | `orchestration/discovery.py` | `discover_indicators()` returns metadata |
+| Indicator params | `config/indicators.yaml` | Per-indicator parameter overrides |
+| Web UI - library | `web/api/library.py` | Strategy + indicator catalog API |
+| Web UI - library tab | `web/static/app.ts` | Library panel rendering + param editor |
 | Task orchestration | `orchestration/app.py` | Parses `tasks_*.yaml` |
 | Web UI - watchlists | `web/api/watchlists.py` | CRUD + search + inline delete |
 | Web UI - tasks | `web/api/tasks.py` | Multi-file task CRUD |
@@ -93,6 +102,7 @@ python -m quantflow.cli web
   - `/api/task-files/...` (list/create/delete)
   - `/api/config` (GET + PUT system config)
   - `/api/strategies` (read-only)
+  - `/api/library/*` (library catalog: strategies + indicators + param updates)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
 - **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`
 

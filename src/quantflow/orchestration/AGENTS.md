@@ -12,6 +12,7 @@ The brain of the monitoring system. Determines **what** to run (watchlists), **w
 orchestration/
 ├── app.py           # Orchestrator - loops through tasks and dispatches jobs
 ├── registry.py      # Strategy Registry - maps string names to Strategy objects
+├── discovery.py     # Indicator discovery - introspects __all__ exports
 ├── loader.py        # TaskConfig loader - parses `tasks_*.yaml`
 └── __init__.py
 ```
@@ -22,6 +23,7 @@ orchestration/
 - `_compute_days_back()`: Calculates calendar days = `max(lookback_bars) * calendar_multiplier + buffer_days`.
 - `_resolve_task_dir()` / `_resolve_combined_dir()`: Returns path with or without date suffix based on CLI `--daily`.
 - `STRATEGY_REGISTRY`: Centralized dictionary mapping `"daily_bull_oversold"` to class.
+- `discover_indicators()`: Returns metadata (name, category, params, fields, lookback) for all indicators discovered from standard and custom package `__all__` exports. Used by the Web UI Library API.
 
 ## DEPENDENCIES
 

@@ -54,6 +54,7 @@ indicators/
 - **Brick Chart Convergence**: The Brick Chart indicator requires sufficient historical data (recommended >200 bars/1 year) to converge with TDX values. Short data windows will show numerical divergence due to SMA initialization, though trend signals remain accurate.
 - **Brick Chart Data Sensitivity**: Numerical values may differ slightly from TDX if the source data (BaoStock vs TDX prices) has minor discrepancies in adjusted prices, but the color/trend logic remains valid.
 - KDJ produces `K`, `D`, `J`, `RSV` columns; cross signals built in strategy layer
+- **Factory Pattern**: Indicators are created via IndicatorFactory.create() to allow config-driven parameters.
 - **DualLine Strict Mode**:
   - DualLine uses 4 MA periods (14, 28, 57, 114).
   - **Behavior**: Requires minimum ~114 bars of history to calculate `long_short_line`.
