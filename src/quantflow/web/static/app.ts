@@ -361,10 +361,11 @@ function populateRunFormFields(type: string) {
         ).join("");
         const stratDiv = document.getElementById("run-strategy-checkboxes")!;
         stratDiv.innerHTML = (state.strategies as any[])
-            .filter((s: any) => s.type === "buy")
-            .map((s: any) =>
-                `<label class="flex items-center gap-2"><input type="checkbox" value="${s.id}" checked class="rounded"> ${s.description || s.id}</label>`
-            ).join("");
+            .map((s: any) => {
+                const icon = s.type === "buy" ? "🔵" : "🔴";
+                const label = s.name.replace(/(Buy|Sell)$/, "");
+                return `<label class="flex items-center gap-2"><input type="checkbox" value="${s.id}" ${s.type === "buy" ? "checked" : ""} class="rounded"> ${icon} ${label}</label>`;
+            }).join("");
     } else if (type === "task_run") {
         const sel = document.getElementById("run-task-config-select") as HTMLSelectElement;
         sel.innerHTML = (state as any).taskFiles.map((tf: any) =>
@@ -1299,7 +1300,10 @@ function setupEventListeners() {
     if (newRunBtn) newRunBtn.addEventListener("click", () => openModal("modal-new-run"));
 
     // Runs modal: cancel/back/check/execute
-    document.getElementById("btn-cancel-run")?.addEventListener("click", () => closeModal("modal-new-run"));
+    document.getElementById("btn-cancel-run")?.addEventListener("click", () => {
+        resetRunModal();
+        closeModal("modal-new-run");
+    });
     document.getElementById("btn-back-run")?.addEventListener("click", () => {
         document.getElementById("run-step-type")!.classList.remove("hidden");
         document.getElementById("run-step-config")!.classList.add("hidden");
