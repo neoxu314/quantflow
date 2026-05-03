@@ -4,7 +4,7 @@ import pandas as pd
 from typing import List
 
 from quantflow.strategies.base import BuyStrategy, Condition
-from quantflow.indicators.custom import DualLineIndicator
+from quantflow.indicators.factory import IndicatorFactory
 from quantflow.indicators.base import IndicatorBase
 
 
@@ -31,12 +31,12 @@ class DailyBullishMidRangeBuy(BuyStrategy):
         return []
 
     def get_required_indicators(self) -> List[IndicatorBase]:
-        return [DualLineIndicator()]
+        return [IndicatorFactory.create("DualLine")]
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # 确保计算过双线指标
         if "short_trend_line" not in df.columns:
-            ind = DualLineIndicator()
+            ind = IndicatorFactory.create("DualLine")
             df = ind.calculate(df)
 
         df = df.copy()

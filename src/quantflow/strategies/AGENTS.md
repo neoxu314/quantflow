@@ -12,7 +12,6 @@ Trading signal generation layer. Buy strategies (golden cross, bull channel) + s
 strategies/
 ├── base.py            # StrategyBase abstract class (BuyStrategy, SellStrategy)
 ├── buy/               # Entry signal generators
-│   ├── kdj_golden_cross.py    # KDJ Golden Cross Buy Strategy
 │   ├── dual_line_bull.py      # Daily Bullish Mid-Range Buy Strategy
 │   └── oversold_rebound.py    # Daily Bullish Oversold Buy Strategy
 ├── sell/              # Exit signal generators
@@ -28,7 +27,7 @@ strategies/
 | Task | Location | Notes |
 |------|----------|-------|
 | Strategy interface | `base.py` | `StrategyBase.generate_signals(df)`, `get_conditions()` |
-| Buy signals | `buy/` | KDJGoldenCrossBuy, DailyBullishMidRangeBuy, DailyBullishOversoldBuy |
+| Buy signals | `buy/` | DailyBullishMidRangeBuy, DailyBullishOversoldBuy |
 | Sell signals | `sell/` | KDJDeadCrossSell, DualLineBearZoneSell, StopLossSell |
 | Composition | `composite.py` | `mode="any"` (OR logic) or `"all"` (AND logic) |
 
@@ -39,6 +38,8 @@ strategies/
 - **Output**: DataFrame with `buy_signal` or `sell_signal` boolean columns
 - **Conditions**: `get_conditions()` returns dict of condition descriptions
 - **Lookback**: Strategies MUST correctly implement `get_required_indicators()` so the system can auto-calculate data fetch range. `StrategyBase.get_lookback_bars()` aggregates from indicator `lookback_bars`.
+- **Indicator Instantiation**: All strategies MUST use `IndicatorFactory.create()` instead of directly instantiating indicators. This enables centralized parameter configuration via `config/indicators.yaml`.
+- **Docstrings**: All strategy classes MUST include a class-level docstring describing the strategy logic. These docstrings are displayed in the Web UI Library panel.
 
 ## ANTI-PATTERNS
 

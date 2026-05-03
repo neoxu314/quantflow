@@ -4,5 +4,9 @@ tasks:
   strategies:
   - daily_bull_mid_range
   - daily_bull_oversold
-  - kdj_golden_cross
+  output: ./output
+- name: test2
+  watchlist: watchlists/test.yaml
+  strategies:
+  - daily_bull_mid_range
   output: ./output

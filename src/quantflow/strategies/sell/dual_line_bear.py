@@ -5,11 +5,19 @@ from typing import List
 
 from quantflow.strategies.base import SellStrategy, Condition
 from quantflow.indicators.base import IndicatorBase
-from quantflow.indicators.custom import DualLineIndicator
+from quantflow.indicators.factory import IndicatorFactory
 
 
 class DualLineBearZoneSell(SellStrategy):
-    
+    """
+    策略定义：双线空头区间卖出策略 (Dual Line Bear Zone Sell)
+
+    卖出逻辑（需同时满足）：
+    1) 空头区间：双线战法中，进入空头状态（is_bear_zone == True）。
+       即：短期趋势线 < 多空线，且状态刚转为空头。
+       意义：趋势由多转空，应及时卖出离场。
+    """
+
     @property
     def name(self) -> str:
         return "DualLine_BearZone"
@@ -20,7 +28,7 @@ class DualLineBearZoneSell(SellStrategy):
         ]
     
     def get_required_indicators(self) -> List[IndicatorBase]:
-        return [DualLineIndicator()]
+        return [IndicatorFactory.create("DualLine")]
     
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
