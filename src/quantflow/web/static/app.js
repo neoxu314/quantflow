@@ -1072,6 +1072,73 @@ async function handleSearch() {
         resultsDiv.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">No matches</div>';
     }
 }
+// ---- Browse Directory Modal ----
+let browseTargetInputId = "run-output-path";
+let browseCurrentPath = "/";
+function openBrowseDir(targetInputId, startPath) {
+    browseTargetInputId = targetInputId;
+    browseCurrentPath = startPath || "/";
+    document.getElementById("browse-new-folder").classList.add("hidden");
+    document.getElementById("modal-browse-dir").classList.remove("hidden");
+    loadBrowseDir(browseCurrentPath);
+}
+async function loadBrowseDir(path) {
+    const list = document.getElementById("browse-list");
+    list.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">Loading...</div>';
+    try {
+        const data = await api(`/api/browse/?path=${encodeURIComponent(path)}`);
+        browseCurrentPath = data.current_path;
+        document.getElementById("browse-breadcrumb").textContent = data.relative_path || data.current_path;
+        document.getElementById("browse-current-path").textContent = data.relative_path || data.current_path;
+        // Parent button
+        const upBtn = document.getElementById("btn-browse-up");
+        upBtn.disabled = !data.has_parent;
+        upBtn.style.opacity = data.has_parent ? "1" : "0.4";
+        const items = data.directories;
+        if (items.length === 0) {
+            list.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">No subdirectories</div>';
+            return;
+        }
+        list.innerHTML = items.map(d => `<div class="browse-item flex items-center gap-2 px-3 py-1.5 rounded cursor-pointer hover:bg-blue-50" data-name="${d}">
+                <span class="text-base">📁</span>
+                <span class="text-sm text-gray-800">${d}</span>
+            </div>`).join("");
+        list.querySelectorAll(".browse-item").forEach(el => {
+            el.addEventListener("dblclick", () => {
+                const name = el.dataset.name;
+                const parent = browseCurrentPath === "/" ? "" : browseCurrentPath;
+                loadBrowseDir(parent ? `${parent}/${name}` : name);
+            });
+        });
+    }
+    catch (e) {
+        list.innerHTML = `<div class="text-red-400 text-sm text-center py-8">Error: ${e.message}</div>`;
+    }
+}
+function handleBrowseSelect() {
+    const target = document.getElementById(browseTargetInputId);
+    if (target) {
+        const rel = document.getElementById("browse-current-path").textContent;
+        target.value = rel || browseCurrentPath;
+    }
+    closeModal("modal-browse-dir");
+}
+function handleBrowseMkdir() {
+    const nameInput = document.getElementById("browse-new-folder-name");
+    const name = nameInput.value.trim();
+    if (!name)
+        return;
+    api("/api/browse/mkdir", {
+        method: "POST",
+        body: JSON.stringify({ path: browseCurrentPath, name }),
+    }).then(() => {
+        nameInput.value = "";
+        document.getElementById("browse-new-folder").classList.add("hidden");
+        loadBrowseDir(browseCurrentPath);
+        toast("Folder created");
+    }).catch((e) => toast(`Failed: ${e.message}`));
+}
+// ---- End of Browse functions ----
 function toast(msg) {
     const el = document.getElementById("toast");
     document.getElementById("toast-message").textContent = msg;
@@ -1287,5 +1354,30 @@ function setupEventListeners() {
     // Global helpers for onclick handlers
     window.copyToClipboard = copyToClipboard;
     window.runAgain = runAgain;
+    // Browse directory buttons
+    document.getElementById("btn-browse-dir")?.addEventListener("click", () => {
+        const input = document.getElementById("run-output-path");
+        openBrowseDir("run-output-path", input?.value || "");
+    });
+    document.getElementById("btn-browse-close")?.addEventListener("click", () => closeModal("modal-browse-dir"));
+    document.getElementById("btn-browse-cancel")?.addEventListener("click", () => closeModal("modal-browse-dir"));
+    document.getElementById("btn-browse-select")?.addEventListener("click", handleBrowseSelect);
+    document.getElementById("btn-browse-up")?.addEventListener("click", () => {
+        // Navigate parent
+        const slashIdx = browseCurrentPath.lastIndexOf("/");
+        const parent = slashIdx > 0 ? browseCurrentPath.slice(0, slashIdx) : "/";
+        loadBrowseDir(parent);
+    });
+    document.getElementById("btn-browse-new")?.addEventListener("click", () => {
+        document.getElementById("browse-new-folder").classList.toggle("hidden");
+        document.getElementById("browse-new-folder-name").focus();
+    });
+    document.getElementById("btn-browse-new-ok")?.addEventListener("click", handleBrowseMkdir);
+    document.getElementById("browse-new-folder-name")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            handleBrowseMkdir();
+        }
+    });
 }
 init();

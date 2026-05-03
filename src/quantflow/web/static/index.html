@@ -652,7 +652,10 @@
                 <!-- Shared output path -->
                 <div class="mt-3 pt-3 border-t">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Output Directory (optional)</label>
-                    <input id="run-output-path" type="text" placeholder="Leave blank for default" class="w-full border rounded px-3 py-2">
+                    <div class="flex gap-2">
+                        <input id="run-output-path" type="text" placeholder="Leave blank for default" class="flex-1 border rounded px-3 py-2">
+                        <button id="btn-browse-dir" type="button" class="px-3 py-2 bg-gray-100 border rounded hover:bg-gray-200 text-sm whitespace-nowrap" title="Browse directories">📁</button>
+                    </div>
                 </div>
 
                 <!-- CLI Preview -->
@@ -667,6 +670,41 @@
                 <button id="btn-back-run" class="hidden px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300">← Back</button>
                 <button id="btn-check-run" class="hidden px-4 py-2 text-yellow-700 bg-yellow-200 rounded hover:bg-yellow-300">Check</button>
                 <button id="btn-execute-run" class="hidden px-4 py-2 text-white bg-green-500 rounded hover:bg-green-600">Run</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browse Directory Modal -->
+    <div id="modal-browse-dir" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+        <div class="bg-white rounded-lg p-0 w-[520px] max-h-[80vh] flex flex-col shadow-xl">
+            <!-- Header -->
+            <div class="flex justify-between items-center px-5 py-3 border-b">
+                <h3 class="text-sm font-semibold text-gray-700">Select Directory</h3>
+                <button id="btn-browse-close" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+            </div>
+            <!-- Breadcrumb -->
+            <div id="browse-breadcrumb" class="px-5 py-2 bg-gray-50 text-xs font-mono text-gray-600 truncate border-b">
+                /
+            </div>
+            <!-- Directory list -->
+            <div id="browse-list" class="overflow-y-auto flex-1 px-3 py-2 space-y-1 min-h-[240px] max-h-[360px]">
+                <div class="text-gray-400 text-sm text-center py-8">Loading...</div>
+            </div>
+            <!-- New folder + actions -->
+            <div class="border-t px-5 py-3">
+                <div id="browse-new-folder" class="hidden mb-2">
+                    <div class="flex gap-2">
+                        <input id="browse-new-folder-name" type="text" placeholder="Folder name..." class="flex-1 border rounded px-2 py-1 text-sm">
+                        <button id="btn-browse-new-ok" class="text-xs px-2 py-1 bg-blue-500 text-white rounded">Create</button>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-400 mb-2">Current: <span id="browse-current-path" class="font-mono">/</span></div>
+                <div class="flex gap-2">
+                    <button id="btn-browse-up" class="flex-1 text-sm px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">↑ Parent</button>
+                    <button id="btn-browse-new" class="text-sm px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">+ New Folder</button>
+                    <button id="btn-browse-cancel" class="text-sm px-3 py-1.5 text-gray-600 bg-gray-100 rounded">Cancel</button>
+                    <button id="btn-browse-select" class="text-sm px-4 py-1.5 text-white bg-blue-500 rounded hover:bg-blue-600">Select</button>
+                </div>
             </div>
         </div>
     </div>

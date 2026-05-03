@@ -20,6 +20,7 @@ def create_app():
     )
 
     # Register API routes
+    from quantflow.web.api.browse import router as browse_router
     from quantflow.web.api.config import router as config_router
 
     # Library endpoints (Phase 1)
@@ -31,6 +32,7 @@ def create_app():
     app.include_router(watchlist_router)
     app.include_router(task_router)
     app.include_router(library_router)
+    app.include_router(browse_router)
 
     # Initialize Runs and Presets API engines and wire them to routers
     from quantflow.web.api.presets import router as presets_router
