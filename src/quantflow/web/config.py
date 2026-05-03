@@ -45,9 +45,16 @@ class WebConfig:
                 raise FileNotFoundError(str(p))
             with p.open("r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-            if isinstance(data, dict):
-                if "host" in data:
-                    cfg.host = str(data["host"])
-                if "port" in data:
-                    cfg.port = int(data["port"])
+        if isinstance(data, dict):
+            nested = data.get("web", {})
+            if not nested:
+                nested = data
+            if "host" in nested:
+                cfg.host = str(nested["host"])
+            elif "host" in data:
+                cfg.host = str(data["host"])
+            if "port" in nested:
+                cfg.port = int(nested["port"])
+            elif "port" in data:
+                cfg.port = int(data["port"])
         return cfg
