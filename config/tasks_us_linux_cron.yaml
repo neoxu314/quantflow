@@ -1,21 +1,25 @@
 tasks:
-  - name: "djia"
-    watchlist: "watchlists/djia.yaml"
-    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/home/neo/SynologyDrive/quantflow_report/djia"
-
-  - name: "nasdaq"
-    watchlist: "watchlists/nasdaq_100.yaml"
-    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/home/neo/SynologyDrive/quantflow_report/nasdaq"  
-
-  - name: "sp500"
-    watchlist: "watchlists/sp_500.yaml"
-    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/home/neo/SynologyDrive/quantflow_report/sp500"    
-
-  - name: "personal_focus_us"
-    watchlist: "watchlists/personal_focus_us.yaml"
-    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/home/neo/SynologyDrive/quantflow_report/personal_focus_us"
-
+- name: djia
+  watchlist: watchlists/djia.yaml
+  strategies:
+  - daily_bull_oversold
+  - daily_bull_mid_range
+  output: /home/neo/SynologyDrive/quantflow_report/djia
+- name: nasdaq
+  watchlist: watchlists/nasdaq_100.yaml
+  strategies:
+  - daily_bull_oversold
+  - daily_bull_mid_range
+  output: /home/neo/SynologyDrive/quantflow_report/nasdaq
+- name: sp500
+  watchlist: watchlists/sp_500.yaml
+  strategies:
+  - daily_bull_oversold
+  - daily_bull_mid_range
+  output: /home/neo/SynologyDrive/quantflow_report/sp500
+- name: personal_focus_us
+  watchlist: watchlists/personal_focus_us.yaml
+  strategies:
+  - daily_bull_oversold
+  - daily_bull_mid_range
+  output: /home/neo/SynologyDrive/quantflow_report/personal_focus_us

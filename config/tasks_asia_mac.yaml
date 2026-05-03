@@ -1,6 +1,7 @@
 tasks:
-  - name: "personal_focus_asia"
-    watchlist: "watchlists/personal_focus_asia.yaml"
-    strategies: ["daily_bull_oversold","daily_bull_mid_range"]
-    output: "/Users/neo/SynologyDrive/Invest/stock-monitor/personal_focus_asia"
-
+- name: personal_focus_asia
+  watchlist: watchlists/personal_focus_asia.yaml
+  strategies:
+  - daily_bull_oversold
+  - daily_bull_mid_range
+  output: /Users/neo/SynologyDrive/Invest/stock-monitor/personal_focus_asia

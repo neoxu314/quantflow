@@ -65,7 +65,11 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
 async function init() {
     setupEventListeners();
     await Promise.allSettled([loadStrategies(), loadWatchlists(), loadTaskFiles(), loadConfig()]);
-    selectTaskFile("");
+    if (state.taskFiles.length > 0) {
+        selectTaskFile(state.taskFiles[0].filename);
+    } else {
+        selectTaskFile("");
+    }
     window.addEventListener("beforeunload", (e) => {
         if (state.watchlistDirty) {
             e.preventDefault();
@@ -93,39 +97,43 @@ async function loadTasks(filename?: string) {
 
 async function loadTaskFiles() {
     state.taskFiles = await api<TaskFileInfo[]>("/api/task-files");
-    renderTaskFileSelect();
+    renderTaskFileSidebar();
 }
 
-function renderTaskFileSelect() {
-    const sel = document.getElementById("task-file-select") as HTMLSelectElement;
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">-- Choose file --</option>';
+function renderTaskFileSidebar() {
+    const list = document.getElementById("task-file-list")!;
+    list.innerHTML = "";
     for (const tf of state.taskFiles) {
-        sel.innerHTML += `<option value="${tf.filename}">${tf.filename} (${tf.taskCount} tasks)</option>`;
-    }
-    if (state.selectedTaskFile && [...sel.options].some(o => o.value === state.selectedTaskFile)) {
-        sel.value = state.selectedTaskFile;
-    } else if (prev && [...sel.options].some(o => o.value === prev)) {
-        sel.value = prev;
+        const li = document.createElement("li");
+        const isSelected = state.selectedTaskFile === tf.filename;
+        li.innerHTML = `
+            <div class="flex items-center justify-between">
+              <button data-filename="${tf.filename}" class="task-file-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
+                  ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "hover:bg-gray-100 text-gray-700"}">
+                <div class="truncate">${tf.filename}</div>
+                <div class="text-xs text-gray-400">${tf.taskCount} tasks</div>
+              </button>
+              <button class="tf-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${tf.filename}">×</button>
+            </div>`;
+        list.appendChild(li);
     }
 }
 
 function selectTaskFile(filename: string) {
     state.selectedTaskFile = filename;
-    const deleteBtn = document.getElementById("btn-delete-task-file")!;
+    renderTaskFileSidebar();
     const emptyMsg = document.getElementById("task-file-empty")!;
     const listArea = document.getElementById("task-list-area")!;
     const header = document.getElementById("task-file-header")!;
     if (!filename) {
-        deleteBtn.classList.add("hidden");
         emptyMsg.classList.remove("hidden");
+        emptyMsg.textContent = "Select a task file";
         listArea.classList.add("hidden");
         return;
     }
-    deleteBtn.classList.remove("hidden");
     emptyMsg.classList.add("hidden");
     listArea.classList.remove("hidden");
-    header.innerHTML = `<h3 class="font-medium text-gray-900">${filename}</h3>`;
+    header.textContent = filename;
     loadTasks(filename);
 }
 
@@ -339,11 +347,11 @@ function renderTaskTable() {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-gray-50";
         tr.innerHTML = `
-            <td class="px-4 py-2 text-sm font-medium text-gray-900">${task.name}</td>
-            <td class="px-4 py-2 text-sm text-gray-600">${task.watchlist}</td>
-            <td class="px-4 py-2 text-sm text-gray-600">${task.strategies.join(", ")}</td>
-            <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs">${task.output}</td>
-            <td class="px-4 py-2 text-sm">
+            <td class="px-4 py-2 text-sm font-medium text-gray-900 break-words">${task.name}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.watchlist}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.strategies.join(", ")}</td>
+            <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs truncate">${task.output}</td>
+            <td class="px-4 py-2 text-sm text-right whitespace-nowrap">
                 <button data-id="${task.id}" class="text-blue-600 hover:text-blue-800 mr-2 edit-task-btn">Edit</button>
                 <button data-id="${task.id}" class="text-red-600 hover:text-red-800 delete-task-btn">Delete</button>
             </td>`;
@@ -369,9 +377,7 @@ function renderTaskTable() {
 async function openTaskModal(taskId?: string) {
     const isEdit = !!taskId;
     document.getElementById("task-modal-title")!.textContent = isEdit ? "Edit Task" : "New Task";
-    // Use the globally selected file
-    const targetFile = state.selectedTaskFile;
-    if (!targetFile) { toast("Please select a config file first."); return; }
+    if (!state.selectedTaskFile) { toast("Please select a task file first."); return; }
     const wlSelect = document.getElementById("task-watchlist") as HTMLSelectElement;
     wlSelect.innerHTML = "";
     for (const wl of state.watchlists) {
@@ -401,11 +407,12 @@ async function openTaskModal(taskId?: string) {
         (document.getElementById("task-name") as HTMLInputElement).value = "";
         (document.getElementById("task-output") as HTMLInputElement).value = "./output";
     }
-    const newSaveBtn = (document.getElementById("btn-save-task")!.cloneNode(true)) as HTMLButtonElement;
-    document.getElementById("btn-save-task")!.parentNode!.replaceChild(newSaveBtn, document.getElementById("btn-save-task")!);
-    newSaveBtn.addEventListener("click", async () => {
+    document.getElementById("btn-save-task")!.onclick = null;
+    document.getElementById("btn-save-task")!.addEventListener("click", async () => {
+        if (!state.selectedTaskFile) { toast("Please select a task file first."); return; }
         const taskName = (document.getElementById("task-name") as HTMLInputElement).value.trim();
         if (!taskName) { alert("Name required"); return; }
+        if (!wlSelect.value) { alert("Watchlist required"); return; }
         const strategies = [...stratContainer.querySelectorAll(".task-strategy-cb:checked")].map(cb => (cb as HTMLInputElement).value);
         const output = (document.getElementById("task-output") as HTMLInputElement).value.trim() || "./output";
         const payload = { name: taskName, watchlist: wlSelect.value, strategies, output };
@@ -414,7 +421,7 @@ async function openTaskModal(taskId?: string) {
                 await api(`/api/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(payload) });
                 toast("Task updated");
             } else {
-                await api(`/api/tasks?filename=${encodeURIComponent(targetFile)}`, { method: "POST", body: JSON.stringify(payload) });
+                await api(`/api/tasks?filename=${encodeURIComponent(state.selectedTaskFile)}`, { method: "POST", body: JSON.stringify(payload) });
                 toast("Task created");
             }
             closeModal("modal-task");
@@ -471,26 +478,49 @@ function setupEventListeners() {
     document.getElementById("btn-confirm-batch")!.addEventListener("click", confirmBatchImport);
     document.getElementById("btn-cancel-task")!.addEventListener("click", () => closeModal("modal-task"));
     document.getElementById("btn-new-task")!.addEventListener("click", () => openTaskModal());
-    document.getElementById("task-file-select")!.addEventListener("change", (e) => {
-        selectTaskFile((e.target as HTMLSelectElement).value);
+    document.getElementById("task-file-list")!.addEventListener("click", async (e) => {
+        const target = e.target as HTMLElement;
+        const delBtn = target.closest(".tf-delete-btn");
+        if (delBtn) {
+            e.stopPropagation();
+            const filename = (delBtn as HTMLElement).dataset.filename;
+            if (!filename) return;
+            if (!confirm(`Delete "${filename}" and all tasks within?`)) return;
+            try {
+                await api(`/api/task-files/${encodeURIComponent(filename)}`, { method: "DELETE" });
+                toast(`Deleted ${filename}`);
+                if (state.selectedTaskFile === filename) {
+                    state.selectedTaskFile = "";
+                    renderTaskFileSidebar();
+                    const emptyMsg = document.getElementById("task-file-empty")!;
+                    const listArea = document.getElementById("task-list-area")!;
+                    emptyMsg.classList.remove("hidden");
+                    emptyMsg.textContent = "Select a task file";
+                    listArea.classList.add("hidden");
+                }
+                loadTaskFiles();
+            } catch (err) {
+                alert("Failed to delete task file");
+            }
+            return;
+        }
+        const btn = target.closest(".task-file-item");
+        if (btn) {
+            const filename = (btn as HTMLElement).dataset.filename;
+            if (filename) selectTaskFile(filename);
+        }
     });
     document.getElementById("btn-new-task-file")!.addEventListener("click", async () => {
         const name = prompt("New task file name (without extension):");
         if (!name) return;
         const filename = name.startsWith("tasks") ? name + ".yaml" : "tasks_" + name.replace(/\s+/g, "_") + ".yaml";
-        await api("/api/task-files", { method: "POST", body: JSON.stringify({ filename }) });
-        toast(`Created ${filename}`);
-        loadTaskFiles();
-    });
-    document.getElementById("btn-delete-task-file")!.addEventListener("click", async () => {
-        const f = state.selectedTaskFile;
-        if (!f) return;
-        if (confirm(`Delete all tasks in "${f}" and the file itself?`)) {
-            await api(`/api/task-files/${encodeURIComponent(f)}`, { method: "DELETE" });
-            toast(`Deleted ${f}`);
-            state.selectedTaskFile = "";
-            loadTaskFiles();
-            selectTaskFile("");
+        try {
+            await api("/api/task-files", { method: "POST", body: JSON.stringify({ filename }) });
+            toast(`Created ${filename}`);
+            await loadTaskFiles();
+            selectTaskFile(filename);
+        } catch (e: any) {
+            alert(`Failed: ${e.message}`);
         }
     });
     document.getElementById("search-input")!.addEventListener("input", () => {
