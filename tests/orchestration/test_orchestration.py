@@ -21,20 +21,20 @@ class TestComputeDaysBack:
 
     def test_single_strategy_dual_line(self):
         strategy = self._make_strategy([DualLineIndicator()])
-        result = _compute_days_back([strategy], None)
+        result = compute_days_back([strategy], None)
         assert result == math.ceil(114 * 2.0) + 30
 
     def test_multiple_strategies_takes_max(self):
         s_kdj = self._make_strategy([KDJIndicator()])
         s_dual = self._make_strategy([DualLineIndicator()])
-        result = _compute_days_back([s_kdj, s_dual], None)
+        result = compute_days_back([s_kdj, s_dual], None)
         assert result == math.ceil(114 * 2.0) + 30
 
     def test_override_takes_precedence(self):
         strategy = self._make_strategy([DualLineIndicator()])
-        result = _compute_days_back([strategy], override=500)
+        result = compute_days_back([strategy], override=500)
         assert result == 500
 
     def test_empty_strategies_fallback(self):
-        result = _compute_days_back([], None)
+        result = compute_days_back([], None)
         assert result == 365

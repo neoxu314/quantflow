@@ -4,3 +4,12 @@ src/quantflow/web/static/dist/
 *.d.ts
 src/quantflow/web/static/utils.js
 data/sectors/
+
+# E2E test artifacts
+config/quantflow.yaml.bak
+config/indicators.yaml.bak
+config/tasks_e2e_test.yaml
+watchlists/_test_e2e_wl.yaml
+
+# Generated reports
+reports/
