@@ -3,3 +3,4 @@
 src/quantflow/web/static/dist/
 *.d.ts
 src/quantflow/web/static/utils.js
+data/sectors/
