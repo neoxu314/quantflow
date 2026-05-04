@@ -135,6 +135,8 @@ python -m quantflow.cli stock_scan --code NVDA.US
 - `--end`: End date. Default: Today.
 - `--indicator`: Indicators to calculate (default: `kdj,dual_line`).
 
+> **Note on date range**: `--start` / `--end` define the **report output date range**. The system automatically fetches additional historical data before `--start` as warmup for indicator calculation, based on the lookback formula. Only data within the user-specified range appears in the output.
+
 ### Command 2: Run Orchestration Tasks (Recommended)
 This runs the strategies defined in your `tasks_*.yaml` file, producing both **per-task** and **combined** outputs.
 ```bash
@@ -250,7 +252,7 @@ pip install -e .
 python -m quantflow.cli web
 ```
 
-- **Default URL**: http://127.0.0.1:8080 (auto-opens in browser)
+- **Default URL**: http://127.0.0.1:{port} (auto-opens in browser). 端口以 `config/quantflow.yaml` 为准（默认 8082）。
 - **Configuration**: Set port/host in `config/quantflow.yaml` under `web:` section
 
 ### UI Features
@@ -286,6 +288,27 @@ python -m quantflow.cli web
    - **Run History**: List of all runs with status, signal count, config details, progress log, report/files browser
    - **Run Details**: 4 sub-tabs — Config, Progress (SSE real-time log), Report (indicator table for stock_scan, Markdown for others), Files
 
+### Available Indicators
+
+The system supports **8 indicators**:
+
+| Category | Indicators | Description |
+|----------|-----------|-------------|
+| Standard | KDJ, MACD, RSI, BOLL, VOL_MA | Built-in technical indicators |
+| Custom | DualLine, BrickChart, Washout | Extended/custom strategy indicators |
+
+> Full details: **Library** tab in Web UI. Parameter overrides: `config/indicators.yaml`.
+
+6. **Presets** (Saved Run Configurations):
+   - Create, save, and reuse run configurations
+   - Run directly from a saved preset
+   - CRUD via API: `/api/presets/`
+
+7. **Directory Browser** (File Picker):
+   - Navigate filesystem to select output paths
+   - Create new directories inline
+   - Available via browse icon in run wizard
+
 ### API Endpoints
 
 | Endpoint | Method | Description |
@@ -306,4 +329,9 @@ python -m quantflow.cli web
 | `/api/runs/{id}/files` | GET | Output file listing |
 | `/api/runs/{id}/logs:sse` | GET | SSE real-time progress log |
 | `/api/runs/{id}/cancel` | POST | Cancel running/queued run |
+| `/api/runs/queue` | GET | Queue status (active/pending) |
+| `/api/presets/` | GET, POST | List and create run presets |
+| `/api/presets/{id}` | GET, PUT, DELETE | Preset details, update, delete |
+| `/api/presets/{id}/run` | POST | Run from saved preset |
 | `/api/browse/` | GET | Directory browsing for file picker |
+| `/api/browse/mkdir` | POST | Create directory via file picker |

@@ -15,7 +15,6 @@ quantflow/
 │   ├── data/            # Multi-source data layer
 │   ├── indicators/      # Technical indicators
 │   │   ├── factory.py      # IndicatorFactory - config-based instantiation
-│   │   ├── library.py        # Library API endpoints
 │   ├── strategies/      # Buy/sell strategies
 │   ├── execution/       # Execution layer (formerly monitoring)
 │   ├── orchestration/   # Task orchestration layer
@@ -46,7 +45,7 @@ quantflow/
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
 | Indicator creation | `indicators/factory.py` | `IndicatorFactory.create("KDJ")` merges config with defaults |
-| Indicator discovery | `orchestration/discovery.py` | `discover_indicators()` returns metadata |
+| Indicator discovery | `web/api/library.py` | `get_library_indicators()` discovers indicators from standard/custom packages |
 | Indicator params | `config/indicators.yaml` | Per-indicator parameter overrides |
 | Web UI - library | `web/api/library.py` | Strategy + indicator catalog API |
 | Web UI - library tab | `web/static/app.ts` | Library panel rendering + param editor |
@@ -57,7 +56,7 @@ quantflow/
 | Web UI - config | `web/api/config.py` | GET (read) + PUT (write) system config |
 | Web UI - settings | `web/static/app.ts` | Settings form logic, token toggle/copy |
 | Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
-| Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` |
+| Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` (reserved, not actively used) |
 | Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
 | Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data |
 | Runs engine | `web/engine/run_engine.py` | stock_scan (indicator output), watchlist_run, task_run |
@@ -115,8 +114,9 @@ python -m quantflow.cli web
   - `/api/config` (GET + PUT system config)
   - `/api/strategies` (read-only)
   - `/api/library/*` (library catalog: strategies + indicators + param updates)
-  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel)
-  - `/api/browse/` (directory browsing for file picker)
+  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel, queue)
+  - `/api/presets/` (GET, POST, PUT, DELETE, run from preset)
+  - `/api/browse/` (directory browsing for file picker, mkdir)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
 - **Frontend tests**: `tests/web/frontend/` (Vitest unit tests for pure functions in `utils.ts`)
 - **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`

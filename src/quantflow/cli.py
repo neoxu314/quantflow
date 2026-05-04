@@ -5,6 +5,8 @@ import logging
 import math
 from datetime import datetime, timedelta
 
+import pandas as pd
+
 from quantflow.config.lookback import load_lookback_config
 from quantflow.data import DataSourceFactory, StockCode
 from quantflow.indicators.composer import IndicatorComposer
@@ -70,8 +72,9 @@ def stock_scan():
     if ind_objs:
         df = IndicatorComposer(ind_objs).compose(df)
 
-        df = df[df.index >= start_date]
-        
+        if "date" in df.columns:
+            df = df[pd.to_datetime(df["date"]) >= start_date]
+
         if start_date == end_date:
             df = df.tail(1)
 

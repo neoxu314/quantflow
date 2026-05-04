@@ -113,6 +113,8 @@ class RunEngine:
         from datetime import datetime as dt
         from datetime import timedelta
 
+        import pandas as pd
+
         from quantflow.config.lookback import load_lookback_config
         from quantflow.data.base import StockCode
         from quantflow.data.factory import DataSourceFactory
@@ -166,13 +168,23 @@ class RunEngine:
 
         df = IndicatorComposer(indicators).compose(df)
 
-        # Trim data to user-requested range, then optionally single-day
-        # Use try-except block for date comparison to handle non-DatetimeIndex cases safely
-        try:
-            mask = (df.index >= start_date) & (df.index <= end_date)
-            result_rows = df.loc[mask] if mask.any() else df
-        except TypeError:
-            # If index is not comparable (e.g. integer), fallback to full data or tail
+        if "date" in df.columns:
+            dt_col = pd.to_datetime(df["date"])
+            mask = (dt_col >= pd.Timestamp(start_date)) & (dt_col <= pd.Timestamp(end_date))
+            matched = mask.sum()
+            if matched > 0:
+                result_rows = df.loc[mask]
+            else:
+                self._sse.publish_log(
+                    run_id,
+                    f"⚠️ Date filter returned 0 rows for {start_date} to {end_date}, using full data ({len(df)} bars)",
+                    "warning",
+                )
+                result_rows = df
+        else:
+            self._sse.publish_log(
+                run_id, "⚠️ No 'date' column found in DataFrame, using full data", "warning"
+            )
             result_rows = df
 
         is_single_day = (start_date == end_date)

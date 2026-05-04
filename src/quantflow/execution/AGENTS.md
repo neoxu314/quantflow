@@ -25,7 +25,7 @@ execution/
   2. yFinance items → `fetch_batch_ohlcv()` (internal chunking: 50/batch, jitter sleep 5–12s to avoid 429).
   3. yFinance signals processed in-memory.
   4. Other items (A-share) → sequential `fetch_ohlcv()`.
-  - **Progress Logging**: Emits chunk progress with success/fail counts and timing, and `Processing [x/y]: ...`.
+  - **Progress Logging**: Via optional `on_progress` callback emitting `ProgressEvent` objects (`type="stock_start"|"stock_done"`, with `current`, `total`, `code`, `message`, `level`). Used by Web UI RunEngine for SSE real-time updates.
   - **Helper**: `_process_single()` for indicator + signal generation per stock.
   - **Enrichment**: Extracts `matched_*_strategies` lists and passes `name` from `WatchlistItem`.
 

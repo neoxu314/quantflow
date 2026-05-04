@@ -187,9 +187,19 @@ function renderConfigTab(run) {
         html += `<span class="text-gray-500">Finished:</span><span>${new Date(run.finished_at).toLocaleString()}</span>`;
     if (run.duration_ms)
         html += `<span class="text-gray-500">Duration:</span><span>${(run.duration_ms / 1000).toFixed(1)}s</span>`;
-    if (run.run_type === "stock_scan" && run.config?.indicators) {
-        const indNames = run.config.indicators.join(", ");
-        html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${indNames}</span>`;
+    if (run.run_type === "stock_scan") {
+        if (run.config?.code)
+            html += `<span class="text-gray-500">Code:</span><span class="font-mono">${run.config.code}</span>`;
+        if (run.config?.start_date)
+            html += `<span class="text-gray-500">Start:</span><span class="font-mono">${run.config.start_date}</span>`;
+        if (run.config?.end_date)
+            html += `<span class="text-gray-500">End:</span><span class="font-mono">${run.config.end_date}</span>`;
+        if (run.config?.indicators) {
+            const indNames = run.config.indicators.join(", ");
+            html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${indNames}</span>`;
+        }
+        if (run.config?.output_path)
+            html += `<span class="text-gray-500">Output:</span><span class="font-mono text-xs">${run.config.output_path}</span>`;
     }
     if (run.signal_count) {
         const label = run.run_type === "stock_scan" ? "Bars:" : "Signals:";
@@ -251,7 +261,11 @@ function renderReportTab(run) {
             const ohlcvCols = ["date", "open", "high", "low", "close", "volume"];
             const otherCols = cols.filter(c => !ohlcvCols.includes(c));
             const orderedCols = [...ohlcvCols.filter(c => cols.includes(c)), ...otherCols];
-            let html = `<div class="mb-2 text-sm text-gray-600">Stock: <span class="font-mono font-semibold">${data.code || code}</span> | Total bars: ${data.bar_count || data.data.length}</div>`;
+            let html = `<div class="mb-2 text-sm text-gray-600">Stock: <span class="font-mono font-semibold">${data.code || code}</span>`;
+            if (run.config?.start_date) {
+                html += ` | Range: <span class="font-mono">${run.config.start_date} → ${run.config.end_date || run.config.start_date}</span>`;
+            }
+            html += ` | Total bars: ${data.bar_count || data.data.length}</div>`;
             html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-xs"><thead class="bg-gray-50"><tr>';
             orderedCols.forEach(c => {
                 html += `<th class="px-2 py-1 text-left font-medium text-gray-500 uppercase tracking-wider">${c}</th>`;
