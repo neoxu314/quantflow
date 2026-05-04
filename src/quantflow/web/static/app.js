@@ -88,9 +88,11 @@ function renderRunsList() {
         const active = state.selectedRunId === r.id ? 'bg-blue-50 border-l-2 border-blue-500' : '';
         const time = new Date(r.created_at).toLocaleString();
         return `<li class="px-3 py-2 rounded cursor-pointer hover:bg-gray-100 ${active}" data-run-id="${r.id}">` +
-            `<div class="font-medium text-sm truncate">${r.name}</div>` +
-            `<div class="text-xs text-gray-500">${r.run_type} • ${r.status} • ${time}</div>` +
-            `</li>`;
+            `<div class="flex items-center justify-between">` +
+            `<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">${r.name}</div>` +
+            `<div class="text-xs text-gray-500">${r.run_type} • ${r.status} • ${time}</div></div>` +
+            `<button class="ml-2 text-gray-400 hover:text-red-500 p-1 rounded flex-shrink-0" onclick="event.stopPropagation(); deleteRun('${r.id}')" title="Delete run">✕</button>` +
+            `</div></li>`;
     }).join('');
     list.querySelectorAll('[data-run-id]').forEach(el => {
         el.addEventListener('click', () => {
@@ -523,6 +525,30 @@ function runAgain(runId) {
         updateCliPreview();
     }
     toast("Pre-filled from previous run");
+}
+async function deleteRun(runId) {
+    const run = state.runsList.find(r => r.id === runId);
+    if (!run)
+        return;
+    const statusMsg = run.status === "running" ? "This will stop the running task." :
+        run.status === "queued" ? "This will remove it from the queue." : "";
+    if (!confirm(`Delete run "${run.name}"?\n${statusMsg}\nAssociated report file will also be deleted.\n\nThis action cannot be undone.`))
+        return;
+    try {
+        await api(`/api/runs/${runId}`, { method: "DELETE" });
+        state.runsList = state.runsList.filter(r => r.id !== runId);
+        if (state.selectedRunId === runId) {
+            state.selectedRunId = null;
+            state.selectedRun = null;
+            document.getElementById("runs-empty-state").classList.remove("hidden");
+            document.getElementById("runs-detail").classList.add("hidden");
+        }
+        renderRunsList();
+        toast("Run deleted");
+    }
+    catch (e) {
+        toast(`Delete failed: ${e.message}`);
+    }
 }
 // ---- End of Runs functions ----
 async function loadTasks(filename) {
@@ -1399,6 +1425,7 @@ function setupEventListeners() {
     // Global helpers for onclick handlers
     window.copyToClipboard = copyToClipboard;
     window.runAgain = runAgain;
+    window.deleteRun = deleteRun;
     // Browse directory buttons
     document.getElementById("btn-browse-dir")?.addEventListener("click", () => {
         const input = document.getElementById("run-output-path");

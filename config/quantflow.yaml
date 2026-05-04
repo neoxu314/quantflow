@@ -32,5 +32,5 @@ yfinance:
     sleep_min: 5
     sleep_max: 12
 web:
-  port: 8080
+  port: 8082
   host: 127.0.0.1

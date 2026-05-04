@@ -101,6 +101,32 @@ def cancel_run(run_id: str):
                         detail="Run cannot be cancelled")
 
 
+@router.delete("/{run_id}")
+def delete_run(run_id: str):
+    """Delete a run record and its report file."""
+    engine = _get_engine()
+    run = engine._history.get_run(run_id)
+    if not run:
+        raise HTTPException(
+            status_code=404, detail=f"Run {run_id} not found")
+
+    if run.status == "running":
+        engine.cancel(run_id)
+        engine._queue.cancel(run_id)
+    elif run.status == "queued":
+        engine._queue.cancel(run_id)
+
+    if run.report_path:
+        rp = Path(run.report_path)
+        if rp.exists():
+            rp.unlink()
+
+    engine._history.delete_run(run_id)
+    engine._sse.disconnect_all(run_id)
+
+    return {"ok": True}
+
+
 @router.get("/{run_id}/report")
 def get_report(run_id: str):
     run = _get_engine()._history.get_run(run_id)

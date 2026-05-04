@@ -156,3 +156,14 @@ class RunHistory:
             return _row_to_record(row) if row else None
         finally:
             _close(conn)
+
+    def delete_run(self, run_id: str) -> bool:
+        """Delete a run record from the database. Returns True if found."""
+        conn = _connect()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM run_history WHERE id = ?", (run_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            _close(conn)
