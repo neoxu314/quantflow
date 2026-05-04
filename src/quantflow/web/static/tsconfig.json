@@ -8,7 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,
-    "outDir": "./dist",
+    // Emit to the source directory (no separate dist folder for this task)
     "noEmit": false,
     "allowJs": true,
     "resolveJsonModule": true,

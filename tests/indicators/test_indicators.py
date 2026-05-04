@@ -77,9 +77,9 @@ class TestMACDIndicator:
         macd = MACDIndicator()
         result = macd.calculate(sample_df)
         
+        assert "DIF" in result.columns
+        assert "DEA" in result.columns
         assert "MACD" in result.columns
-        assert "MACD_SIGNAL" in result.columns
-        assert "MACD_HIST" in result.columns
 
 
 class TestRSIIndicator:

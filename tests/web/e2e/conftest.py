@@ -20,7 +20,15 @@ from pathlib import Path
 # ─── Constants ──────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-WEB_PORT = 8080
+
+def _load_web_port():
+    try:
+        from quantflow.web.config import WebConfig
+        return WebConfig.load().port
+    except Exception:
+        return 8080
+
+WEB_PORT = _load_web_port()
 SERVER_URL = f"http://127.0.0.1:{WEB_PORT}"
 
 # Test data names

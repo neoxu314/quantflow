@@ -29,7 +29,7 @@ class KDJIndicator(IndicatorBase):
         return ["high", "low", "close"]
     
     def get_output_fields(self) -> List[str]:
-        return ["K", "D", "J", "RSV"]
+        return ["K", "D", "J"]
     
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -57,6 +57,5 @@ class KDJIndicator(IndicatorBase):
         df["K"] = k
         df["D"] = d
         df["J"] = j
-        df["RSV"] = rsv
         
         return df

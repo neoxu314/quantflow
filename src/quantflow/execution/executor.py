@@ -1,20 +1,32 @@
 """Stock Executor for processing execution jobs."""
 
 import logging
-import pandas as pd
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Callable, Dict, List, Optional
+
+import pandas as pd
 
 from quantflow.config.loader import ConfigLoader
 from quantflow.data import DataSourceFactory, StockCode
+from quantflow.execution.storage import ExecutionResultItem, Storage
 from quantflow.indicators.composer import IndicatorComposer
-from quantflow.indicators.standard import KDJIndicator, MACDIndicator
 from quantflow.indicators.custom import DualLineIndicator
-from quantflow.execution.storage import Storage, ExecutionResultItem
+from quantflow.indicators.standard import KDJIndicator, MACDIndicator
+
 from .job import ExecutionJob
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class ProgressEvent:
+    type: str          # "stock_start" | "stock_done" | "log"
+    current: int       # Current stock index (0-based)
+    total: int         # Total stocks
+    code: str          # Current stock code
+    message: str       # Human-readable message
+    level: str         # "info" | "warning" | "error"
 
 class Executor:
     def __init__(self):
@@ -72,8 +84,19 @@ class Executor:
             )
         return None
 
-    def execute(self, job: ExecutionJob) -> List[ExecutionResultItem]:
+    def execute(
+        self,
+        job: ExecutionJob,
+        on_progress: Optional[Callable[[ProgressEvent], None]] = None,
+    ) -> List[ExecutionResultItem]:
         total = len(job.items)
+        def _emit(code: str, msg: str, level: str = "info",
+                  etype: str = "log", idx: int = 0):
+            if on_progress:
+                on_progress(ProgressEvent(
+                    type=etype, current=idx, total=total,
+                    code=code, message=msg, level=level,
+                ))
         logger.info(f"Starting execution: {job.name} ({total} items)")
         results = []
         start_date = (datetime.now() - timedelta(days=job.days_back)).strftime("%Y-%m-%d")
@@ -105,34 +128,55 @@ class Executor:
                 f"yFinance batch complete: {len(yf_data)}/{len(yfinance_items)} stocks"
             )
 
-        for item, code in yfinance_items:
+        for idx, (item, code) in enumerate(yfinance_items, 1):
             df = yf_data.get(code.standard)
+            _emit(code.standard, f"[{idx}/{total}] {code.standard}",
+                  "info", "stock_start", idx)
             if df is None or df.empty:
                 logger.warning(f"No data for {item.code}")
+                _emit(code.standard, f"No data: {code.standard}",
+                      "warning", "stock_done", idx)
                 continue
             result = self._process_single(item, code, df, job)
+            sigs = result.buy_signals + result.sell_signals if result else 0
             if result:
                 results.append(result)
+                _emit(code.standard, f"Done: {code.standard} ({sigs} signals)",
+                      "info", "stock_done", idx)
+            else:
+                _emit(code.standard, f"Done: {code.standard} (0 signals)",
+                      "info", "stock_done", idx)
 
         for idx, (item, code) in enumerate(other_items, 1):
             try:
+                _emit(code.standard, f"[{idx}/{total}] {code.standard}",
+                      "info", "stock_start", idx)
                 logger.info(f"Processing [{idx}/{total}]: {item.code}")
                 df, _ = self.factory.fetch_ohlcv(
                     code, start_date=start_date, end_date=end_date
                 )
                 if df.empty:
                     logger.warning(f"No data for {item.code}")
+                    _emit(code.standard, f"No data: {code.standard}",
+                          "warning", "stock_done", idx)
                     continue
                 result = self._process_single(item, code, df, job)
+                sigs = result.buy_signals + result.sell_signals if result else 0
                 if result:
                     results.append(result)
+                    _emit(code.standard, f"Done: {code.standard} ({sigs} signals)",
+                          "info", "stock_done", idx)
+                else:
+                    _emit(code.standard, f"Done: {code.standard} (0 signals)",
+                          "info", "stock_done", idx)
             except Exception as e:
                 logger.error(f"Failed {item.code}: {e}")
+                _emit(code.standard, f"Failed: {code.standard} - {e}",
+                      "error", "stock_done", idx)
 
-        # Save results
+        # Always write JSON (even empty arrays for zero-signal runs)
         path = f"{job.output_dir}/{job.name}.json"
-        if results:
-            self.storage.save_results(path, results)
-            logger.info(f"Saved results to {path}")
+        self.storage.save_results(path, results)
+        logger.info(f"Saved results to {path}")
 
         return results

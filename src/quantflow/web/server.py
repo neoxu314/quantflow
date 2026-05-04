@@ -20,16 +20,37 @@ def create_app():
     )
 
     # Register API routes
+    from quantflow.web.api.browse import router as browse_router
     from quantflow.web.api.config import router as config_router
-    from quantflow.web.api.watchlists import router as watchlist_router
-    from quantflow.web.api.tasks import router as task_router
+
     # Library endpoints (Phase 1)
     from quantflow.web.api.library import router as library_router
+    from quantflow.web.api.tasks import router as task_router
+    from quantflow.web.api.watchlists import router as watchlist_router
 
     app.include_router(config_router)
     app.include_router(watchlist_router)
     app.include_router(task_router)
     app.include_router(library_router)
+    app.include_router(browse_router)
+
+    # Initialize Runs and Presets API engines and wire them to routers
+    from quantflow.web.api.presets import router as presets_router
+    from quantflow.web.api.runs import router as runs_router
+    from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
+    # Build singletons for the web app
+    history = RunHistory()
+    sse = SSEManager()
+    queue = RunQueue(on_run_available=lambda rid: None)
+    engine = RunEngine(queue=queue, history=history, sse=sse)
+    # Expose engine to API modules
+    from quantflow.web.api import presets as presets_api
+    from quantflow.web.api import runs as runs_api
+    runs_api._set_engine(engine)
+    presets_api._set_engine(engine)
+    # Register runs and presets routers as part of app routes
+    app.include_router(runs_router)
+    app.include_router(presets_router)
 
     # Serve static files (frontend)
     static_dir = Path(__file__).parent / "static"
@@ -48,7 +69,7 @@ def start_server(config: WebConfig = None):
 
     url = f"http://{config.host}:{config.port}"
     print(f"\n{'='*50}")
-    print(f"  QuantFlow Web UI")
+    print("  QuantFlow Web UI")
     print(f"  URL: {url}")
     print(f"{'='*50}\n")
 
