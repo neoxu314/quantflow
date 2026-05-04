@@ -129,7 +129,7 @@ class PreflightChecker:
                 r.fail("Watchlist path required")
             else:
                 r.errors.extend(validate_watchlist_file(wl).errors)
-            for sid in config.get("strategies", []):
+            for sid in config.get("strategies") or []:
                 r.errors.extend(validate_strategy_id(sid).errors)
         elif run_type == "task_run":
             tp = config.get("task_config")
