@@ -174,10 +174,9 @@ class Executor:
                 _emit(code.standard, f"Failed: {code.standard} - {e}",
                       "error", "stock_done", idx)
 
-        # Save results
+        # Always write JSON (even empty arrays for zero-signal runs)
         path = f"{job.output_dir}/{job.name}.json"
-        if results:
-            self.storage.save_results(path, results)
-            logger.info(f"Saved results to {path}")
+        self.storage.save_results(path, results)
+        logger.info(f"Saved results to {path}")
 
         return results

@@ -118,8 +118,9 @@ class RunEngine:
 
         cfg = run.config
         code = StockCode.from_standard(cfg["code"])
-        output = cfg.get("output_path") or str(
+        base_output = cfg.get("output_path") or str(
             PROJECT_ROOT / "output" / "manual_scans")
+        output = str(Path(base_output) / run_id)
 
         start_date = cfg.get("start_date") or (
             dt.now() - timedelta(days=365)).strftime("%Y-%m-%d")
@@ -223,8 +224,9 @@ class RunEngine:
         wp = cfg["watchlist"]
         p = Path(wp) if os.path.isabs(wp) else PROJECT_ROOT / wp
         wl = Watchlist.load(str(p))
-        output = cfg.get("output_path") or str(
+        base_output = cfg.get("output_path") or str(
             PROJECT_ROOT / "output" / "manual_watchlist")
+        output = str(Path(base_output) / run_id)
         sids = cfg.get("strategies", [
             "daily_bull_oversold", "daily_bull_mid_range"])
         strategies = [STRATEGY_REGISTRY[s]() for s in sids]
@@ -266,8 +268,9 @@ class RunEngine:
         tp = cfg["task_config"]
         p = Path(tp) if os.path.isabs(tp) else PROJECT_ROOT / tp
         configs = TaskConfig.load(str(p))
-        output = cfg.get("output_path")
+        base_output = cfg.get("output_path") or "reports"
         daily = cfg.get("daily", False)
+        output = str(Path(base_output) / run_id)
 
         self._sse.publish_log(
             run_id,
@@ -275,7 +278,7 @@ class RunEngine:
         signal_count = Orchestrator(
             configs, output_override=output, daily_mode=daily).run()
 
-        rdir = output or "reports"
+        rdir = output
         if daily:
             rdir = str(Path(rdir) / dt.now().strftime("%Y-%m-%d"))
 

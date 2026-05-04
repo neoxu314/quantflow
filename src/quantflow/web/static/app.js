@@ -66,14 +66,44 @@ async function loadWatchlists() {
     renderWatchlistSidebar();
 }
 // Runs data fetch
+let runsPollingTimer = null;
 async function loadRuns() {
     try {
         const res = await api("/api/runs/");
         state.runsList = res.runs || [];
         renderRunsList();
+        // Refresh detail panel if a run status changed
+        if (state.selectedRunId) {
+            const updated = state.runsList.find(r => r.id === state.selectedRunId);
+            if (updated && updated.status !== state.selectedRun?.status) {
+                state.selectedRun = updated;
+                renderRunsDetail(updated);
+                if (updated.status !== "running" && updated.status !== "queued") {
+                    if (sseSource) {
+                        sseSource.close();
+                        sseSource = null;
+                        sseTargetRunId = null;
+                    }
+                }
+                else {
+                    connectSSE(updated.id);
+                }
+            }
+        }
     }
     catch (e) {
         console.error('Failed to load runs:', e);
+    }
+}
+function startRunsPolling() {
+    if (runsPollingTimer)
+        return;
+    runsPollingTimer = setInterval(loadRuns, 3000);
+}
+function stopRunsPolling() {
+    if (runsPollingTimer) {
+        clearInterval(runsPollingTimer);
+        runsPollingTimer = null;
     }
 }
 function renderRunsList() {
@@ -392,6 +422,7 @@ async function executeRun() {
         closeModal("modal-new-run");
         toast("Run started");
         await loadRuns();
+        startRunsPolling();
         if (result.run_id)
             selectRun(result.run_id);
     }
@@ -622,6 +653,12 @@ function switchTab(tab) {
             tabBtn.className = "tab-inactive px-6 py-3 border-b-2 font-medium text-sm";
             panel.classList.add("hidden");
         }
+    }
+    if (tab === "runs") {
+        startRunsPolling();
+    }
+    else {
+        stopRunsPolling();
     }
 }
 // Library sub-tab switching (strategies / indicators)
@@ -1391,7 +1428,10 @@ function setupEventListeners() {
         runsTab.addEventListener("click", () => switchTab("runs"));
     const newRunBtn = document.getElementById("btn-new-run");
     if (newRunBtn)
-        newRunBtn.addEventListener("click", () => openModal("modal-new-run"));
+        newRunBtn.addEventListener("click", () => {
+            resetRunModal();
+            openModal("modal-new-run");
+        });
     // Runs modal: cancel/back/check/execute
     document.getElementById("btn-cancel-run")?.addEventListener("click", () => {
         resetRunModal();

@@ -7,17 +7,19 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pytest
 from fastapi.testclient import TestClient
+
 from quantflow.web.engine import run_history
+
 run_history.DB_PATH = Path(":memory:")
 
 
 @pytest.fixture
 def app():
     from fastapi import FastAPI
-    from quantflow.web.api import runs as runs_api
+
     from quantflow.web.api import presets as presets_api
-    from quantflow.web.engine import (
-        RunEngine, RunQueue, SSEManager, RunHistory)
+    from quantflow.web.api import runs as runs_api
+    from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
 
     # Reset memory connection for each test
     run_history._MEMORY_CONN = None
@@ -145,10 +147,10 @@ class TestDeleteRunApi:
         h.update_status(rid, "completed",
             report_path=str(report_file))
 
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine.run_engine import RunEngine
         from quantflow.web.engine.run_queue import RunQueue
         from quantflow.web.engine.sse import SSEManager
-        from quantflow.web.engine.run_engine import RunEngine
-        from quantflow.web.api import runs as runs_api
 
         engine = RunEngine(
             RunQueue(), h, SSEManager())
@@ -156,3 +158,90 @@ class TestDeleteRunApi:
 
         client.delete(f"/api/runs/{rid}")
         assert not report_file.exists()
+
+
+class TestTaskRunPreflight:
+    def test_preflight_missing_task_config(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "task_run",
+        })
+        data = r.json()
+        assert data["ok"] is False
+        assert any("required" in e.lower() for e in data["errors"])
+
+    def test_preflight_nonexistent_task_file(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "task_run",
+            "task_config": "config/does_not_exist.yaml",
+        })
+        data = r.json()
+        assert data["ok"] is False
+        assert any("not found" in e.lower() for e in data["errors"])
+
+    def test_preflight_valid_task_config(self, client, tmp_path):
+        from quantflow.web.engine import preflight
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+
+        tp = tmp_path / "config" / "tasks_valid.yaml"
+        tp.parent.mkdir(parents=True, exist_ok=True)
+        tp.write_text(
+            "tasks:\n"
+            "  - name: valid_task\n"
+            "    watchlist: watchlists/djia.yaml\n"
+            "    strategies: [daily_bull_oversold]\n"
+            "    output: ./output/valid\n"
+        )
+        try:
+            r = client.post("/api/runs/", json={
+                "run_type": "task_run",
+                "task_config": str(tp),
+            })
+            assert r.json()["ok"] is True
+            assert r.json()["run_id"] is not None
+        finally:
+            preflight.PROJECT_ROOT = orig
+
+
+class TestFilesEndpoint:
+    def test_files_endpoint_no_output_path(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        files_resp = client.get(f"/api/runs/{rid}/files")
+        assert files_resp.status_code == 200
+        assert files_resp.json()["files"] == []
+
+    def test_files_endpoint_nonexistent_run(self, client):
+        r = client.get("/api/runs/nonexistent-id/files")
+        assert r.status_code == 404
+
+
+class TestTaskRunNaming:
+    def test_task_run_auto_name(self, client, tmp_path):
+        from quantflow.web.engine import preflight
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+
+        tp = tmp_path / "config" / "tasks_named.yaml"
+        tp.parent.mkdir(parents=True, exist_ok=True)
+        tp.write_text(
+            "tasks:\n"
+            "  - name: named_task\n"
+            "    watchlist: watchlists/djia.yaml\n"
+            "    strategies: [daily_bull_oversold]\n"
+            "    output: ./output/named\n"
+        )
+        try:
+            r = client.post("/api/runs/", json={
+                "run_type": "task_run",
+                "task_config": str(tp),
+            })
+            assert r.json()["ok"] is True
+            rid = r.json()["run_id"]
+            detail = client.get(f"/api/runs/{rid}").json()
+            assert "tasks_named" in detail["run"]["name"]
+        finally:
+            preflight.PROJECT_ROOT = orig

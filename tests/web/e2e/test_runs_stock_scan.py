@@ -163,3 +163,28 @@ class TestRunsStockScanWorkflow:
 
         assert count == 0, "Run should be deleted from DB"
         assert not report_file.exists(), "Output file should be deleted"
+
+    def test_new_run_modal_resets_on_open(self, page: Page):
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.click('button[data-tab="runs"]')
+
+        page.click("#btn-new-run")
+        page.wait_for_selector("#modal-new-run", state="visible")
+
+        page.click("button[data-type='stock_scan']")
+        page.wait_for_selector("#run-config-stock_scan", state="visible")
+
+        page.click("#btn-cancel-run")
+        page.wait_for_selector("#modal-new-run", state="hidden")
+
+        page.click("#btn-new-run")
+        page.wait_for_selector("#modal-new-run", state="visible")
+        page.wait_for_selector("#run-step-type", state="visible")
+
+        config_stock = page.locator("#run-config-stock_scan")
+        expect(config_stock).to_be_hidden()
+        config_watchlist = page.locator("#run-config-watchlist_run")
+        expect(config_watchlist).to_be_hidden()
+        config_task = page.locator("#run-config-task_run")
+        expect(config_task).to_be_hidden()

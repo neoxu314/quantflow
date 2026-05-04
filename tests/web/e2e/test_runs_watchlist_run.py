@@ -188,3 +188,24 @@ class TestRunsWatchlistRunWorkflow:
             ).fetchone()[0]
 
         assert count == 0, "Run should be deleted from DB"
+
+    def test_run_type_cannot_modify_after_select(self, page: Page, base_url: str):
+        setup_test_watchlist(base_url)
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.click('button[data-tab="runs"]')
+
+        page.click("#btn-new-run")
+        page.wait_for_selector("#modal-new-run", state="visible")
+
+        page.click("button[data-type='stock_scan']")
+        page.wait_for_selector("#run-config-stock_scan", state="visible")
+
+        page.click("#btn-back-run")
+        page.wait_for_selector("#run-step-type", state="visible")
+
+        step_type = page.locator("#run-step-type")
+        expect(step_type).to_be_visible()
+        config_stock = page.locator("#run-config-stock_scan")
+        expect(config_stock).to_be_hidden()
