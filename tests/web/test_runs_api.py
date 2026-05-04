@@ -107,3 +107,52 @@ class TestPresetsApi:
             assert r2.json()["ok"] is True
         finally:
             presets.PRESETS_DIR = orig
+
+
+class TestDeleteRunApi:
+    def test_delete_run(self, client):
+        """Delete a completed run removes DB record."""
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        r2 = client.delete(f"/api/runs/{rid}")
+        assert r2.json()["ok"] is True
+        r3 = client.get(f"/api/runs/{rid}")
+        assert r3.status_code == 404
+
+    def test_delete_nonexistent(self, client):
+        """Delete a run that doesn't exist returns 404."""
+        r = client.delete("/api/runs/no-such-id")
+        assert r.status_code == 404
+
+    def test_delete_removes_from_list(self, client):
+        """After delete, runner should not appear in list."""
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan", "code": "NVDA.US"})
+        rid = r.json()["run_id"]
+        client.delete(f"/api/runs/{rid}")
+        runs = client.get("/api/runs/").json()
+        assert all(run["id"] != rid for run in runs["runs"])
+
+    def test_delete_report_file(self, client, tmp_path):
+        """Delete removes the report file if it exists."""
+        report_file = tmp_path / "test_report.json"
+        report_file.write_text("{}")
+        h = run_history.RunHistory()
+        rid = h.create_run("T", "stock_scan", {})
+        h.update_status(rid, "completed",
+            report_path=str(report_file))
+
+        from quantflow.web.engine.run_queue import RunQueue
+        from quantflow.web.engine.sse import SSEManager
+        from quantflow.web.engine.run_engine import RunEngine
+        from quantflow.web.api import runs as runs_api
+
+        engine = RunEngine(
+            RunQueue(), h, SSEManager())
+        runs_api._set_engine(engine)
+
+        client.delete(f"/api/runs/{rid}")
+        assert not report_file.exists()
