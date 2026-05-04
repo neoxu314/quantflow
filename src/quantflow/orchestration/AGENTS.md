@@ -19,8 +19,8 @@ orchestration/
 
 ## KEY CLASSES
 
-- `Orchestrator`: Loads YAML, resolves strategies, computes `days_back` from lookbacks, dispatches jobs, and aggregates results for combined reporting.
-- `_compute_days_back()`: Calculates calendar days = `max(lookback_bars) * calendar_multiplier + buffer_days`.
+- `Orchestrator`: Loads YAML, resolves strategies, computes `days_back` via `config.lookback`, dispatches jobs, and aggregates results for combined reporting. Returns total signal count from `.run()`.
+- `compute_days_back()` (shared): Located in `config/lookback.py`. Calculates calendar days = `max(lookback_bars) * calendar_multiplier + buffer_days`. Used by CLI, Web, and Orchestrator.
 - `_resolve_task_dir()` / `_resolve_combined_dir()`: Returns path with or without date suffix based on CLI `--daily`.
 - `STRATEGY_REGISTRY`: Centralized dictionary mapping `"daily_bull_oversold"` to class.
 - `discover_indicators()`: Returns metadata (name, category, params, fields, lookback) for all indicators discovered from standard and custom package `__all__` exports. Used by the Web UI Library API.

@@ -126,9 +126,9 @@ This means a 700-stock list with 200 yFinance stocks takes ~6-8 minutes with jit
 You can run scans manually or via automation. Run these from the project root directory (`quantflow/`).
 
 ### Command 1: Single Stock Scan
-For quick, ad-hoc analysis of one stock.
+For quick, ad-hoc analysis of one stock (outputs indicator values).
 ```bash
-python -m quantflow.cli scan --code NVDA.US
+python -m quantflow.cli stock_scan --code NVDA.US
 ```
 - `--code`: Stock code (Standard format, e.g., `600519.SH` for A-share, `NVDA.US` for US).
 - `--start`: Start date for data (YYYY-MM-DD). Default: 1 year ago.
@@ -139,13 +139,13 @@ python -m quantflow.cli scan --code NVDA.US
 This runs the strategies defined in your `tasks_*.yaml` file, producing both **per-task** and **combined** outputs.
 ```bash
 # Default: outputs per-task to paths defined in tasks_*.yaml
-python -m quantflow.cli tasks --config config/tasks_us_mac.yaml
+python -m quantflow.cli task_run --config config/tasks_us_mac.yaml
 
 # Combined: specify a combined-report base directory
-python -m quantflow.cli tasks --config config/tasks_us_mac.yaml --output ./summary
+python -m quantflow.cli task_run --config config/tasks_us_mac.yaml --output ./summary
 
 # Daily Archive: inject today's date into ALL output paths
-python -m quantflow.cli tasks --config config/tasks_us_mac.yaml --output ./summary --daily
+python -m quantflow.cli task_run --config config/tasks_us_mac.yaml --output ./summary --daily
 ```
 
 **Parameters:**
@@ -160,13 +160,15 @@ python -m quantflow.cli tasks --config config/tasks_us_mac.yaml --output ./summa
 *Note: If your tasks config file contains multiple tasks, this command will run them sequentially. A combined Markdown report is generated at the end of all tasks.*
 
 ### Command 3: Run Single Watchlist
-For running a specific watchlist with default strategies.
+For running a specific watchlist with strategies, saving JSON results + Markdown report.
 ```bash
-python -m quantflow.cli monitor --watchlist watchlists/us_tech.yaml --output ./output/manual_test
+python -m quantflow.cli watchlist_run --watchlist watchlists/us_tech.yaml --output ./output/manual_test
+python -m quantflow.cli watchlist_run --watchlist watchlists/us_tech.yaml --strategies kdj_dead_cross --days-back 180
 ```
 - `--watchlist`: Path to specific watchlist file.
-- `--output`: Directory to save results.
-- **Default strategies loaded**: `DailyBullishMidRangeBuy`, `DailyBullishOversoldBuy`.
+- `--output`: Directory to save results (default: `./output`).
+- `--strategies`: Comma-separated strategy IDs (default: `daily_bull_oversold,daily_bull_mid_range`).
+- `--days-back`: Override auto-calculated lookback days (optional).
 
 ## 3. Output & Results
 
@@ -221,7 +223,7 @@ To monitor daily with automatic date-based archiving:
 1. **Crontab entry** (`crontab -e`):
 ```bash
 # Run A-shares at 20:00 (Beijing Time) — auto-archives by date
-00 20 * * * cd /path/to/quantflow && python -m quantflow.cli tasks --config config/tasks_asia_mac.yaml --output ./reports --daily >> /var/log/quantflow.log 2>&1
+00 20 * * * cd /path/to/quantflow && python -m quantflow.cli task_run --config config/tasks_asia_mac.yaml --output ./reports --daily >> /var/log/quantflow.log 2>&1
 ```
 
 2. **Resulting structure** (each day creates a new folder):
@@ -276,6 +278,13 @@ python -m quantflow.cli web
    - **Strategy Library**: View all registered strategies with descriptions, signal types, required indicators, and lookback days
    - **Indicator Library**: Browse all available indicators with parameters, inputs/outputs, and lookback requirements
    - **Parameter Editing**: Click "Edit Params" on any indicator to modify its configuration, persisted to `config/indicators.yaml`
+5. **Runs Panel** (New Run History):
+   - **New Run Wizard**: Create runs for `stock_scan`, `watchlist_run`, or `task_run` via guided form
+   - **Stock Scan**: Outputs indicator calculation results (KDJ, MACD, DualLine, etc.), not strategy signals — consistent with CLI `stock_scan`
+   - **Watchlist Run**: Runs watchlist with selected strategies, outputs JSON + Markdown report — consistent with CLI `watchlist_run`
+   - **Task Run**: Executes task file via Orchestrator — consistent with CLI `task_run`
+   - **Run History**: List of all runs with status, signal count, config details, progress log, report/files browser
+   - **Run Details**: 4 sub-tabs — Config, Progress (SSE real-time log), Report (indicator table for stock_scan, Markdown for others), Files
 
 ### API Endpoints
 
@@ -290,3 +299,11 @@ python -m quantflow.cli web
 | `/api/library/strategies` | GET | Strategy catalog with descriptions, indicators, lookback |
 | `/api/library/indicators` | GET | Indicator catalog with params, fields, lookback |
 | `/api/library/indicators/params` | PUT | Update indicator parameter configuration |
+| `/api/runs/` | GET, POST, DELETE | Run history CRUD + create runs |
+| `/api/runs/{id}` | GET | Single run details |
+| `/api/runs/{id}/indicator-data` | GET | Indicator results for stock_scan runs |
+| `/api/runs/{id}/report` | GET | Markdown report for watchlist/task runs |
+| `/api/runs/{id}/files` | GET | Output file listing |
+| `/api/runs/{id}/logs:sse` | GET | SSE real-time progress log |
+| `/api/runs/{id}/cancel` | POST | Cancel running/queued run |
+| `/api/browse/` | GET | Directory browsing for file picker |

@@ -19,12 +19,14 @@ quantflow/
 │   ├── strategies/      # Buy/sell strategies
 │   ├── execution/       # Execution layer (formerly monitoring)
 │   ├── orchestration/   # Task orchestration layer
-│   ├── config/          # YAML loader + defaults
+│   ├── config/          # YAML loader + lookback config
+│   │   ├── loader.py       # ConfigLoader - token, yfinance settings
+│   │   └── lookback.py     # compute_days_back() - shared lookback logic
 │   ├── backtest/        # Reserved - stub (__init__.py only)
 │   ├── risk/            # Reserved - stub (__init__.py only)
 │   ├── web/             # Web UI server (FastAPI + frontend)
 │   ├── reports/         # Markdown report generation
-│   └── cli.py           # Entry: `python -m quantflow.cli` (scan, monitor, tasks, web)
+│   └── cli.py           # Entry: `python -m quantflow.cli` (stock_scan, watchlist_run, task_run, web)
 ├── config/tasks_*.yaml  # Orchestration task configs (tasks_asia_mac.yaml, tasks_us_mac.yaml, etc.)
 ├── config/indicators.yaml  # Indicator parameter defaults
 ├── scripts/              # Build verification utilities
@@ -35,7 +37,10 @@ quantflow/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Run scan | `cli.py` | `scan`, `monitor`, or `tasks` subcommands |
+| Run scan | `cli.py` | `stock_scan` (alias: `scan`) |
+| Run watchlist | `cli.py` | `watchlist_run` (alias: `monitor`), supports `--strategies` and `--days-back` |
+| Run task file | `cli.py` | `task_run` (alias: `tasks`) |
+| Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
 | Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()` |
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
@@ -54,6 +59,9 @@ quantflow/
 | Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
 | Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` |
 | Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
+| Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data |
+| Runs engine | `web/engine/run_engine.py` | stock_scan (indicator output), watchlist_run, task_run |
+| Run history | `web/engine/run_history.py` | SQLite persistence for execution history |
 
 ## CONVENTIONS
 
@@ -62,7 +70,7 @@ quantflow/
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
-- **Lookback**: Data fetch days derived from indicator `lookback_bars` → aggregated by strategy → max computed in orchestration, multiplied by `calendar_multiplier` + `buffer_days` from `config/quantflow.yaml`
+- **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
 - **YFinance batch**: Auto-chunked (50 tickers/chunk, jitter sleep 5–12s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 - **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
 
@@ -107,6 +115,8 @@ python -m quantflow.cli web
   - `/api/config` (GET + PUT system config)
   - `/api/strategies` (read-only)
   - `/api/library/*` (library catalog: strategies + indicators + param updates)
+  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel)
+  - `/api/browse/` (directory browsing for file picker)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
 - **Frontend tests**: `tests/web/frontend/` (Vitest unit tests for pure functions in `utils.ts`)
 - **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`

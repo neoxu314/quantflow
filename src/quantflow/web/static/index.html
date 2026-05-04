@@ -456,7 +456,20 @@
                 <!-- Right: run details -->
                 <div class="flex-1">
                     <div id="runs-empty-state" class="text-gray-400 text-center py-8">Select a run to view details</div>
-                    <div id="runs-detail" class="hidden"></div>
+                    <div id="runs-detail" class="hidden">
+                        <div class="border-b border-gray-200 mb-4">
+                            <nav class="flex gap-4" aria-label="Run tabs">
+                                <button class="run-subtab px-1 py-2 text-sm font-medium" data-runtab="config" style="border-bottom: 2px solid #3b82f6; color: #2563eb;">Config</button>
+                                <button class="run-subtab px-1 py-2 text-sm font-medium text-gray-500" data-runtab="progress">Progress</button>
+                                <button class="run-subtab px-1 py-2 text-sm font-medium text-gray-500" data-runtab="report">Report</button>
+                                <button class="run-subtab px-1 py-2 text-sm font-medium text-gray-500" data-runtab="files">Files</button>
+                            </nav>
+                        </div>
+                        <div id="runtab-config" class="run-tab-content"></div>
+                        <div id="runtab-progress" class="run-tab-content hidden"></div>
+                        <div id="runtab-report" class="run-tab-content hidden"></div>
+                        <div id="runtab-files" class="run-tab-content hidden"></div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -114,6 +114,28 @@ def get_report(run_id: str):
     return {"report": rp.read_text(), "path": str(rp)}
 
 
+@router.get("/{run_id}/indicator-data")
+def get_indicator_data(run_id: str):
+    """Return indicator calculation results for stock_scan runs."""
+    run = _get_engine()._history.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+    if run.run_type != "stock_scan":
+        return {"data": None, "message": "Not a stock scan run"}
+    data_path = run.report_path
+    if not data_path:
+        return {"data": None, "message": "No data available"}
+    dp = Path(data_path)
+    if not dp.exists():
+        return {"data": None, "message": "Data file not found"}
+    data = json.loads(dp.read_text())
+    return {
+        "data": data,
+        "code": run.config.get("code"),
+        "bar_count": len(data),
+    }
+
+
 @router.get("/{run_id}/files")
 def get_files(run_id: str):
     run = _get_engine()._history.get_run(run_id)

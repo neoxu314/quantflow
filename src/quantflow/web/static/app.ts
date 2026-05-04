@@ -243,7 +243,14 @@ function renderConfigTab(run: RunRecord) {
     if (run.started_at) html += `<span class="text-gray-500">Started:</span><span>${new Date(run.started_at).toLocaleString()}</span>`;
     if (run.finished_at) html += `<span class="text-gray-500">Finished:</span><span>${new Date(run.finished_at).toLocaleString()}</span>`;
     if (run.duration_ms) html += `<span class="text-gray-500">Duration:</span><span>${(run.duration_ms / 1000).toFixed(1)}s</span>`;
-    if (run.signal_count) html += `<span class="text-gray-500">Signals:</span><span>${run.signal_count}</span>`;
+    if (run.run_type === "stock_scan" && run.config?.indicators) {
+        const indNames = (run.config.indicators as string[]).join(", ");
+        html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${indNames}</span>`;
+    }
+    if (run.signal_count) {
+        const label = run.run_type === "stock_scan" ? "Bars:" : "Signals:";
+        html += `<span class="text-gray-500">${label}</span><span>${run.signal_count}</span>`;
+    }
     if (run.error) html += `<span class="text-gray-500">Error:</span><span class="text-red-600">${run.error}</span>`;
     html += `</div></div>`;
     html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
@@ -257,9 +264,10 @@ function renderConfigTab(run: RunRecord) {
 function renderProgressTab(run: RunRecord) {
     const panel = document.getElementById("runtab-progress")!;
     if (run.status === "completed") {
+        const label = run.run_type === "stock_scan" ? "bar(s)" : "signal(s)";
         panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">✅</div>
             <div class="text-lg font-medium">Complete</div>
-            ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} signal(s)</div>` : ""}</div>`;
+            ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} ${label}</div>` : ""}</div>`;
     } else if (run.status === "failed") {
         panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">❌</div>
             <div class="text-lg font-medium text-red-600">Failed</div>
@@ -284,6 +292,47 @@ function renderReportTab(run: RunRecord) {
         panel.innerHTML = '<div class="text-gray-500 text-center py-8">Report available after completion</div>';
         return;
     }
+
+    if (run.run_type === "stock_scan") {
+        const code = run.config?.code || run.name;
+        panel.innerHTML = '<div class="text-sm text-gray-500 text-center">Loading indicator data...</div>';
+        api<{ data: Record<string, any>[] | null; code?: string; bar_count?: number; message?: string }>(`/api/runs/${run.id}/indicator-data`)
+            .then(data => {
+                if (!data.data || data.data.length === 0) {
+                    panel.innerHTML = `<div class="text-gray-500 text-center py-8">${data.message || "No indicator data"}</div>`;
+                    return;
+                }
+                const cols = Object.keys(data.data[0]).filter(k => k !== "index");
+                const ohlcvCols = ["date","open","high","low","close","volume"];
+                const otherCols = cols.filter(c => !ohlcvCols.includes(c));
+                const orderedCols = [...ohlcvCols.filter(c => cols.includes(c)), ...otherCols];
+
+                let html = `<div class="mb-2 text-sm text-gray-600">Stock: <span class="font-mono font-semibold">${data.code || code}</span> | Total bars: ${data.bar_count || data.data.length}</div>`;
+                html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-xs"><thead class="bg-gray-50"><tr>';
+                orderedCols.forEach(c => {
+                    html += `<th class="px-2 py-1 text-left font-medium text-gray-500 uppercase tracking-wider">${c}</th>`;
+                });
+                html += '</tr></thead><tbody class="bg-white divide-y divide-gray-100">';
+                const rows = data.data.slice(-100).reverse();
+                rows.forEach(row => {
+                    html += '<tr>';
+                    orderedCols.forEach(c => {
+                        const v = row[c] !== null && row[c] !== undefined ? row[c] : '-';
+                        const fmt = (typeof v === 'number') ? v.toFixed(4) : v;
+                        const fontClass = (c === 'K'|| c === 'D' || c === 'J' || c === 'MACD' || c === 'RSI') ? 'font-mono' : '';
+                        html += `<td class="px-2 py-1 ${fontClass}">${fmt}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                if (data.data.length > 100) {
+                    html += `<div class="text-xs text-gray-400 mt-1 text-center">Showing last 100 of ${data.data.length} bars</div>`;
+                }
+                panel.innerHTML = html;
+            }).catch(() => { panel.innerHTML = '<div class="text-red-500 text-center">Failed to load</div>'; });
+        return;
+    }
+
     if (!run.report_path) {
         panel.innerHTML = '<div class="text-gray-500 text-center py-8">No report available</div>';
         return;

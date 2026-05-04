@@ -66,7 +66,7 @@ def _connect() -> sqlite3.Connection:
 
 def _close(conn: sqlite3.Connection) -> None:
     if conn is not _MEMORY_CONN:
-        _close(conn)
+        conn.close()
 
 
 def _row_to_record(row: tuple) -> RunRecord:

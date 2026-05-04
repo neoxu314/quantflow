@@ -1,6 +1,7 @@
 """RunEngine — wraps execution in background threads with progress."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
@@ -109,48 +110,102 @@ class RunEngine:
 
     def _exec_stock_scan(self, run_id: str, run, flag: CancellationFlag):
         from datetime import datetime as dt
+        from datetime import timedelta
 
         from quantflow.data.base import StockCode
-        from quantflow.execution.executor import Executor
-        from quantflow.execution.job import ExecutionJob
-        from quantflow.execution.watchlist import Watchlist, WatchlistItem
-        from quantflow.reports.markdown import MarkdownReporter
-        from quantflow.strategies.buy import DailyBullishMidRangeBuy, DailyBullishOversoldBuy
+        from quantflow.data.factory import DataSourceFactory
+        from quantflow.indicators.composer import IndicatorComposer
 
         cfg = run.config
         code = StockCode.from_standard(cfg["code"])
         output = cfg.get("output_path") or str(
             PROJECT_ROOT / "output" / "manual_scans")
 
-        item = WatchlistItem(code=code)
-        wl = Watchlist(name=code.standard, items=[item])
-        strategies = [
-            DailyBullishOversoldBuy(),
-            DailyBullishMidRangeBuy(),
-        ]
+        start_date = cfg.get("start_date") or (
+            dt.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        end_date = cfg.get("end_date") or dt.now().strftime("%Y-%m-%d")
 
-        job = ExecutionJob(
-            name=code.standard, items=[item], strategies=strategies,
-            output_dir=output, days_back=365)
-        results = Executor().execute(
-            job, on_progress=self._progress_cb(run_id, flag))
+        factory = DataSourceFactory()
+        df, source = factory.fetch_ohlcv(code, start_date, end_date)
 
-        date_str = dt.now().strftime("%Y-%m-%d")
-        rpath = MarkdownReporter().generate(
-            code.standard, strategies, results, wl, output, date_str)
+        if df.empty:
+            raise ValueError(f"No data for {cfg['code']} from {source}")
 
+        self._sse.publish_log(
+            run_id, f"Data source: {source}, bars: {len(df)}")
+
+        indicator_names = cfg.get("indicators", ["kdj", "dual_line"])
+        indicators = self._build_indicators_for_run(indicator_names, run_id)
+
+        self._sse.publish_log(
+            run_id,
+            f"Indicators: {', '.join(i.name for i in indicators)}")
+
+        df = IndicatorComposer(indicators).compose(df)
+
+        Path(output).mkdir(parents=True, exist_ok=True)
+        safe_code = cfg["code"].replace("/", "_").replace("\\", "_")
+        data_file = Path(output) / f"{safe_code}_indicators.json"
+
+        def _serialize_df(df):
+            out = []
+            for row in df.to_dict(orient="records"):
+                clean = {}
+                for k, v in row.items():
+                    if hasattr(v, "isoformat"):
+                        clean[k] = v.isoformat()
+                    elif hasattr(v, "item"):
+                        try:
+                            clean[k] = v.item()
+                        except Exception:
+                            clean[k] = str(v)
+                    else:
+                        clean[k] = v
+                out.append(clean)
+            return out
+
+        indicator_data = _serialize_df(df)
+        data_file.write_text(json.dumps(indicator_data, indent=2))
+
+        total_bars = len(df)
         self._history.update_status(
             run_id, "completed",
             finished_at=dt.now(timezone.utc).isoformat(),
-            signal_count=len(results), output_path=output,
-            report_path=rpath)
-        self._sse.publish_log(run_id, f"Complete: {len(results)} signals")
+            signal_count=total_bars, output_path=str(output),
+            report_path=str(data_file))
+        self._sse.publish_log(
+            run_id, f"Complete: {total_bars} bars saved")
         self._sse.publish_status(run_id, "completed",
-                                 signal_count=len(results))
+                                 signal_count=total_bars)
+
+    def _build_indicators_for_run(self, names: list[str],
+                                  run_id: str = None):
+        name_map = {
+            "kdj": "KDJ", "macd": "MACD", "rsi": "RSI",
+            "boll": "BOLL", "vol_ma": "VolumeMA",
+            "dual_line": "DualLine",
+            "brick_chart": "BrickChart", "washout": "Washout",
+        }
+        from quantflow.indicators.factory import IndicatorFactory
+        indicators = []
+        for name in names:
+            canonical = name_map.get(name, name)
+            try:
+                indicators.append(IndicatorFactory.create(canonical))
+            except Exception as e:
+                self._sse.publish_log(
+                    run_id, f"Skipped {name}: {e}", "warning")
+        if not indicators:
+            indicators = [
+                IndicatorFactory.create("KDJ"),
+                IndicatorFactory.create("DualLine"),
+            ]
+        return indicators
 
     def _exec_watchlist_run(self, run_id: str, run, flag: CancellationFlag):
         from datetime import datetime as dt
 
+        from quantflow.config.lookback import compute_days_back
         from quantflow.execution.executor import Executor
         from quantflow.execution.job import ExecutionJob
         from quantflow.execution.watchlist import Watchlist
@@ -167,15 +222,21 @@ class RunEngine:
             "daily_bull_oversold", "daily_bull_mid_range"])
         strategies = [STRATEGY_REGISTRY[s]() for s in sids]
 
+        days_back = compute_days_back(
+            strategies=strategies, override=cfg.get("days_back"))
+
+        self._sse.publish_log(
+            run_id, f"Lookback: {days_back} days for {len(wl.items)} stocks")
+
         job = ExecutionJob(
-            name=wl.name, items=wl.items, strategies=strategies,
-            output_dir=output, days_back=365)
+            name=f"web:{wl.name}", items=wl.items, strategies=strategies,
+            output_dir=output, days_back=days_back)
         results = Executor().execute(
             job, on_progress=self._progress_cb(run_id, flag))
 
         date_str = dt.now().strftime("%Y-%m-%d")
         rpath = MarkdownReporter().generate(
-            wl.name, strategies, results, wl, output, date_str)
+            f"web:{wl.name}", strategies, results, wl, output, date_str)
 
         self._history.update_status(
             run_id, "completed",
@@ -204,8 +265,8 @@ class RunEngine:
         self._sse.publish_log(
             run_id,
             f"Running {len(configs)} task(s) via Orchestrator...")
-        Orchestrator(configs, output_override=output,
-                     daily_mode=daily).run()
+        signal_count = Orchestrator(
+            configs, output_override=output, daily_mode=daily).run()
 
         rdir = output or "reports"
         if daily:
@@ -214,7 +275,9 @@ class RunEngine:
         self._history.update_status(
             run_id, "completed",
             finished_at=dt.now(timezone.utc).isoformat(),
-            signal_count=0, output_path=output,
+            signal_count=signal_count, output_path=output,
             report_path=str(Path(rdir) / "Daily_Report.md"))
-        self._sse.publish_log(run_id, "Orchestration tasks complete")
-        self._sse.publish_status(run_id, "completed", signal_count=0)
+        self._sse.publish_log(
+            run_id, f"Orchestration tasks complete: {signal_count} signals")
+        self._sse.publish_status(
+            run_id, "completed", signal_count=signal_count)
