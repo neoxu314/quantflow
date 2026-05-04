@@ -2,8 +2,10 @@
 
 import argparse
 import logging
+import math
 from datetime import datetime, timedelta
 
+from quantflow.config.lookback import load_lookback_config
 from quantflow.data import DataSourceFactory, StockCode
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.standard import KDJIndicator, MACDIndicator
@@ -25,25 +27,53 @@ def stock_scan():
     end_date = args.end or datetime.now().strftime("%Y-%m-%d")
     start_date = args.start or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
+    ind_objs = []
+    for ind_name in args.indicator.split(","):
+        if ind_name == "kdj":
+            ind_objs.append(KDJIndicator())
+        elif ind_name == "macd":
+            ind_objs.append(MACDIndicator())
+        elif ind_name == "dual_line":
+            from quantflow.indicators.custom import DualLineIndicator
+            ind_objs.append(DualLineIndicator())
+
+    if ind_objs:
+        lookback_cfg = load_lookback_config()
+        multiplier = lookback_cfg.get("calendar_multiplier", 2)
+        buffer = lookback_cfg.get("buffer_days", 30)
+        max_lookback = max(ind.lookback_bars for ind in ind_objs)
+        extra_days = math.ceil(max_lookback * multiplier) + buffer
+
+        fetch_start_date = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=extra_days)
+        fetch_start = fetch_start_date.strftime("%Y-%m-%d")
+    else:
+        fetch_start = start_date
+
     factory = DataSourceFactory()
-    df, source = factory.fetch_ohlcv(code, start_date, end_date)
+    df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
 
     if df.empty:
         logger.error(f"No data for {args.code}")
         return
 
-    indicators = []
-    for ind_name in args.indicator.split(","):
-        if ind_name == "kdj":
-            indicators.append(KDJIndicator())
-        elif ind_name == "macd":
-            indicators.append(MACDIndicator())
-        elif ind_name == "dual_line":
-            from quantflow.indicators.custom import DualLineIndicator
-            indicators.append(DualLineIndicator())
+    actual_end = factory._latest_date(df)
+    if actual_end < end_date:
+        print(f"⚠️ No data on {end_date}. Using latest available: {actual_end}")
+    if df.empty:
+        logger.error(f"No data for {args.code}")
+        return
 
-    if indicators:
-        df = IndicatorComposer(indicators).compose(df)
+    actual_end = factory._latest_date(df)
+    if actual_end < end_date:
+        print(f"⚠️ No data on {end_date}. Using latest available: {actual_end}")
+
+    if ind_objs:
+        df = IndicatorComposer(ind_objs).compose(df)
+
+        df = df[df.index >= start_date]
+        
+        if start_date == end_date:
+            df = df.tail(1)
 
     print(f"\n=== Scan Result for {args.code} ===")
     print(f"Date range: {start_date} to {end_date}")

@@ -26,7 +26,7 @@ class Orchestrator:
         self.daily_mode = daily_mode
 
     def _resolve_task_dir(self, cfg):
-        base = cfg.output_dir
+        base = self.output_override or cfg.output_dir
         if self.daily_mode:
             return str(Path(base) / self.date_str)
         return base

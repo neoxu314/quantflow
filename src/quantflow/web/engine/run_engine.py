@@ -109,9 +109,11 @@ class RunEngine:
         self._sse.publish_status(run_id, status)
 
     def _exec_stock_scan(self, run_id: str, run, flag: CancellationFlag):
+        import math
         from datetime import datetime as dt
         from datetime import timedelta
 
+        from quantflow.config.lookback import load_lookback_config
         from quantflow.data.base import StockCode
         from quantflow.data.factory import DataSourceFactory
         from quantflow.indicators.composer import IndicatorComposer
@@ -126,23 +128,56 @@ class RunEngine:
             dt.now() - timedelta(days=365)).strftime("%Y-%m-%d")
         end_date = cfg.get("end_date") or dt.now().strftime("%Y-%m-%d")
 
+        indicator_names = cfg.get("indicators", ["kdj", "dual_line"])
+        indicators = self._build_indicators_for_run(indicator_names, run_id)
+
+        # Calculate warm-up period using system lookback config
+        if indicators:
+            lookback_cfg = load_lookback_config()
+            multiplier = lookback_cfg.get("calendar_multiplier", 2)
+            buffer = lookback_cfg.get("buffer_days", 30)
+            max_lookback = max(ind.lookback_bars for ind in indicators)
+
+            fetch_start_date = dt.strptime(start_date, "%Y-%m-%d") - timedelta(
+                days=math.ceil(max_lookback * multiplier) + buffer)
+            fetch_start = fetch_start_date.strftime("%Y-%m-%d")
+        else:
+            fetch_start = start_date
+
         factory = DataSourceFactory()
-        df, source = factory.fetch_ohlcv(code, start_date, end_date)
+        df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
 
         if df.empty:
             raise ValueError(f"No data for {cfg['code']} from {source}")
 
+        actual_end = factory._latest_date(df)
+        if actual_end < end_date:
+            self._sse.publish_log(
+                run_id,
+                f"⚠️ No data on {end_date}. Using latest available: {actual_end}",
+                "warning")
+
         self._sse.publish_log(
             run_id, f"Data source: {source}, bars: {len(df)}")
 
-        indicator_names = cfg.get("indicators", ["kdj", "dual_line"])
-        indicators = self._build_indicators_for_run(indicator_names, run_id)
-
         self._sse.publish_log(
             run_id,
-            f"Indicators: {', '.join(i.name for i in indicators)}")
+            f"Indicators: {', '.join(i.name for i in indicators)}, calculating...")
 
         df = IndicatorComposer(indicators).compose(df)
+
+        # Trim data to user-requested range, then optionally single-day
+        # Use try-except block for date comparison to handle non-DatetimeIndex cases safely
+        try:
+            mask = (df.index >= start_date) & (df.index <= end_date)
+            result_rows = df.loc[mask] if mask.any() else df
+        except TypeError:
+            # If index is not comparable (e.g. integer), fallback to full data or tail
+            result_rows = df
+
+        is_single_day = (start_date == end_date)
+        if is_single_day:
+            result_rows = result_rows.tail(1)
 
         Path(output).mkdir(parents=True, exist_ok=True)
         safe_code = cfg["code"].replace("/", "_").replace("\\", "_")
@@ -172,10 +207,10 @@ class RunEngine:
                 out.append(clean)
             return out
 
-        indicator_data = _serialize_df(df)
+        indicator_data = _serialize_df(result_rows)
         data_file.write_text(json.dumps(indicator_data, indent=2))
 
-        total_bars = len(df)
+        total_bars = len(result_rows)
         self._history.update_status(
             run_id, "completed",
             finished_at=dt.now(timezone.utc).isoformat(),
@@ -282,11 +317,14 @@ class RunEngine:
         if daily:
             rdir = str(Path(rdir) / dt.now().strftime("%Y-%m-%d"))
 
+        rpath = str(Path(rdir) / "Daily_Report.md")
+        if not Path(rpath).exists():
+            rpath = None
         self._history.update_status(
             run_id, "completed",
             finished_at=dt.now(timezone.utc).isoformat(),
             signal_count=signal_count, output_path=output,
-            report_path=str(Path(rdir) / "Daily_Report.md"))
+            report_path=rpath)
         self._sse.publish_log(
             run_id, f"Orchestration tasks complete: {signal_count} signals")
         self._sse.publish_status(

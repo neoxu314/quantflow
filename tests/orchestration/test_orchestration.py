@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from quantflow.indicators.custom.dual_line import DualLineIndicator
 from quantflow.indicators.standard.kdj import KDJIndicator
-from quantflow.orchestration.app import _compute_days_back
+from quantflow.config.lookback import compute_days_back
 
 
 class TestComputeDaysBack:

@@ -1,4 +1,5 @@
 """Runs integration: API → DB → API verification."""
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -292,6 +293,116 @@ class TestRunsAPIDBRoundTrip:
         assert names1 == {"a.json"}
         assert names2 == {"b.json"}
 
+class TestCrossRunTypeFileCleanup:
+    """Verify delete_run removes ALL output files for every run type."""
+
+    def _setup_engine(self):
+        import sqlite3
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine.run_engine import RunEngine
+        from quantflow.web.engine.run_history import RunHistory
+        from quantflow.web.engine.run_queue import RunQueue
+        from quantflow.web.engine.sse import SSEManager
+
+        run_history._MEMORY_CONN = None
+        run_history.DB_PATH = Path(":memory:")
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        conn.executescript(run_history._INIT_SQL)
+        run_history._MEMORY_CONN = conn
+        h = RunHistory()
+        engine = RunEngine(RunQueue(on_run_available=lambda rid: None), h, SSEManager())
+        runs_api._set_engine(engine)
+        return h, runs_api, engine
+
+    def test_stock_scan_cleanup_on_delete(self):
+        h, runs_api, engine = self._setup_engine()
+
+        rid = h.create_run("SS Cleanup", "stock_scan", {"code": "X"})
+        d = Path(tempfile.mkdtemp())
+        h.update_status(rid, "completed",
+            output_path=str(d),
+            report_path=str(d / "data.json"))
+        (d / "data.json").write_text("[]")
+        (d / "indicators.json").write_text("{}")
+
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+
+        assert not d.exists(), "Stock scan output dir should be deleted"
+
+    def test_watchlist_run_cleanup_on_delete(self):
+        h, runs_api, engine = self._setup_engine()
+
+        rid = h.create_run("WL Cleanup", "watchlist_run", {"watchlist": "x.yaml"})
+        d = Path(tempfile.mkdtemp())
+        h.update_status(rid, "completed",
+            output_path=str(d),
+            report_path=str(d / "report.md"))
+        (d / "results.json").write_text("[]")
+        (d / "report.md").write_text("# Report")
+
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+
+        assert not d.exists(), "Watchlist run output dir should be deleted"
+
+    def test_task_run_cleanup_on_delete(self):
+        h, runs_api, engine = self._setup_engine()
+
+        rid = h.create_run("TR Cleanup", "task_run", {"task_config": "tasks.yaml"})
+        d = Path(tempfile.mkdtemp())
+        h.update_status(rid, "completed",
+            output_path=str(d),
+            report_path=str(d / "Daily_Report.md"))
+        (d / "Combined_Results.json").write_text("[]")
+        (d / "Daily_Report.md").write_text("# Report")
+
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+
+        assert not d.exists(), "Task run output dir should be deleted"
+
+    def test_output_files_actually_exist_on_disk(self):
+        """Verify /files endpoint returns paths that exist."""
+        h, runs_api, engine = self._setup_engine()
+
+        rid = h.create_run("Exists Check", "task_run", {})
+        d = Path(tempfile.mkdtemp())
+        (d / "data.json").write_text("[]")
+        h.update_status(rid, "completed",
+            output_path=str(d))
+
+        client = TestClient(_make_app(runs_api))
+        files_resp = client.get(f"/api/runs/{rid}/files")
+        for f in files_resp.json()["files"]:
+            assert Path(f["path"]).exists(), f"File {f['path']} should exist"
+
+    def test_db_record_deleted_after_cleanup(self):
+        """Verify DB record is removed after successful file cleanup."""
+        h, runs_api, engine = self._setup_engine()
+
+        rid = h.create_run("DB Delete", "stock_scan", {"code": "X"})
+        d = Path(tempfile.mkdtemp())
+        h.update_status(rid, "completed",
+            output_path=str(d))
+        (d / "data.json").write_text("[]")
+
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+
+        assert h.get_run(rid) is None, "DB record should be deleted"
+
+
+def _make_app(runs_api_module):
+    from fastapi import FastAPI
+    app = FastAPI()
+    app.include_router(runs_api_module.router)
+    return app
+
+
+class TestExecutorAlwaysWritesJson:
     def test_executor_always_writes_json(self, tmp_path):
         """Executor.save_results should write JSON even with empty results."""
         from quantflow.execution.storage import Storage

@@ -33,7 +33,7 @@ class MACDIndicator(IndicatorBase):
         return ["close"]
     
     def get_output_fields(self) -> List[str]:
-        return ["MACD", "MACD_SIGNAL", "MACD_HIST"]
+        return ["DIF", "DEA", "MACD"]
     
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -41,8 +41,11 @@ class MACDIndicator(IndicatorBase):
         ema_fast = df["close"].ewm(span=self.fast_period, adjust=False).mean()
         ema_slow = df["close"].ewm(span=self.slow_period, adjust=False).mean()
         
-        df["MACD"] = ema_fast - ema_slow
-        df["MACD_SIGNAL"] = df["MACD"].ewm(span=self.signal_period, adjust=False).mean()
-        df["MACD_HIST"] = df["MACD"] - df["MACD_SIGNAL"]
+        # DIF = EMA(12) - EMA(26)
+        df["DIF"] = ema_fast - ema_slow
+        # DEA = EMA(DIF, 9)
+        df["DEA"] = df["DIF"].ewm(span=self.signal_period, adjust=False).mean()
+        # MACD = (DIF - DEA) * 2 (Matches TongDaXin logic)
+        df["MACD"] = 2 * (df["DIF"] - df["DEA"])
         
         return df
