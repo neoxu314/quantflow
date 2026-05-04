@@ -102,6 +102,9 @@ def get_library_indicators():
             ind_config = config.get(ind_key, {})
             if isinstance(ind_config, dict) and isinstance(ind_config.get("params"), dict):
                 params = {**params, **ind_config["params"]}
+                for k, v in params.items():
+                    if hasattr(inst, k):
+                        setattr(inst, k, v)
 
             indicators.append({
                 "name": inst.name,

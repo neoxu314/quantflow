@@ -14,7 +14,7 @@ indicators/
 ├── standard/          # Built-in indicators
 │   ├── kdj.py         # Stochastic oscillator (N=9, M1=3, M2=3)
 │   ├── macd.py        # Moving Average Convergence Divergence
-│   ├── rsi.py         # Relative Strength Index
+│   ├── rsi.py         # Relative Strength Index (multi-period, e.g. RSI6/RSI12/RSI24)
 │   ├── boll.py        # Bollinger Bands
 │   └── vol_ma.py      # Volume Moving Average
 ├── custom/            # Custom indicators
@@ -60,3 +60,17 @@ indicators/
   - **Behavior**: Requires minimum ~114 bars of history to calculate `long_short_line`.
   - **New Stocks**: If history < 114 days, returns `NaN` for the line. Strategies will naturally fail to generate signal (Safe).
 - Composer applies indicators sequentially, each can depend on previous results
+
+## TESTS
+
+| Category | Test File(s) | Test Count | Type |
+|----------|--------------|------------|------|
+| Base + Condition | `test_condition.py` | 16 | Unit (IndicatorBase abstract contract, Condition operator coverage, signal generation) |
+| Standard indicators | `test_indicators.py` + `test_standard_indicators.py` | 47 | Unit (name/params/lookback/fields/calculate for KDJ/MACD/RSI/BOLL/VOL_MA + edge cases) |
+| Custom indicators | `test_dual_line.py`, `test_brick_chart.py`, `test_washout_short_term.py` | 16 | Unit + TDX reference integration |
+| Factory | `test_indicator_factory.py` | 10 | Unit (config merging, caching, disabled indicators, real yaml load) |
+| Composer | `test_composer.py` | 5 + 3 (in `test_indicators.py`) | Unit (add/remove, data preservation, dependency validation) |
+| Integration (real data) | `test_integration.py` | 14 | Integration (2 stocks × 7 indicators vs TongDaXin reference values with tolerance) |
+
+- **RSI**: Supports multi-period via `periods=[6,12,24]` → outputs `RSI6`, `RSI12`, `RSI24`. Config: `config/indicators.yaml`.
+- Run: `pytest tests/indicators/ -m "not integration"` for unit, `-m integration` for network tests.

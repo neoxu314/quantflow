@@ -83,14 +83,17 @@ class TestMACDIndicator:
 
 
 class TestRSIIndicator:
-    
+
     def test_calculate(self, sample_df):
-        rsi = RSIIndicator(period=14)
+        rsi = RSIIndicator(periods=[6, 12, 24])
         result = rsi.calculate(sample_df)
-        
-        assert "RSI" in result.columns
-        assert result["RSI"].min() >= 0
-        assert result["RSI"].max() <= 100
+
+        assert "RSI6" in result.columns
+        assert "RSI12" in result.columns
+        assert "RSI24" in result.columns
+        for col in ("RSI6", "RSI12", "RSI24"):
+            assert result[col].min() >= 0
+            assert result[col].max() <= 100
 
 
 class TestDualLineIndicator:

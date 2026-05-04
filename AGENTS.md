@@ -67,6 +67,9 @@ quantflow/
 - **Build**: `pip install -e .`, setuptools with `src/` layout
 - **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
+  - Data layer: 80 unit + 17 integration (sector cache) = 97 tests
+  - Indicator layer: 112 unit + 14 integration (TDX reference values) = 126 tests
+  - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
