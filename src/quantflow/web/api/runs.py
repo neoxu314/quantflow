@@ -56,6 +56,9 @@ def create_run(body: dict):
     if not result.ok:
         return {"ok": False, "errors": result.errors}
 
+    if body.get("validate_only"):
+        return {"ok": True}
+
     name = body.get("name") or _auto_name(run_type, config)
     engine = _get_engine()
     run_id = engine._history.create_run(
@@ -103,7 +106,7 @@ def cancel_run(run_id: str):
 
 @router.delete("/{run_id}")
 def delete_run(run_id: str):
-    """Delete a run record and its report file."""
+    """Delete a run record and all associated output files."""
     engine = _get_engine()
     run = engine._history.get_run(run_id)
     if not run:
@@ -120,6 +123,12 @@ def delete_run(run_id: str):
         rp = Path(run.report_path)
         if rp.exists():
             rp.unlink()
+
+    if run.output_path:
+        op = Path(run.output_path)
+        if op.exists() and op.is_dir():
+            import shutil
+            shutil.rmtree(op, ignore_errors=True)
 
     engine._history.delete_run(run_id)
     engine._sse.disconnect_all(run_id)

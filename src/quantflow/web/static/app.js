@@ -344,11 +344,25 @@ function selectRunType(type) {
         document.getElementById(`run-config-${t}`).classList.add("hidden");
     });
     document.getElementById(`run-config-${type}`).classList.remove("hidden");
+    if (type === "stock_scan") {
+        const today = new Date().toISOString().split("T")[0];
+        document.getElementById("run-start-date").value = today;
+        document.getElementById("run-end-date").value = today;
+    }
     populateRunFormFields(type);
     updateCliPreview();
 }
 function populateRunFormFields(type) {
-    if (type === "watchlist_run") {
+    const today = new Date().toISOString().split("T")[0];
+    if (type === "stock_scan") {
+        const startDate = document.getElementById("run-start-date");
+        const endDate = document.getElementById("run-end-date");
+        if (startDate && !startDate.value)
+            startDate.value = today;
+        if (endDate && !endDate.value)
+            endDate.value = today;
+    }
+    else if (type === "watchlist_run") {
         const sel = document.getElementById("run-watchlist-select");
         sel.innerHTML = state.watchlists.map(w => `<option value="${w.path}">${w.name} (${w.itemCount} stocks)</option>`).join("");
         const stratDiv = document.getElementById("run-strategy-checkboxes");
@@ -431,7 +445,7 @@ async function executeRun() {
     }
 }
 async function preflightCheck() {
-    const body = { run_type: selectedRunType };
+    const body = { run_type: selectedRunType, validate_only: true };
     if (selectedRunType === "stock_scan") {
         body.code = document.getElementById("run-stock-code").value;
     }
@@ -482,8 +496,10 @@ function mdToHtml(md) {
         .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-8">$1</h1>')
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g, "<em>$1</em>")
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>');
-    html = html.replace(/((?:\|.+\|\n)+)/g, (match) => {
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>')
+        .replace(/\*\s+(.+?)(?=\n|$)/gm, '<li class="ml-4 list-disc">$1</li>')
+        .replace(/^[-•]\s+(.+?)(?=\n|$)/gm, '<li class="ml-4 list-disc">$1</li>');
+    html = html.replace(/((?:\|.+\|\n?)+)/g, (match) => {
         const rows = match.trim().split("\n").filter(r => !r.match(/^\|-+[-| ]+$/));
         if (rows.length < 2)
             return match;
@@ -496,7 +512,7 @@ function mdToHtml(md) {
         });
         return t + "</tbody></table>";
     });
-    html = html.replace(/^(?!<[a-z/])((?!$).+)$/gm, '<p class="text-sm text-gray-700 mb-1">$1</p>');
+    html = html.replace(/^(?!<\/?[a-zA-Z\/\d])((?!$).+)$/gm, '<p class="text-sm text-gray-700 mb-1">$1</p>');
     return html;
 }
 let sseSource = null;
@@ -562,6 +578,12 @@ function runAgain(runId) {
     selectRunType(orig.run_type);
     if (orig.run_type === "stock_scan" && orig.config?.code) {
         document.getElementById("run-stock-code").value = orig.config.code;
+        if (orig.config?.start_date) {
+            document.getElementById("run-start-date").value = orig.config.start_date;
+        }
+        if (orig.config?.end_date) {
+            document.getElementById("run-end-date").value = orig.config.end_date;
+        }
         updateCliPreview();
     }
     toast("Pre-filled from previous run");
