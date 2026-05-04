@@ -108,6 +108,9 @@ async function selectRun(runId) {
         const data = await api(`/api/runs/${runId}`);
         state.selectedRun = data.run;
         renderRunsDetail(state.selectedRun);
+        if (data.run.status === "running" || data.run.status === "queued") {
+            connectSSE(runId);
+        }
     }
     catch (e) {
         console.error('Failed to load run details:', e);
@@ -466,17 +469,20 @@ function mdToHtml(md) {
     return html;
 }
 let sseSource = null;
+let sseTargetRunId = null;
 function connectSSE(runId) {
+    if (sseTargetRunId === runId && sseSource)
+        return;
     if (sseSource)
         sseSource.close();
-    const logContainer = document.getElementById("run-log-container");
-    if (!logContainer)
-        return;
+    sseTargetRunId = runId;
     try {
         sseSource = new EventSource(`/api/runs/${runId}/logs:sse`);
         sseSource.addEventListener("log", (ev) => {
             const data = JSON.parse(ev.data);
-            appendLog(logContainer, data.message, data.level || "info");
+            const logContainer = document.getElementById("run-log-container");
+            if (logContainer)
+                appendLog(logContainer, data.message, data.level || "info");
         });
         sseSource.addEventListener("progress", (ev) => {
             const data = JSON.parse(ev.data);
@@ -487,18 +493,21 @@ function connectSSE(runId) {
             if (txt)
                 txt.textContent = `${data.percentage}% (${data.current}/${data.total})`;
         });
-        sseSource.addEventListener("status", (ev) => {
+        sseSource.addEventListener("status", async (ev) => {
             const data = JSON.parse(ev.data);
             if (data.status !== "running") {
                 if (sseSource)
                     sseSource.close();
+                sseSource = null;
+                sseTargetRunId = null;
                 if (state.selectedRunId)
-                    selectRun(state.selectedRunId);
+                    await selectRun(state.selectedRunId);
+                await loadRuns();
             }
         });
     }
     catch (_e) {
-        appendLog(logContainer, "SSE not available", "warning");
+        /* SSE unavailable — queued or deleted */
     }
 }
 function appendLog(container, message, level) {

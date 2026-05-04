@@ -198,6 +198,9 @@ async function selectRun(runId: string) {
         const data = await api<{ run: RunRecord }>(`/api/runs/${runId}`);
         state.selectedRun = data.run;
         renderRunsDetail(state.selectedRun);
+        if (data.run.status === "running" || data.run.status === "queued") {
+            connectSSE(runId);
+        }
     } catch (e) {
         console.error('Failed to load run details:', e);
     }
@@ -551,16 +554,18 @@ function mdToHtml(md: string): string {
 }
 
 let sseSource: EventSource | null = null;
+let sseTargetRunId: string | null = null;
 
 function connectSSE(runId: string) {
+    if (sseTargetRunId === runId && sseSource) return;
     if (sseSource) sseSource.close();
-    const logContainer = document.getElementById("run-log-container");
-    if (!logContainer) return;
+    sseTargetRunId = runId;
     try {
         sseSource = new EventSource(`/api/runs/${runId}/logs:sse`);
         sseSource.addEventListener("log", (ev: Event) => {
             const data = JSON.parse((ev as MessageEvent).data);
-            appendLog(logContainer, data.message, data.level || "info");
+            const logContainer = document.getElementById("run-log-container");
+            if (logContainer) appendLog(logContainer, data.message, data.level || "info");
         });
         sseSource.addEventListener("progress", (ev: Event) => {
             const data = JSON.parse((ev as MessageEvent).data);
@@ -569,15 +574,18 @@ function connectSSE(runId: string) {
             if (bar) bar.style.width = `${data.percentage}%`;
             if (txt) txt.textContent = `${data.percentage}% (${data.current}/${data.total})`;
         });
-        sseSource.addEventListener("status", (ev: Event) => {
+        sseSource.addEventListener("status", async (ev: Event) => {
             const data = JSON.parse((ev as MessageEvent).data);
             if (data.status !== "running") {
                 if (sseSource) sseSource.close();
-                if (state.selectedRunId) selectRun(state.selectedRunId);
+                sseSource = null;
+                sseTargetRunId = null;
+                if (state.selectedRunId) await selectRun(state.selectedRunId);
+                await loadRuns();
             }
         });
     } catch (_e) {
-        appendLog(logContainer, "SSE not available", "warning");
+        /* SSE unavailable — queued or deleted */
     }
 }
 

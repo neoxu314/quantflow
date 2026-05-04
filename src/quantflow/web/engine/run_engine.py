@@ -148,6 +148,7 @@ class RunEngine:
         data_file = Path(output) / f"{safe_code}_indicators.json"
 
         def _serialize_df(df):
+            import math
             out = []
             for row in df.to_dict(orient="records"):
                 clean = {}
@@ -156,9 +157,15 @@ class RunEngine:
                         clean[k] = v.isoformat()
                     elif hasattr(v, "item"):
                         try:
-                            clean[k] = v.item()
+                            val = v.item()
+                            if isinstance(val, float) and math.isnan(val):
+                                val = None
+                            clean[k] = val
                         except Exception:
                             clean[k] = str(v)
+                    elif isinstance(v, float):
+                        import math as _math
+                        clean[k] = None if _math.isnan(v) else v
                     else:
                         clean[k] = v
                 out.append(clean)
