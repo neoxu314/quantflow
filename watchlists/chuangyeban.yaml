@@ -1,0 +1,403 @@
+name: 创业板指_Components
+description: Auto-generated ChiNext (创业板指) constituents from akshare
+items:
+- code: 300100.SZ
+  name: 双林股份
+  tags:
+  - 创业板指
+- code: 300255.SZ
+  name: 常山药业
+  tags:
+  - 创业板指
+- code: 300432.SZ
+  name: 富临精工
+  tags:
+  - 创业板指
+- code: 300548.SZ
+  name: 长芯博创
+  tags:
+  - 创业板指
+- code: 300718.SZ
+  name: 长盛轴承
+  tags:
+  - 创业板指
+- code: 300972.SZ
+  name: 万辰集团
+  tags:
+  - 创业板指
+- code: 301200.SZ
+  name: 大族数控
+  tags:
+  - 创业板指
+- code: 301611.SZ
+  name: 珂玛科技
+  tags:
+  - 创业板指
+- code: 300058.SZ
+  name: 蓝色光标
+  tags:
+  - 创业板指
+- code: 300115.SZ
+  name: 长盈精密
+  tags:
+  - 创业板指
+- code: 300458.SZ
+  name: 全志科技
+  tags:
+  - 创业板指
+- code: 300679.SZ
+  name: 电连技术
+  tags:
+  - 创业板指
+- code: 300857.SZ
+  name: 协创数据
+  tags:
+  - 创业板指
+- code: 301165.SZ
+  name: 锐捷网络
+  tags:
+  - 创业板指
+- code: 301498.SZ
+  name: 乖宝宠物
+  tags:
+  - 创业板指
+- code: 301536.SZ
+  name: 星宸科技
+  tags:
+  - 创业板指
+- code: 302132.SZ
+  name: 中航成飞
+  tags:
+  - 创业板指
+- code: 300024.SZ
+  name: 机器人
+  tags:
+  - 创业板指
+- code: 300339.SZ
+  name: 润和软件
+  tags:
+  - 创业板指
+- code: 300346.SZ
+  name: 南大光电
+  tags:
+  - 创业板指
+- code: 300627.SZ
+  name: 华测导航
+  tags:
+  - 创业板指
+- code: 300677.SZ
+  name: 英科医疗
+  tags:
+  - 创业板指
+- code: 300735.SZ
+  name: 光弘科技
+  tags:
+  - 创业板指
+- code: 300002.SZ
+  name: 神州泰岳
+  tags:
+  - 创业板指
+- code: 300017.SZ
+  name: 网宿科技
+  tags:
+  - 创业板指
+- code: 300442.SZ
+  name: 润泽科技
+  tags:
+  - 创业板指
+- code: 300476.SZ
+  name: 胜宏科技
+  tags:
+  - 创业板指
+- code: 300765.SZ
+  name: 新诺威
+  tags:
+  - 创业板指
+- code: 301301.SZ
+  name: 川宁生物
+  tags:
+  - 创业板指
+- code: 300394.SZ
+  name: 天孚通信
+  tags:
+  - 创业板指
+- code: 300502.SZ
+  name: 新易盛
+  tags:
+  - 创业板指
+- code: 300567.SZ
+  name: 精测电子
+  tags:
+  - 创业板指
+- code: 301358.SZ
+  name: 湖南裕能
+  tags:
+  - 创业板指
+- code: 300666.SZ
+  name: 江丰电子
+  tags:
+  - 创业板指
+- code: 300803.SZ
+  name: 指南针
+  tags:
+  - 创业板指
+- code: 301236.SZ
+  name: 软通动力
+  tags:
+  - 创业板指
+- code: 301269.SZ
+  name: 华大九天
+  tags:
+  - 创业板指
+- code: 301308.SZ
+  name: 江波龙
+  tags:
+  - 创业板指
+- code: 300054.SZ
+  name: 鼎龙股份
+  tags:
+  - 创业板指
+- code: 300395.SZ
+  name: 菲利华
+  tags:
+  - 创业板指
+- code: 300487.SZ
+  name: 蓝晓科技
+  tags:
+  - 创业板指
+- code: 300604.SZ
+  name: 长川科技
+  tags:
+  - 创业板指
+- code: 300373.SZ
+  name: 扬杰科技
+  tags:
+  - 创业板指
+- code: 300919.SZ
+  name: 中伟股份
+  tags:
+  - 创业板指
+- code: 300957.SZ
+  name: 贝泰妮
+  tags:
+  - 创业板指
+- code: 300979.SZ
+  name: 华利集团
+  tags:
+  - 创业板指
+- code: 300763.SZ
+  name: 锦浪科技
+  tags:
+  - 创业板指
+- code: 300751.SZ
+  name: 迈为股份
+  tags:
+  - 创业板指
+- code: 300866.SZ
+  name: 安克创新
+  tags:
+  - 创业板指
+- code: 300896.SZ
+  name: 爱美客
+  tags:
+  - 创业板指
+- code: 300888.SZ
+  name: 稳健医疗
+  tags:
+  - 创业板指
+- code: 300832.SZ
+  name: 新产业
+  tags:
+  - 创业板指
+- code: 300037.SZ
+  name: 新宙邦
+  tags:
+  - 创业板指
+- code: 300999.SZ
+  name: 金龙鱼
+  tags:
+  - 创业板指
+- code: 300223.SZ
+  name: 北京君正
+  tags:
+  - 创业板指
+- code: 300782.SZ
+  name: 卓胜微
+  tags:
+  - 创业板指
+- code: 300661.SZ
+  name: 圣邦股份
+  tags:
+  - 创业板指
+- code: 300759.SZ
+  name: 康龙化成
+  tags:
+  - 创业板指
+- code: 300724.SZ
+  name: 捷佳伟创
+  tags:
+  - 创业板指
+- code: 300748.SZ
+  name: 金力永磁
+  tags:
+  - 创业板指
+- code: 300012.SZ
+  name: 华测检测
+  tags:
+  - 创业板指
+- code: 300454.SZ
+  name: 深信服
+  tags:
+  - 创业板指
+- code: 300529.SZ
+  name: 健帆生物
+  tags:
+  - 创业板指
+- code: 300760.SZ
+  name: 迈瑞医疗
+  tags:
+  - 创业板指
+- code: 300750.SZ
+  name: 宁德时代
+  tags:
+  - 创业板指
+- code: 300601.SZ
+  name: 康泰生物
+  tags:
+  - 创业板指
+- code: 300285.SZ
+  name: 国瓷材料
+  tags:
+  - 创业板指
+- code: 300308.SZ
+  name: 中际旭创
+  tags:
+  - 创业板指
+- code: 300413.SZ
+  name: 快乐购
+  tags:
+  - 创业板指
+- code: 300474.SZ
+  name: 景嘉微
+  tags:
+  - 创业板指
+- code: 300699.SZ
+  name: 光威复材
+  tags:
+  - 创业板指
+- code: 300628.SZ
+  name: 亿联网络
+  tags:
+  - 创业板指
+- code: 300676.SZ
+  name: 华大基因
+  tags:
+  - 创业板指
+- code: 300316.SZ
+  name: 晶盛机电
+  tags:
+  - 创业板指
+- code: 300558.SZ
+  name: 贝达药业
+  tags:
+  - 创业板指
+- code: 300450.SZ
+  name: 先导智能
+  tags:
+  - 创业板指
+- code: 300073.SZ
+  name: 当升科技
+  tags:
+  - 创业板指
+- code: 300014.SZ
+  name: 亿纬锂能
+  tags:
+  - 创业板指
+- code: 300496.SZ
+  name: 中科创达
+  tags:
+  - 创业板指
+- code: 300383.SZ
+  name: 光环新网
+  tags:
+  - 创业板指
+- code: 300418.SZ
+  name: 昆仑万维
+  tags:
+  - 创业板指
+- code: 300498.SZ
+  name: 温氏股份
+  tags:
+  - 创业板指
+- code: 300136.SZ
+  name: 信维通信
+  tags:
+  - 创业板指
+- code: 300408.SZ
+  name: 三环集团
+  tags:
+  - 创业板指
+- code: 300433.SZ
+  name: 蓝思科技
+  tags:
+  - 创业板指
+- code: 300033.SZ
+  name: 同花顺
+  tags:
+  - 创业板指
+- code: 300253.SZ
+  name: 卫宁软件
+  tags:
+  - 创业板指
+- code: 300207.SZ
+  name: 欣旺达
+  tags:
+  - 创业板指
+- code: 300347.SZ
+  name: 泰格医药
+  tags:
+  - 创业板指
+- code: 300251.SZ
+  name: 光线传媒
+  tags:
+  - 创业板指
+- code: 300274.SZ
+  name: 阳光电源
+  tags:
+  - 创业板指
+- code: 300144.SZ
+  name: 宋城股份
+  tags:
+  - 创业板指
+- code: 300146.SZ
+  name: 汤臣倍健
+  tags:
+  - 创业板指
+- code: 300122.SZ
+  name: 智飞生物
+  tags:
+  - 创业板指
+- code: 300124.SZ
+  name: 汇川技术
+  tags:
+  - 创业板指
+- code: 300142.SZ
+  name: 沃森生物
+  tags:
+  - 创业板指
+- code: 300001.SZ
+  name: 特锐德
+  tags:
+  - 创业板指
+- code: 300003.SZ
+  name: 乐普医疗
+  tags:
+  - 创业板指
+- code: 300015.SZ
+  name: 爱尔眼科
+  tags:
+  - 创业板指
+- code: 300059.SZ
+  name: 东方财富
+  tags:
+  - 创业板指
