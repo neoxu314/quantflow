@@ -100,7 +100,7 @@ class TestFilesEndpointExecutionConsistency:
         output_dir = tmp_path / rid
         output_dir.mkdir()
         
-        md_file = output_dir / "web:test_Components.md"
+        md_file = output_dir / "web-test_Components.md"
         md_file.write_text("# Test Report\n\n## Signals\n- NVDA.US")
         
         json_file = output_dir / "results.json"
@@ -122,7 +122,7 @@ class TestFilesEndpointExecutionConsistency:
         file_names = {f["name"] for f in files}
         
         # Should find both .md and .json
-        assert "web:test_Components.md" in file_names
+        assert "web-test_Components.md" in file_names
         assert "results.json" in file_names
         
         # Verify paths exist
@@ -271,7 +271,7 @@ class TestReportEndpointExecutionConsistency:
         output_dir = tmp_path / rid
         output_dir.mkdir()
         
-        report_file = output_dir / "web:test.md"
+        report_file = output_dir / "web-test.md"
         report_content = "# Watchlist Report\n\n## Signals\n- NVDA.US"
         report_file.write_text(report_content)
         

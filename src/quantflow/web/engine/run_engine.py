@@ -283,14 +283,14 @@ class RunEngine:
             run_id, f"Lookback: {days_back} days for {len(wl.items)} stocks")
 
         job = ExecutionJob(
-            name=f"web:{wl.name}", items=wl.items, strategies=strategies,
+            name=f"web-{wl.name}", items=wl.items, strategies=strategies,
             output_dir=output, days_back=days_back)
         results = Executor().execute(
             job, on_progress=self._progress_cb(run_id, flag))
 
         date_str = dt.now().strftime("%Y-%m-%d")
         rpath = MarkdownReporter().generate(
-            f"web:{wl.name}", strategies, results, wl, output, date_str)
+            f"web-{wl.name}", strategies, results, wl, output, date_str)
 
         self._history.update_status(
             run_id, "completed",

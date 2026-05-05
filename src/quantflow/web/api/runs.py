@@ -268,7 +268,7 @@ def _delete_watchlist_run_outputs(run, output_dir: Path):
     The report_path is already deleted in delete_run().
     """
     # The Executor saves results as {output_dir}/{job.name}.json
-    # where job.name is "web:{wl.name}"
+    # where job.name is "web-{wl.name}"
     # The run.name should match job.name
     json_file = output_dir / f"{run.name}.json"
     
