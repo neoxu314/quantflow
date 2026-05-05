@@ -14,7 +14,7 @@ data/
 ├── factory.py        # DataSourceFactory - primary/fallback selection
 ├── config.py         # MarketDataSourceConfig
 ├── fetch_indices.py  # Fetches S&P 500, Nasdaq, DJIA from Wikipedia -> generates watchlists
-├── fetch_cn_indices.py  # Fetches CSI 500, ChiNext from akshare -> generates watchlists
+├── fetch_cn_indices.py  # Fetches HS 300, CSI 500, ChiNext from akshare -> generates watchlists
 ├── sector_cache.py   # SectorCache - JSON cache management
 ├── adapters/
 │   ├── baostock.py   # BaoStock adapter (adjustflag="2" for qfq)
@@ -72,11 +72,11 @@ data/
 | YFinance batch | `test_yfinance_batch.py` | 11 | Unit (chunking, version check, jitter) |
 | AKShare adapter | `test_akshare.py` | 27 | Unit (sector classification, industry/concept, constituents, HK OHLCV) |
 | fetch_indices | `test_fetch_indices.py` | 26 | Unit (clean_ticker, INDICES structure, YAML output) + 3 Integration (mocked HTTP) |
-| fetch_cn_indices | `test_fetch_cn_indices.py` | 13 | Unit (convert_cn_code, CN_INDICES structure, fetch_cn_index with mock) |
+| fetch_cn_indices | `test_fetch_cn_indices.py` | 14 | Unit (convert_cn_code, CN_INDICES structure, fetch_cn_index with mock) |
 | Sector cache | `test_sector_data.py` | 17 | Integration (EM/THS/SW sector lists, constituents, cache I/O) |
 | Data fetch (real data) | `test_data_fetch.py` | 24 | Integration (BaoStock/Tushare/YFinance against known reference values) |
 
-**Total: 150 unit + 10 integration = 160 tests**
+**Total: 151 unit + 10 integration = 161 tests**
 
 Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for network tests.
 
