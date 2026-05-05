@@ -4,10 +4,13 @@ Provides:
 1. Browser launch configuration (Chrome for Testing)
 2. Production config protection via backup/restore mechanism
 3. Test data cleanup (watchlists, task files)
+4. SAFETY: Prevents tests from writing to production paths
 
 All E2E tests use backup strategy to protect production YAML files:
 - config/quantflow.yaml → quantflow.yaml.bak
 - config/indicators.yaml → indicators.yaml.bak
+- ALL watchlists/*.yaml → backed up individually
+- ALL config/tasks*.yaml → backed up individually
 """
 import os
 import shutil
@@ -31,13 +34,15 @@ def _load_web_port():
 WEB_PORT = _load_web_port()
 SERVER_URL = f"http://127.0.0.1:{WEB_PORT}"
 
-# Test data names
+# Test data names (use _test_ prefix to distinguish from production)
 TEST_WATCHLIST_NAME = "_test_e2e_wl"
 TEST_TASK_FILE = "tasks_e2e_test.yaml"
 
 # Backup file paths
 CFG_BACKUP = PROJECT_ROOT / "config" / "quantflow.yaml.bak"
 INDICATORS_BACKUP = PROJECT_ROOT / "config" / "indicators.yaml.bak"
+WATCHLISTS_BACKUP_DIR = PROJECT_ROOT / "watchlists" / ".bak"
+TASKS_BACKUP_DIR = PROJECT_ROOT / "config" / ".tasks_bak"
 
 
 # ─── Browser Configuration ──────────────────────────────────────────────────
@@ -103,45 +108,91 @@ def base_url(web_server):
 @pytest.fixture(autouse=True)
 def protect_production_configs(base_url):
     """
-    Protect production config files via backup/restore.
+    Protect ALL production config and data files via backup/restore.
     
-    This fixture runs before/after every E2E test:
-    - Before: Backup quantflow.yaml and indicators.yaml
-    - After: Restore backups, delete test watchlists/task files
+    CRITICAL SAFETY: This fixture runs before/after EVERY E2E test:
+    - Before: Backup ALL production files (quantflow.yaml, indicators.yaml, 
+              ALL watchlists/*.yaml, ALL config/tasks*.yaml)
+    - After: Restore ALL backups, delete test data files
     
-    This ensures E2E tests can safely modify config files without
-    affecting production data.
+    This ensures E2E tests NEVER modify production data.
+    
+    Protected files:
+    - config/quantflow.yaml
+    - config/indicators.yaml
+    - watchlists/*.yaml (ALL watchlists, not just test ones)
+    - config/tasks*.yaml (ALL task configs)
     """
-    _backup_all_configs()
+    _backup_all_production_files()
     yield
-    _restore_all_configs()
+    _restore_all_production_files()
     _cleanup_test_data_via_api(base_url)
 
 
-def _backup_all_configs():
-    """Backup all production config files before test."""
+def _backup_all_production_files():
+    """Backup ALL production files before test (CRITICAL SAFETY)."""
+    # Backup quantflow.yaml
     cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
     if cfg.exists():
         shutil.copy2(cfg, CFG_BACKUP)
     
+    # Backup indicators.yaml
     indicators = PROJECT_ROOT / "config" / "indicators.yaml"
     if indicators.exists():
         shutil.copy2(indicators, INDICATORS_BACKUP)
+    
+    # Backup ALL watchlists (not just test ones!)
+    watchlists_dir = PROJECT_ROOT / "watchlists"
+    if watchlists_dir.exists():
+        WATCHLISTS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        for wl_file in watchlists_dir.glob("*.yaml"):
+            # Skip test watchlists (they will be deleted anyway)
+            if not wl_file.name.startswith("_test_"):
+                shutil.copy2(wl_file, WATCHLISTS_BACKUP_DIR / wl_file.name)
+    
+    # Backup ALL task configs (not just test ones!)
+    config_dir = PROJECT_ROOT / "config"
+    if config_dir.exists():
+        TASKS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        for task_file in config_dir.glob("tasks*.yaml"):
+            # Skip test task files
+            if not task_file.name.startswith("tasks_e2e_"):
+                shutil.copy2(task_file, TASKS_BACKUP_DIR / task_file.name)
 
 
-def _restore_all_configs():
-    """Restore all production config files after test."""
+def _restore_all_production_files():
+    """Restore ALL production files after test (CRITICAL SAFETY)."""
+    # Restore quantflow.yaml
     cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
     if CFG_BACKUP.exists():
         shutil.move(str(CFG_BACKUP), str(cfg))
     elif cfg.exists():
         cfg.unlink()
     
+    # Restore indicators.yaml
     indicators = PROJECT_ROOT / "config" / "indicators.yaml"
     if INDICATORS_BACKUP.exists():
         shutil.move(str(INDICATORS_BACKUP), str(indicators))
     elif indicators.exists():
         indicators.unlink()
+    
+    # Restore ALL watchlists
+    watchlists_dir = PROJECT_ROOT / "watchlists"
+    if WATCHLISTS_BACKUP_DIR.exists():
+        for backup_file in WATCHLISTS_BACKUP_DIR.glob("*.yaml"):
+            original = watchlists_dir / backup_file.name
+            shutil.move(str(backup_file), str(original))
+        # Clean up backup dir
+        shutil.rmtree(WATCHLISTS_BACKUP_DIR, ignore_errors=True)
+    
+    # Restore ALL task configs
+    config_dir = PROJECT_ROOT / "config"
+    if TASKS_BACKUP_DIR.exists():
+        for backup_file in TASKS_BACKUP_DIR.glob("*.yaml"):
+            original = config_dir / backup_file.name
+            shutil.move(str(backup_file), str(original))
+        # Clean up backup dir
+        shutil.rmtree(TASKS_BACKUP_DIR, ignore_errors=True)
 
 
 def _cleanup_test_data_via_api(base_url):
@@ -169,4 +220,6 @@ __all__ = [
     "TEST_TASK_FILE",
     "CFG_BACKUP",
     "INDICATORS_BACKUP",
+    "WATCHLISTS_BACKUP_DIR",
+    "TASKS_BACKUP_DIR",
 ]
