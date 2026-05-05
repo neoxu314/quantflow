@@ -271,9 +271,7 @@ class RunEngine:
         wp = cfg["watchlist"]
         p = Path(wp) if os.path.isabs(wp) else PROJECT_ROOT / wp
         wl = Watchlist.load(str(p))
-        base_output = cfg.get("output_path") or str(
-            PROJECT_ROOT / "output" / "manual_watchlist")
-        output = str(Path(base_output) / run_id)
+        output = cfg.get("output_path") or "./output/manual_watchlist"
         sids = cfg.get("strategies", [
             "daily_bull_oversold", "daily_bull_mid_range"])
         strategies = [STRATEGY_REGISTRY[s]() for s in sids]

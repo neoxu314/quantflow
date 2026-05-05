@@ -319,18 +319,23 @@ class TestCrossRunTypeFileCleanup:
     def test_stock_scan_cleanup_on_delete(self):
         h, runs_api, engine = self._setup_engine()
 
-        rid = h.create_run("SS Cleanup", "stock_scan", {"code": "X"})
+        rid = h.create_run("SS Cleanup", "stock_scan", {"code": "600000.SH"})
         d = Path(tempfile.mkdtemp())
         h.update_status(rid, "completed",
             output_path=str(d),
             report_path=str(d / "data.json"))
         (d / "data.json").write_text("[]")
-        (d / "indicators.json").write_text("{}")
+        (d / "600000.SH_indicators.json").write_text("{}")
+        (d / "other_file.txt").write_text("user data")
 
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
 
-        assert not d.exists(), "Stock scan output dir should be deleted"
+        # Stock scan: only deletes indicator file, not entire directory
+        assert d.exists(), "Directory should remain (shared output)"
+        assert not (d / "data.json").exists(), "report_path should be deleted"
+        assert not (d / "600000.SH_indicators.json").exists(), "indicator file should be deleted"
+        assert (d / "other_file.txt").exists(), "user files should be preserved"
 
     def test_watchlist_run_cleanup_on_delete(self):
         h, runs_api, engine = self._setup_engine()
@@ -340,13 +345,28 @@ class TestCrossRunTypeFileCleanup:
         h.update_status(rid, "completed",
             output_path=str(d),
             report_path=str(d / "report.md"))
-        (d / "results.json").write_text("[]")
+        # The Executor saves results as {output_dir}/{job.name}.json
+        # where job.name = "web:{wl.name}"
+        # For this test, run.name is "WL Cleanup" (not "web:..." because we're mocking)
+        # But we should test the actual pattern: {run.name}.json
+        json_file = d / "WL Cleanup.json"
+        json_file.write_text("[]")
         (d / "report.md").write_text("# Report")
+        # User file - should be preserved
+        user_file = d / "user_data.txt"
+        user_file.write_text("important data")
 
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
 
-        assert not d.exists(), "Watchlist run output dir should be deleted"
+        # Directory should still exist (no longer deleting entire directory)
+        assert d.exists(), "Output directory should be preserved"
+        # JSON file should be deleted
+        assert not json_file.exists(), "JSON file should be deleted"
+        # Report file should be deleted
+        assert not (d / "report.md").exists(), "Report file should be deleted"
+        # User file should be preserved
+        assert user_file.exists(), "User file should be preserved"
 
     def test_task_run_cleanup_on_delete(self):
         """task_run delete should remove task outputs but preserve directory.
@@ -460,15 +480,26 @@ class TestCrossRunTypeFileCleanup:
         assert d.exists(), "Base output directory should be preserved (safety)"
         
     def test_delete_run_removes_report_path_file_first(self):
-        """Verify report_path file is deleted before rmtree (edge case test)."""
+        """Verify report_path file and indicator file are deleted, directory preserved.
+        
+        After Phase 1.1: stock_scan no longer creates run_id subdirectory.
+        Output directory may contain files from other runs, so we only delete
+        specific files, not the entire directory.
+        """
         h, runs_api, engine = self._setup_engine()
         
         rid = h.create_run("Report Delete", "stock_scan", {"code": "X"})
         d = Path(tempfile.mkdtemp())
         
+        # Indicator file (should be deleted)
+        indicator_file = d / "X_indicators.json"
+        indicator_file.write_text("[]")
+        # Report file (should be deleted)
         report_file = d / "data.json"
         report_file.write_text("[]")
-        (d / "other.json").write_text("{}")
+        # Other file from different run (should be preserved)
+        other_file = d / "other.json"
+        other_file.write_text("{}")
         
         h.update_status(rid, "completed",
             output_path=str(d),
@@ -477,9 +508,13 @@ class TestCrossRunTypeFileCleanup:
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
         
-        # Verify both report_path and output_path are cleaned
+        # Verify specific files are deleted
         assert not report_file.exists(), "report_path file should be deleted"
-        assert not d.exists(), "output_path directory should be deleted"
+        assert not indicator_file.exists(), "indicator file should be deleted"
+        # Verify directory is preserved (may contain files from other runs)
+        assert d.exists(), "output_path directory should be preserved"
+        # Verify other file is preserved
+        assert other_file.exists(), "other file should be preserved"
 
 
 def _make_app(runs_api_module):

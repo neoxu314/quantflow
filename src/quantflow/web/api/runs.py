@@ -127,17 +127,19 @@ def delete_run(run_id: str):
     if run.output_path:
         op = Path(run.output_path)
         
-        # task_run: only delete task output files, not entire directory
-        # to prevent accidental deletion of user's other files
         if run.run_type == "task_run":
+            # task_run: only delete task output files, not entire directory
+            # to prevent accidental deletion of user's other files
             if op.exists() and op.is_dir():
                 _delete_task_run_outputs(run, op)
+        elif run.run_type == "stock_scan":
+            # stock_scan: only delete the specific indicator JSON file
+            # output_path is shared directory, may contain files from other runs
+            _delete_stock_scan_outputs(run, op)
         else:
-            # stock_scan, watchlist_run: safe to delete entire directory
-            # (output_path contains run_id subdirectory)
-            if op.exists() and op.is_dir():
-                import shutil
-                shutil.rmtree(op, ignore_errors=True)
+            # watchlist_run: only delete the specific JSON file
+            # output_path is shared directory, may contain files from other runs
+            _delete_watchlist_run_outputs(run, op)
 
     engine._history.delete_run(run_id)
     engine._sse.disconnect_all(run_id)
@@ -225,6 +227,53 @@ def _delete_task_run_outputs(run, output_dir: Path):
                 base_dir.rmdir()  # Use rmdir() for empty directories
         except Exception:
             pass
+
+
+def _delete_stock_scan_outputs(run, output_dir: Path):
+    """Delete stock_scan output file without deleting entire directory.
+    
+    For stock_scan, output_path is a shared directory (no run_id isolation).
+    We only delete the specific indicator JSON file:
+    - {code}_indicators.json
+    
+    The report_path is already deleted in delete_run().
+    """
+    # Get stock code from run config
+    code = run.config.get("code", "")
+    if not code:
+        # Fallback: try to extract from run.name if it contains a stock code
+        # e.g., "Scan 600000.SH" → "600000.SH"
+        parts = run.name.split()
+        for part in parts:
+            if "." in part or part.isdigit():
+                code = part
+                break
+    
+    if code:
+        # Safe code (replace slashes to match file naming)
+        safe_code = code.replace("/", "_").replace("\\", "_")
+        indicator_file = output_dir / f"{safe_code}_indicators.json"
+        
+        if indicator_file.exists():
+            indicator_file.unlink()
+
+
+def _delete_watchlist_run_outputs(run, output_dir: Path):
+    """Delete watchlist_run output file without deleting entire directory.
+    
+    For watchlist_run, output_path is a shared directory (no run_id isolation).
+    We only delete the specific JSON file:
+    - {name}.json
+    
+    The report_path is already deleted in delete_run().
+    """
+    # The Executor saves results as {output_dir}/{job.name}.json
+    # where job.name is "web:{wl.name}"
+    # The run.name should match job.name
+    json_file = output_dir / f"{run.name}.json"
+    
+    if json_file.exists():
+        json_file.unlink()
 
 
 @router.get("/{run_id}/report")
