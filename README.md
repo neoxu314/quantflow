@@ -46,9 +46,12 @@ quantflow/
 │   ├── tasks_*.yaml     # Task orchestration files (e.g., tasks_asia_mac.yaml, tasks_us_mac.yaml)
 │   ├── quantflow.yaml   # Global settings (lookback, etc.)
 │   └── indicators.yaml  # Indicator parameter overrides
-├── watchlists/          # 👈 Stock lists go here
+├── watchlists/          # 👈 Stock lists go here (includes pre-built A-share indices)
 │   ├── us_tech.yaml
-│   └── a_value.yaml
+│   ├── a_value.yaml
+│   ├── hushen_300.yaml       # CSI 300 constituents (280 stocks)
+│   ├── zhongzheng_500.yaml   # CSI 500 constituents (425 stocks)
+│   └── chuangyeban.yaml      # ChiNext index constituents (100 stocks)
 ├── output/              # 👈 Sub-task results (per-task JSON + MD)
 │   ├── a_stocks/
 │   │   └── 2026-05-01/  # Auto-created with --daily
@@ -59,6 +62,23 @@ quantflow/
         ├── Daily_Report.md
         └── Combined_Results.json
 ```
+
+### Pre-built Watchlists
+
+The system includes pre-built A-share index constituent watchlists:
+
+| Watchlist | Index | Constituents | Update Method |
+|-----------|-------|-------------|---------------|
+| `hushen_300.yaml` | CSI 300 (沪深300) | 280 stocks | `python -m quantflow.data.fetch_cn_indices` |
+| `zhongzheng_500.yaml` | CSI 500 (中证500) | 425 stocks | `python -m quantflow.data.fetch_cn_indices` |
+| `chuangyeban.yaml` | ChiNext (创业板指) | 100 stocks | `python -m quantflow.data.fetch_cn_indices` |
+
+**Update all A-share indices:**
+```bash
+python -m quantflow.data.fetch_cn_indices
+```
+
+This fetches latest constituents from akshare API and updates the YAML files.
 
 ### Watchlist Configuration
 A watchlist defines **which stocks** to monitor.
@@ -410,14 +430,14 @@ pytest tests/ --cov=quantflow
 
 | Layer | Unit Tests | Integration Tests | Total |
 |-------|-----------|------------------|-------|
-| Data | 80 | 17 | 97 |
+| Data | 151 | 10 | 161 |
 | Indicators | 112 | 14 | 126 |
 | Config | 30 | 1 | 31 |
 | Orchestration | 35 | 11 | 46 |
 | Reports | 18 | 0 | 18 |
 | CLI | 16 | 11 | 27 |
 | Web | 42 + 26 + 4 | 137 (E2E) | 209 |
-| **Total** | **333** | **180** | **513** |
+| **Total** | **354** | **174** | **528** |
 
 ### CLI Test Highlights
 

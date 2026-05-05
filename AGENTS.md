@@ -28,6 +28,10 @@ quantflow/
 │   └── cli.py           # Entry: `python -m quantflow.cli` (stock_scan, watchlist_run, task_run, web)
 ├── config/tasks_*.yaml  # Orchestration task configs (tasks_asia_mac.yaml, tasks_us_mac.yaml, etc.)
 ├── config/indicators.yaml  # Indicator parameter defaults
+├── watchlists/             # Stock watchlists (including pre-built A-share indices)
+│   ├── hushen_300.yaml        # CSI 300 constituents (280 stocks)
+│   ├── zhongzheng_500.yaml    # CSI 500 constituents (425 stocks)
+│   └── chuangyeban.yaml       # ChiNext index constituents (100 stocks)
 ├── scripts/              # Build verification utilities
 ...
 ```
@@ -39,6 +43,7 @@ quantflow/
 | Run scan | `cli.py` | `stock_scan` (alias: `scan`), supports `--output` for JSON results (default: `output/cli_scans/`) |
 | Run watchlist | `cli.py` | `watchlist_run` (alias: `monitor`), supports `--strategies` and `--days-back` |
 | Run task file | `cli.py` | `task_run` (alias: `tasks`) |
+| Update A-share indices | `data/fetch_cn_indices.py` | `python -m quantflow.data.fetch_cn_indices` - fetches CSI 300, CSI 500, ChiNext constituents |
 | Output logic | See below | CLI vs Web UI default paths differ; see OUTPUT LOGIC section |
 | Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
 | Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()` |
@@ -68,7 +73,7 @@ quantflow/
 - **Build**: `pip install -e .`, setuptools with `src/` layout
 - **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
-  - Data layer: 137 unit + 10 integration (sector cache, fetch_indices) = 147 tests
+  - Data layer: 151 unit + 10 integration (sector cache, fetch_indices, fetch_cn_indices) = 161 tests
   - Indicator layer: 105 unit + 1 integration (TDX reference values) = 106 tests
   - Config layer: 31 unit = 31 tests
   - Orchestration layer: 42 unit = 42 tests
@@ -78,7 +83,7 @@ quantflow/
   - CLI layer: 24 unit + 6 skipped (pending expected values) = 30 tests
   - Web layer: 301 tests (210 API/integration + 91 E2E) + 92 frontend TypeScript tests
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
-  - Total: ~785 Python tests (301 web + 其他层) + ~92 frontend tests
+  - Total: ~799 Python tests (301 web + 其他层) + ~92 frontend tests
   - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
   - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
   - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)
