@@ -39,5 +39,5 @@ def convert_cn_code(code: str) -> str:
     elif code.startswith(("0", "3")):
         return f"{code}.SZ"
     else:
-        # Fallback to SZ for unknown patterns
+        logger.warning(f"Unknown code pattern: {code}, defaulting to SZ")
         return f"{code}.SZ"
