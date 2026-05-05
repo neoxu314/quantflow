@@ -36,3 +36,15 @@ reports/
 - Receives results from `Executor.execute()` via `Orchestrator`.
 - `Orchestrator` collects `task_runs` tuples: `(name, results, watchlist, strategies)`.
 - Writes output: per-task to `_resolve_task_dir()`, combined to `_resolve_combined_dir()`.
+
+## TESTS
+
+| Category | Test File(s) | Tests | Type |
+|----------|--------------|-------|------|
+| Signal grouping | `tests/reports/test_reports.py` | 3 | Unit (resonance, single strategy, name fallback) |
+| Combined reports | `tests/reports/test_reports.py` | 4 | Unit (multi-task, empty, single task, statistics aggregation) |
+| Edge cases | `tests/reports/test_reports.py` | 3 | Unit (empty results, sell-only, auto-create output dir) |
+| Group-by-strategy | `tests/reports/test_reports.py` | 3 | Unit (empty list, resonance sorting, sell grouping) |
+| Helper methods | `tests/reports/test_reports.py` | 5 | Unit (format strategy name, count watched with/without length) |
+
+Run: `pytest tests/reports/ -v` for all reports tests. All tests use `tmp_path` fixtures — zero production data dependency.
