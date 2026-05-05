@@ -29,3 +29,7 @@ items:
   name: NuScale Power
   tags:
   - Personal
+- code: CRCL.US
+  name: Circle
+  tags:
+  - 稳定币
