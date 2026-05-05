@@ -1076,7 +1076,7 @@ function renderTaskTable() {
     listArea.classList.remove("hidden");
     emptyMsg.classList.add("hidden");
     if (state.tasks.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">No tasks yet. Click "+ New Task" to add.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-400">No tasks yet. Click "+ New Task" to add.</td></tr>`;
         return;
     }
     for (const task of state.tasks) {
@@ -1086,7 +1086,6 @@ function renderTaskTable() {
             <td class="px-4 py-2 text-sm font-medium text-gray-900 break-words">${task.name}</td>
             <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.watchlist}</td>
             <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.strategies.join(", ")}</td>
-            <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs truncate">${task.output}</td>
             <td class="px-4 py-2 text-sm text-right whitespace-nowrap">
                 <button data-id="${task.id}" class="text-blue-600 hover:text-blue-800 mr-2 edit-task-btn">Edit</button>
                 <button data-id="${task.id}" class="text-red-600 hover:text-red-800 delete-task-btn">Delete</button>
@@ -1137,7 +1136,6 @@ async function openTaskModal(taskId) {
         if (!task)
             return;
         document.getElementById("task-name").value = task.name;
-        document.getElementById("task-output").value = task.output;
         wlSelect.value = task.watchlist;
         stratContainer.querySelectorAll(".task-strategy-cb").forEach((cb) => {
             cb.checked = task.strategies.includes(cb.value);
@@ -1145,10 +1143,9 @@ async function openTaskModal(taskId) {
     }
     else {
         document.getElementById("task-name").value = "";
-        document.getElementById("task-output").value = "./output";
     }
-    document.getElementById("btn-save-task").onclick = null;
-    document.getElementById("btn-save-task").addEventListener("click", async () => {
+    const saveBtn = document.getElementById("btn-save-task");
+    saveBtn.onclick = async () => {
         if (!state.selectedTaskFile) {
             toast("Please select a task file first.");
             return;
@@ -1163,8 +1160,7 @@ async function openTaskModal(taskId) {
             return;
         }
         const strategies = [...stratContainer.querySelectorAll(".task-strategy-cb:checked")].map(cb => cb.value);
-        const output = document.getElementById("task-output").value.trim() || "./output";
-        const payload = { name: taskName, watchlist: wlSelect.value, strategies, output };
+        const payload = { name: taskName, watchlist: wlSelect.value, strategies };
         try {
             if (isEdit) {
                 await api(`/api/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1181,7 +1177,7 @@ async function openTaskModal(taskId) {
         catch (e) {
             alert(`Failed: ${e.message}`);
         }
-    });
+    };
     openModal("modal-task");
 }
 function populateSettingsForm(raw) {

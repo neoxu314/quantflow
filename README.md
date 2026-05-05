@@ -85,9 +85,10 @@ tasks:
     watchlist: "watchlists/us_tech.yaml"   # Path to watchlist file
     strategies: 
       - "daily_bull_oversold"              # Strategy ID
-    output: "output/us_signals"            # Result save path
     # days_back: 300                        # Optional: override auto-calculated lookback
 ```
+
+**Output Path**: Specified via CLI/Web `--output` parameter (default: `./output`). All tasks output to the same directory, differentiated by file names.
 - **Available Strategy IDs:**
 - `daily_bull_oversold`: Buy when KDJ(J)<20 in a bullish channel.
 - `daily_bull_mid_range`: Buy when price stabilizes between trend lines in a bull channel.
@@ -144,13 +145,13 @@ python -m quantflow.cli stock_scan --code 002594.SZ --indicator kdj,macd --outpu
 ### Command 2: Run Orchestration Tasks (Recommended)
 This runs the strategies defined in your `tasks_*.yaml` file, producing both **per-task** and **combined** outputs.
 ```bash
-# Default: outputs per-task to paths defined in tasks_*.yaml
+# Default: outputs all tasks to ./output/
 python -m quantflow.cli task_run --config config/tasks_us_mac.yaml
 
-# Combined: specify a combined-report base directory
+# Custom: specify output directory
 python -m quantflow.cli task_run --config config/tasks_us_mac.yaml --output ./summary
 
-# Daily Archive: inject today's date into ALL output paths
+# Daily Archive: inject today's date into output path
 python -m quantflow.cli task_run --config config/tasks_us_mac.yaml --output ./summary --daily
 ```
 
@@ -159,8 +160,8 @@ python -m quantflow.cli task_run --config config/tasks_us_mac.yaml --output ./su
 | Parameter | Required | Description |
 | :--- | :--- | :--- |
 | `--config` | Yes | Path to your task orchestration YAML file (e.g., `config/tasks_asia_mac.yaml`). |
-| `--output` | No | Base directory for combined report. Default: `reports`. |
-| `--daily` | No | **Auto-archive**: appends today's date (`YYYY-MM-DD`) to all output paths (both sub-task and combined). |
+| `--output` | No | Base directory for all task outputs. Default: `./output`. All tasks output to this directory, differentiated by file names (`{task_name}.md`, `Daily_Report.md`, `Combined_Results.json`). |
+| `--daily` | No | **Auto-archive**: appends today's date (`YYYY-MM-DD`) to output path (e.g., `./output/2026-05-05/`). |
 | `-h` | No | Display help information. |
 
 *Note: If your tasks config file contains multiple tasks, this command will run them sequentially. A combined Markdown report is generated at the end of all tasks.*
@@ -181,9 +182,9 @@ python -m quantflow.cli watchlist_run --watchlist watchlists/us_tech.yaml --stra
 The system produces **two tiers** of output for each run:
 
 ### Tier 1: Per-Task Output (Sub-task level)
-Each task in your config file generates its own JSON + Markdown report to its configured `output` path.
-*   **Path**: `{tasks output}/{task_name}.json` (or `{output}/{date}/` if `--daily`)
-*   **Contains**: Raw results + individual Markdown report for that specific task.
+Each task generates its own Markdown report to the output directory.
+*   **Path**: `{--output}/{task_name}.md` (or `{--output}/{date}/{task_name}.md` if `--daily`)
+*   **Contains**: Individual Markdown report for that specific task.
 
 ### Tier 2: Combined Output (Aggregated level)
 After all tasks complete, a combined JSON and `Daily_Report.md` are generated.

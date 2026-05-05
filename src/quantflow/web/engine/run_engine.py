@@ -317,9 +317,8 @@ class RunEngine:
         tp = cfg["task_config"]
         p = Path(tp) if os.path.isabs(tp) else PROJECT_ROOT / tp
         configs = TaskConfig.load(str(p))
-        base_output = cfg.get("output_path") or "reports"
+        output = cfg.get("output_path") or "./output"
         daily = cfg.get("daily", False)
-        output = str(Path(base_output) / run_id)
 
         self._sse.publish_log(
             run_id,

@@ -266,11 +266,11 @@ class TestOrchestratorPathResolution:
         app.date_str = "2026-05-05"
         assert app._resolve_combined_dir() == "/base"
 
-    def test_resolve_task_dir_fallback_to_cfg_output(self):
-        """Without override, falls back to task config's output_dir."""
+    def test_resolve_task_dir_fallback_to_default_output(self):
+        """Without override, defaults to './output'."""
         app = Orchestrator([], daily_mode=False)
-        cfg = MagicMock(output_dir="/config-output")
-        assert app._resolve_task_dir(cfg) == "/config-output"
+        cfg = MagicMock()
+        assert app._resolve_task_dir(cfg) == "./output"
 
     def test_resolve_combined_dir_fallback_to_reports(self):
         """Without override, defaults to 'reports'."""

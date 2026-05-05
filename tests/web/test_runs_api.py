@@ -220,6 +220,32 @@ class TestFilesEndpoint:
 
     def test_files_endpoint_finds_files_in_subdirectory(self, client, tmp_path):
         """Files in nested directories (daily mode) should be discovered."""
+        import yaml
+        
+        # Create valid task config file
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        task_file = config_dir / "tasks_test.yaml"
+        
+        # Create watchlist file
+        watchlists_dir = tmp_path / "watchlists"
+        watchlists_dir.mkdir()
+        watchlist_file = watchlists_dir / "test.yaml"
+        watchlist_file.write_text(yaml.dump({
+            "name": "test",
+            "description": "test",
+            "items": [{"code": "NVDA.US", "name": "Nvidia", "tags": []}]
+        }))
+        
+        # Create task config
+        task_file.write_text(yaml.dump({
+            "tasks": [{
+                "name": "test_task",
+                "watchlist": str(watchlist_file),
+                "strategies": ["daily_bull_oversold"]
+            }]
+        }))
+        
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         daily_dir = output_dir / "2026-05-05"
@@ -232,7 +258,7 @@ class TestFilesEndpoint:
         
         r = client.post("/api/runs/", json={
             "run_type": "task_run",
-            "task_config": "config/tasks_test.yaml",
+            "task_config": str(task_file),
         })
         rid = r.json()["run_id"]
         h = run_history.RunHistory()

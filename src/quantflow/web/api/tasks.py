@@ -16,7 +16,6 @@ class TaskModel(BaseModel):
     name: str
     watchlist: str
     strategies: List[str] = []
-    output: str = "./output"
     days_back: Optional[int] = None
 
 
@@ -26,7 +25,6 @@ class TaskResponse(BaseModel):
     name: str
     watchlist: str
     strategies: List[str]
-    output: str
     days_back: Optional[int]
 
 
@@ -56,7 +54,6 @@ def load_all_tasks() -> List[TaskResponse]:
                 name=task["name"],
                 watchlist=task["watchlist"],
                 strategies=task.get("strategies", []),
-                output=task.get("output", "./output"),
                 days_back=task.get("days_back"),
             ))
     return tasks
@@ -168,7 +165,6 @@ def add_task(task: TaskModel, filename: Optional[str] = None):
         "name": task.name,
         "watchlist": task.watchlist,
         "strategies": task.strategies,
-        "output": task.output,
     }
     if task.days_back is not None:
         new_task["days_back"] = task.days_back
@@ -199,7 +195,6 @@ def update_task(task_id: str, task: TaskModel):
                 "name": task.name,
                 "watchlist": task.watchlist,
                 "strategies": task.strategies,
-                "output": task.output,
             }
             if task.days_back is not None:
                 data["tasks"][i]["days_back"] = task.days_back

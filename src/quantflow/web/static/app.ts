@@ -32,7 +32,6 @@ interface TaskData {
     name: string;
     watchlist: string;
     strategies: string[];
-    output: string;
     days_back?: number | null;
 }
 
@@ -1144,7 +1143,7 @@ function renderTaskTable() {
     emptyMsg.classList.add("hidden");
 
     if (state.tasks.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-sm text-gray-400">No tasks yet. Click "+ New Task" to add.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-400">No tasks yet. Click "+ New Task" to add.</td></tr>`;
         return;
     }
 
@@ -1155,7 +1154,6 @@ function renderTaskTable() {
             <td class="px-4 py-2 text-sm font-medium text-gray-900 break-words">${task.name}</td>
             <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.watchlist}</td>
             <td class="px-4 py-2 text-sm text-gray-600 break-words">${task.strategies.join(", ")}</td>
-            <td class="px-4 py-2 text-sm text-gray-600 font-mono text-xs truncate">${task.output}</td>
             <td class="px-4 py-2 text-sm text-right whitespace-nowrap">
                 <button data-id="${task.id}" class="text-blue-600 hover:text-blue-800 mr-2 edit-task-btn">Edit</button>
                 <button data-id="${task.id}" class="text-red-600 hover:text-red-800 delete-task-btn">Delete</button>
@@ -1203,24 +1201,22 @@ async function openTaskModal(taskId?: string) {
         const task = state.tasks.find(t => t.id === taskId);
         if (!task) return;
         (document.getElementById("task-name") as HTMLInputElement).value = task.name;
-        (document.getElementById("task-output") as HTMLInputElement).value = task.output;
         wlSelect.value = task.watchlist;
         stratContainer.querySelectorAll(".task-strategy-cb").forEach((cb: HTMLInputElement) => {
             cb.checked = task.strategies.includes(cb.value);
         });
     } else {
         (document.getElementById("task-name") as HTMLInputElement).value = "";
-        (document.getElementById("task-output") as HTMLInputElement).value = "./output";
     }
-    document.getElementById("btn-save-task")!.onclick = null;
-    document.getElementById("btn-save-task")!.addEventListener("click", async () => {
+    
+    const saveBtn = document.getElementById("btn-save-task")!;
+    saveBtn.onclick = async () => {
         if (!state.selectedTaskFile) { toast("Please select a task file first."); return; }
         const taskName = (document.getElementById("task-name") as HTMLInputElement).value.trim();
         if (!taskName) { alert("Name required"); return; }
         if (!wlSelect.value) { alert("Watchlist required"); return; }
         const strategies = [...stratContainer.querySelectorAll(".task-strategy-cb:checked")].map(cb => (cb as HTMLInputElement).value);
-        const output = (document.getElementById("task-output") as HTMLInputElement).value.trim() || "./output";
-        const payload = { name: taskName, watchlist: wlSelect.value, strategies, output };
+        const payload = { name: taskName, watchlist: wlSelect.value, strategies };
         try {
             if (isEdit) {
                 await api(`/api/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1235,7 +1231,7 @@ async function openTaskModal(taskId?: string) {
         } catch (e: any) {
             alert(`Failed: ${e.message}`);
         }
-    });
+    };
     openModal("modal-task");
 }
 

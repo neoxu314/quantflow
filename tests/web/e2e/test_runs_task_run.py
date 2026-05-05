@@ -60,7 +60,6 @@ def setup_test_task_config(base_url):
             "name": "e2e_task_test",
             "watchlist": f"watchlists/{TEST_WATCHLIST_NAME}.yaml",
             "strategies": ["daily_bull_oversold"],
-            "output": "./output/e2e_task_run_test",
         },
         timeout=30,
     )
@@ -389,17 +388,6 @@ class TestRunsTaskRunWorkflow:
         for expected in expected_files:
             assert any(expected in name for name in file_names), \
                 f"Expected {expected} in files, got: {file_names}"
-        
-        # Verify file paths contain run_id or task name
-        task_stem = TEST_TASK_FILE.replace('.yaml', '')
-        for row in file_rows[:3]:  # Check first 3 rows
-            cells = row.locator("td").all()
-            if len(cells) >= 2:
-                path_cell = cells[1]
-                if path_cell.count() > 0:
-                    path_text = path_cell.text_content()
-                    assert run["id"] in path_text or task_stem in path_text, \
-                        f"File path should contain run_id or task name: {path_text}"
 
     def test_task_run_daily_mode_files_validation(self, page: Page, base_url: str):
         """Daily mode: files tab should show files from YYYY-MM-DD subdirectory."""

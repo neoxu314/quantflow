@@ -19,7 +19,6 @@ tasks:
   - name: "US-Tech"
     watchlist: "watchlists/us_tech.yaml"
     strategies: [daily_bull_oversold]
-    output: "output/us"
 """)
         tasks = TaskConfig.load(path)
         assert len(tasks) == 1
@@ -27,7 +26,6 @@ tasks:
         assert t.name == "US-Tech"
         assert t.watchlist_path == "watchlists/us_tech.yaml"
         assert t.strategy_names == ["daily_bull_oversold"]
-        assert t.output_dir == "output/us"
 
     def test_load_multiple_tasks(self, tmp_path):
         """Parse multiple tasks in a single YAML."""
@@ -36,11 +34,9 @@ tasks:
   - name: "A-Shares"
     watchlist: "watchlists/a_value.yaml"
     strategies: [kdj_dead_cross]
-    output: "output/a"
   - name: "HK-Tech"
     watchlist: "watchlists/hk_tech.yaml"
     strategies: [daily_bull_oversold, dual_line_bear]
-    output: "output/hk"
 """)
         tasks = TaskConfig.load(path)
         assert len(tasks) == 2
@@ -53,21 +49,9 @@ tasks:
 tasks:
   - name: "No-Strategy"
     watchlist: "watchlists/djia.yaml"
-    output: "output/default"
 """)
         tasks = TaskConfig.load(path)
         assert tasks[0].strategy_names == []
-
-    def test_default_output_is_dot_slash_output(self, tmp_path):
-        """Missing 'output' field defaults to './output'."""
-        path = self._write_yaml(tmp_path, """\
-tasks:
-  - name: "No-Output"
-    watchlist: "watchlists/djia.yaml"
-    strategies: [daily_bull_oversold]
-""")
-        tasks = TaskConfig.load(path)
-        assert tasks[0].output_dir == "./output"
 
     def test_days_back_overridden(self, tmp_path):
         """Explicit 'days_back' is parsed."""
@@ -76,7 +60,6 @@ tasks:
   - name: "Custom-Lookback"
     watchlist: "watchlists/djia.yaml"
     strategies: [daily_bull_oversold]
-    output: "output/x"
     days_back: 180
 """)
         tasks = TaskConfig.load(path)
@@ -89,7 +72,6 @@ tasks:
   - name: "Auto-Lookback"
     watchlist: "watchlists/djia.yaml"
     strategies: [daily_bull_oversold]
-    output: "output/x"
 """)
         tasks = TaskConfig.load(path)
         assert tasks[0].days_back is None
@@ -117,11 +99,23 @@ tasks:
             name="Test",
             watchlist_path="wl.yaml",
             strategy_names=["s1", "s2"],
-            output_dir="out",
             days_back=100
         )
         assert cfg.name == "Test"
         assert cfg.watchlist_path == "wl.yaml"
         assert cfg.strategy_names == ["s1", "s2"]
-        assert cfg.output_dir == "out"
         assert cfg.days_back == 100
+
+    def test_duplicate_task_names_rejected(self, tmp_path):
+        """Duplicate task names in same file raise ValueError."""
+        path = self._write_yaml(tmp_path, """\
+tasks:
+  - name: "task1"
+    watchlist: "watchlists/wl1.yaml"
+    strategies: [daily_bull_oversold]
+  - name: "task1"
+    watchlist: "watchlists/wl2.yaml"
+    strategies: [daily_bull_oversold]
+""")
+        with pytest.raises(ValueError, match="Duplicate task name 'task1'"):
+            TaskConfig.load(path)

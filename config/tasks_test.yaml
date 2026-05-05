@@ -1,8 +1,11 @@
 tasks:
-- name: test1
+- name: djia
   watchlist: watchlists/djia.yaml
   strategies:
   - daily_bull_mid_range
   - daily_bull_oversold
-  - kdj_dead_cross
-  output: /Users/neo/Downloads
+- name: focus
+  watchlist: watchlists/personal_focus_us.yaml
+  strategies:
+  - daily_bull_mid_range
+  - daily_bull_oversold
