@@ -266,21 +266,43 @@ def _delete_watchlist_run_outputs(run, output_dir: Path):
     - {job.name}.json (Executor output)
     - {job.name}.md (Markdown report, already deleted via report_path)
     
-    The job.name format is "web-{wl.name}" where wl.name is the watchlist name.
-    We reconstruct this from run.config to get the correct filename.
+    The job.name format is "web-{wl.name}" where wl.name comes from YAML content
+    (not file name!). We must load the watchlist to get the correct name.
     """
-    # Reconstruct job.name from watchlist path
+    # Load watchlist to get wl.name from YAML content
     wl_path = run.config.get("watchlist", "")
-    wl_name = Path(wl_path).stem if wl_path else ""
+    if not wl_path:
+        return
     
-    # job.name format: "web-{wl_name}" (see run_engine.py:286)
-    job_name = f"web-{wl_name}"
-    
-    # Executor saves results as {output_dir}/{job_name}.json
-    json_file = output_dir / f"{job_name}.json"
-    
-    if json_file.exists():
-        json_file.unlink()
+    try:
+        from pathlib import Path as _Path
+        import os
+        
+        # Resolve absolute path
+        PROJECT_ROOT = Path(__file__).resolve().parents[4]
+        if not os.path.isabs(wl_path):
+            wl_path = str(PROJECT_ROOT / wl_path)
+        
+        # Load watchlist to get name field from YAML
+        from quantflow.execution.watchlist import Watchlist
+        wl = Watchlist.load(wl_path)
+        wl_name = wl.name
+        
+        # job.name format: "web-{wl_name}" (see run_engine.py:286)
+        job_name = f"web-{wl_name}"
+        
+        # Executor saves results as {output_dir}/{job_name}.json
+        json_file = output_dir / f"{job_name}.json"
+        
+        if json_file.exists():
+            json_file.unlink()
+    except Exception:
+        # Fallback: if load fails, try using file stem (may not match)
+        wl_name = Path(wl_path).stem
+        job_name = f"web-{wl_name}"
+        json_file = output_dir / f"{job_name}.json"
+        if json_file.exists():
+            json_file.unlink()
 
 
 @router.get("/{run_id}/report")
