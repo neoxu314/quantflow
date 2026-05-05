@@ -259,18 +259,25 @@ def _delete_stock_scan_outputs(run, output_dir: Path):
 
 
 def _delete_watchlist_run_outputs(run, output_dir: Path):
-    """Delete watchlist_run output file without deleting entire directory.
+    """Delete watchlist_run output files without deleting entire directory.
     
     For watchlist_run, output_path is a shared directory (no run_id isolation).
-    We only delete the specific JSON file:
-    - {name}.json
+    Files generated:
+    - {job.name}.json (Executor output)
+    - {job.name}.md (Markdown report, already deleted via report_path)
     
-    The report_path is already deleted in delete_run().
+    The job.name format is "web-{wl.name}" where wl.name is the watchlist name.
+    We reconstruct this from run.config to get the correct filename.
     """
-    # The Executor saves results as {output_dir}/{job.name}.json
-    # where job.name is "web-{wl.name}"
-    # The run.name should match job.name
-    json_file = output_dir / f"{run.name}.json"
+    # Reconstruct job.name from watchlist path
+    wl_path = run.config.get("watchlist", "")
+    wl_name = Path(wl_path).stem if wl_path else ""
+    
+    # job.name format: "web-{wl_name}" (see run_engine.py:286)
+    job_name = f"web-{wl_name}"
+    
+    # Executor saves results as {output_dir}/{job_name}.json
+    json_file = output_dir / f"{job_name}.json"
     
     if json_file.exists():
         json_file.unlink()

@@ -339,18 +339,18 @@ class TestCrossRunTypeFileCleanup:
     def test_watchlist_run_cleanup_on_delete(self):
         h, runs_api, engine = self._setup_engine()
 
-        rid = h.create_run("WL Cleanup", "watchlist_run", {"watchlist": "x.yaml"})
+        rid = h.create_run("web-test_watchlist", "watchlist_run", 
+                          {"watchlist": "watchlists/test_watchlist.yaml"})
         d = Path(tempfile.mkdtemp())
         h.update_status(rid, "completed",
             output_path=str(d),
-            report_path=str(d / "report.md"))
-        # The Executor saves results as {output_dir}/{job.name}.json
-        # where job.name = "web:{wl.name}"
-        # For this test, run.name is "WL Cleanup" (not "web:..." because we're mocking)
-        # But we should test the actual pattern: {run.name}.json
-        json_file = d / "WL Cleanup.json"
+            report_path=str(d / "web-test_watchlist.md"))
+        
+        # Create files matching actual execution pattern
+        # job.name format: "web-{wl_name}" (see run_engine.py:286)
+        json_file = d / "web-test_watchlist.json"
         json_file.write_text("[]")
-        (d / "report.md").write_text("# Report")
+        (d / "web-test_watchlist.md").write_text("# Report")
         # User file - should be preserved
         user_file = d / "user_data.txt"
         user_file.write_text("important data")
