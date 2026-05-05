@@ -1,4 +1,16 @@
-"""YFinance data source adapter for global markets."""
+"""YFinance data source adapter for global markets.
+
+Supported markets:
+- US: No suffix (e.g., AAPL)
+- HK: .HK suffix (e.g., 09660.HK)
+- KR: .KS suffix (e.g., 000660.KS for SK Hynix)
+- JP: .T suffix (e.g., 8035.T for Tokyo Electron)
+
+Market suffix mapping handled via MARKET_SUFFIX dictionary:
+- KR → .KS (Korean stocks)
+- JP → .T (Japanese stocks)
+- HK → .HK (Hong Kong stocks)
+"""
 
 import time
 import random

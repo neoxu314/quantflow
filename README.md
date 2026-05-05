@@ -1,6 +1,6 @@
 # Quantflow
 
-Stock Quantitative Analysis System for A-share, US, and HK markets.
+Stock Quantitative Analysis System for A-share, US, HK, KR, and JP markets.
 
 ## Architecture
 
@@ -27,9 +27,11 @@ Before running tasks, ensure your environment is ready:
    pip install pandas numpy pyyaml baostock yfinance
    ```
 3. **Stock Code Format**:
-   The system strictly requires standard formats. Do **not** use standalone codes (e.g., just `MSFT`).
-   *   **A-Share**: `{code}.{exchange}` (e.g., `600519.SH` or `002594.SZ`)
-   *   **US/HK**: `{code}.{market}` (e.g., `NVDA.US` or `00700.HK`)
+    The system strictly requires standard formats. Do **not** use standalone codes (e.g., just `MSFT`).
+    *   **A-Share**: `{code}.{exchange}` (e.g., `600519.SH` or `002594.SZ`)
+    *   **US/HK**: `{code}.{market}` (e.g., `NVDA.US` or `00700.HK`)
+    *   **KR (Korea)**: `{code}.KR` (e.g., `000660.KR` for SK Hynix, auto-converted to `000660.KS`)
+    *   **JP (Japan)**: `{code}.JP` (e.g., `8035.JP` for Tokyo Electron, auto-converted to `8035.T`)
 
 ## 1. Configuration
 

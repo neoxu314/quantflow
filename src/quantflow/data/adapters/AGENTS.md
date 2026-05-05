@@ -30,6 +30,7 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 - Internal chunking: splits N tickers into batches of `chunk_size`, sleeps `random(sleep_min, sleep_max)` between batches.
 - Returns `Dict[str, DataFrame]` with same column format as single-stock `fetch_ohlcv`.
 - Uses `curl_cffi` for Chrome TLS fingerprint bypass
+- **Market suffix mapping**: KR→.KS (Korean), JP→.T (Japanese), HK→.HK (Hong Kong), US→no suffix
 - Hong Kong: `hk` prefix handling, USD conversion needed for `total_mv`
 - Fundamental data: `pe_ttm`, `pb`, `total_mv` (ps_ttm not available)
 
