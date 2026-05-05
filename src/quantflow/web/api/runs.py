@@ -210,16 +210,16 @@ def get_files(run_id: str):
     if not run.output_path:
         return {"files": []}
     files = []
-    for d in [Path(run.output_path)]:
-        if not d.exists():
-            continue
-        for f in d.iterdir():
-            if f.is_file() and f.suffix in (".json", ".md"):
-                files.append({
-                    "name": f.name, "path": str(f),
-                    "size": _human_size(f.stat().st_size),
-                    "type": f.suffix.lstrip("."),
-                })
+    output_dir = Path(run.output_path)
+    if not output_dir.exists():
+        return {"files": files}
+    for f in output_dir.rglob("*"):
+        if f.is_file() and f.suffix in (".json", ".md"):
+            files.append({
+                "name": f.name, "path": str(f),
+                "size": _human_size(f.stat().st_size),
+                "type": f.suffix.lstrip("."),
+            })
     return {"files": files}
 
 
