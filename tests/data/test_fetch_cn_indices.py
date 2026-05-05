@@ -112,10 +112,25 @@ class TestFetchCnIndex:
         
         # Mock project root path
         with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            # Create chain: Path(__file__) -> parent^4 -> mock_project_root
+            mock_file = MagicMock()
+            mock_p1 = MagicMock()
+            mock_p2 = MagicMock()
+            mock_p3 = MagicMock()
             mock_project_root = MagicMock()
-            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
-            mock_path.return_value = mock_project_root
-            mock_path.__file__ = "dummy.py"
+            
+            mock_file.parent = mock_p1
+            mock_p1.parent = mock_p2
+            mock_p2.parent = mock_p3
+            mock_p3.parent = mock_project_root
+            
+            mock_path.return_value = mock_file
+            
+            # Setup division: mock_project_root / "watchlists" returns intermediate
+            # intermediate / filename returns tmp_path / filename
+            mock_intermediate = MagicMock()
+            mock_intermediate.__truediv__ = lambda self, key: tmp_path / key
+            mock_project_root.__truediv__ = lambda self, key: mock_intermediate
             
             # Call function
             fetch_cn_index(
@@ -159,9 +174,23 @@ class TestFetchCnIndex:
         mock_ak.index_stock_cons.return_value = pd.DataFrame()
         
         with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            # Create parent chain
+            mock_file = MagicMock()
+            mock_p1 = MagicMock()
+            mock_p2 = MagicMock()
+            mock_p3 = MagicMock()
             mock_project_root = MagicMock()
-            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
-            mock_path.return_value = mock_project_root
+            
+            mock_file.parent = mock_p1
+            mock_p1.parent = mock_p2
+            mock_p2.parent = mock_p3
+            mock_p3.parent = mock_project_root
+            
+            mock_path.return_value = mock_file
+            
+            mock_intermediate = MagicMock()
+            mock_intermediate.__truediv__ = lambda self, key: tmp_path / key
+            mock_project_root.__truediv__ = lambda self, key: mock_intermediate
             
             fetch_cn_index(
                 index_name="中证500",
@@ -183,9 +212,23 @@ class TestFetchCnIndex:
         mock_ak.index_stock_cons.side_effect = Exception("Network error")
         
         with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            # Create parent chain
+            mock_file = MagicMock()
+            mock_p1 = MagicMock()
+            mock_p2 = MagicMock()
+            mock_p3 = MagicMock()
             mock_project_root = MagicMock()
-            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
-            mock_path.return_value = mock_project_root
+            
+            mock_file.parent = mock_p1
+            mock_p1.parent = mock_p2
+            mock_p2.parent = mock_p3
+            mock_p3.parent = mock_project_root
+            
+            mock_path.return_value = mock_file
+            
+            mock_intermediate = MagicMock()
+            mock_intermediate.__truediv__ = lambda self, key: tmp_path / key
+            mock_project_root.__truediv__ = lambda self, key: mock_intermediate
             
             # Should not raise, just log error
             fetch_cn_index(
