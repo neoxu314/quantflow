@@ -1,6 +1,6 @@
 """Fetch A-share index constituents from akshare and generate watchlist YAMLs.
 
-This script fetches CSI 500 (中证500) and ChiNext (创业板指) constituents
+This script fetches HS 300 (沪深300), CSI 500 (中证500) and ChiNext (创业板指) constituents
 from akshare and saves them to watchlists/*.yaml.
 """
 
@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 CN_INDICES = {
+    "沪深300": {
+        "symbol": "000300",
+        "name": "HS 300",
+        "filename": "hushen_300.yaml"
+    },
     "中证500": {
         "symbol": "000905",
         "name": "CSI 500",

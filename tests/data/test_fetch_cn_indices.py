@@ -93,6 +93,13 @@ class TestCNIndicesConfig:
         
         assert "创业板指" in CN_INDICES
         assert CN_INDICES["创业板指"]["symbol"] == "399006"
+    
+    def test_has_hs300(self):
+        """Should include HS 300 (沪深300)."""
+        from quantflow.data.fetch_cn_indices import CN_INDICES
+        
+        assert "沪深300" in CN_INDICES
+        assert CN_INDICES["沪深300"]["symbol"] == "000300"
 
 
 class TestFetchCnIndex:
