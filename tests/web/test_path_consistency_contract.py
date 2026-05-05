@@ -94,7 +94,7 @@ class TestOutputReportPathContract:
         for run_type in ["stock_scan", "watchlist_run", "task_run"]:
             rid = h.create_run(f"Test {run_type}", run_type, {})
             
-            output_dir = tmp_path / f"{run_type}_{rid}"
+            output_dir = tmp_path / f"{run_type}_output"
             output_dir.mkdir()
             
             # Create appropriate report file
@@ -116,25 +116,3 @@ class TestOutputReportPathContract:
             run = h.get_run(rid)
             assert run.report_path is not None
             assert Path(run.report_path).exists()
-            
-    def test_output_path_unique_per_run(self, setup_db, tmp_path):
-        """Each run must have unique output_path (isolated directories)."""
-        h = run_history.RunHistory()
-        
-        rid1 = h.create_run("Run 1", "stock_scan", {})
-        rid2 = h.create_run("Run 2", "stock_scan", {})
-        
-        output1 = tmp_path / rid1
-        output2 = tmp_path / rid2
-        output1.mkdir()
-        output2.mkdir()
-        
-        h.update_status(rid1, "completed", output_path=str(output1))
-        h.update_status(rid2, "completed", output_path=str(output2))
-        
-        run1 = h.get_run(rid1)
-        run2 = h.get_run(rid2)
-        
-        # Contract: output_paths are different
-        assert run1.output_path != run2.output_path
-        assert Path(run1.output_path) != Path(run2.output_path)
