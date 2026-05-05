@@ -89,7 +89,7 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 92 E2E tests + 15 Python test files (209 tests) + 82 frontend unit tests**
+**Total: 92 E2E tests + 15 Python test files (209 tests) + 92 frontend unit tests**
 
 ## Test Categories
 
@@ -123,7 +123,7 @@ src/quantflow/web/static/
 | Browse E2E | `test_browse_api.py` | 8 | Directory listing, mkdir, parent nav |
 | Presets E2E | `test_presets.py` | 8 | CRUD, run from preset, persistence, validation |
 | Frontend Utils | `utils.test.ts` | 49 | Pure functions (MARKET_SUFFIX, get/setNestedValue, formatStockCode) |
-| Frontend App | `app.test.ts` | 33 | Pure app functions (render helpers, formatters, openFolder) |
+| Frontend App | `app.test.ts` | 43 | Pure app functions (render helpers, formatters, CLI preview event listeners) |
 
 **Note**: See `TEST_MATRIX.md` for detailed Execution → API test coverage per run_type × endpoint combination.
 

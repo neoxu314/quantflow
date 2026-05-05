@@ -402,17 +402,42 @@ function updateCliPreview() {
         return;
     if (selectedRunType === "stock_scan") {
         const code = document.getElementById("run-stock-code").value || "CODE";
+        const start = document.getElementById("run-start-date").value;
+        const end = document.getElementById("run-end-date").value;
         const inds = Array.from(document.querySelectorAll(".run-indicator:checked"))
             .map((el) => el.value).join(",");
-        preview.textContent = `python -m quantflow.cli scan --code ${code} --indicator ${inds || "kdj,dual_line"}`;
+        const output = document.getElementById("run-output-path").value;
+        let cmd = `python -m quantflow.cli scan --code ${code} --indicator ${inds || "kdj,dual_line"}`;
+        if (start)
+            cmd += ` --start ${start}`;
+        if (end)
+            cmd += ` --end ${end}`;
+        if (output)
+            cmd += ` --output ${output}`;
+        preview.textContent = cmd;
     }
     else if (selectedRunType === "watchlist_run") {
         const wl = document.getElementById("run-watchlist-select")?.value || "WATCHLIST";
-        preview.textContent = `python -m quantflow.cli monitor --watchlist ${wl}`;
+        const strategies = Array.from(document.querySelectorAll("#run-strategy-checkboxes input:checked"))
+            .map((el) => el.value).join(",");
+        const output = document.getElementById("run-output-path").value;
+        let cmd = `python -m quantflow.cli monitor --watchlist ${wl}`;
+        if (strategies)
+            cmd += ` --strategies ${strategies}`;
+        if (output)
+            cmd += ` --output ${output}`;
+        preview.textContent = cmd;
     }
     else if (selectedRunType === "task_run") {
         const tc = document.getElementById("run-task-config-select")?.value || "CONFIG";
-        preview.textContent = `python -m quantflow.cli tasks --config ${tc}`;
+        const daily = document.getElementById("run-daily-mode").checked;
+        const output = document.getElementById("run-output-path").value;
+        let cmd = `python -m quantflow.cli tasks --config ${tc}`;
+        if (daily)
+            cmd += ` --daily`;
+        if (output)
+            cmd += ` --output ${output}`;
+        preview.textContent = cmd;
     }
 }
 async function executeRun() {
@@ -1555,10 +1580,22 @@ function setupEventListeners() {
     document.querySelectorAll('[data-type]').forEach(btn => {
         btn.addEventListener("click", () => selectRunType(btn.dataset.type));
     });
-    // CLI preview on form changes
+    // CLI preview on form changes - all relevant inputs (static)
     document.getElementById("run-stock-code")?.addEventListener("input", updateCliPreview);
+    document.getElementById("run-start-date")?.addEventListener("input", updateCliPreview);
+    document.getElementById("run-end-date")?.addEventListener("input", updateCliPreview);
+    document.getElementById("run-output-path")?.addEventListener("input", updateCliPreview);
+    document.getElementById("run-watchlist-select")?.addEventListener("change", updateCliPreview);
+    document.getElementById("run-task-config-select")?.addEventListener("change", updateCliPreview);
+    document.getElementById("run-daily-mode")?.addEventListener("change", updateCliPreview);
     document.querySelectorAll(".run-indicator").forEach(el => {
-        el.addEventListener("change", () => updateCliPreview());
+        el.addEventListener("change", updateCliPreview);
+    });
+    // Event delegation for dynamically generated strategy checkboxes
+    document.getElementById("run-strategy-checkboxes")?.addEventListener("change", (e) => {
+        if (e.target instanceof HTMLInputElement) {
+            updateCliPreview();
+        }
     });
     // Run sub-tab switching
     document.querySelectorAll('[data-runtab]').forEach(btn => {

@@ -31,6 +31,7 @@ web/
 ## KEY COMPONENTS
 - `create_app()`: Wires all API routers, initializes RunEngine/RunHistory/RunQueue/SSEManager, mounts static files
 - `start_server()`: Loads WebConfig, opens browser, starts uvicorn
+- `updateCliPreview()`: Real-time CLI command preview generator for New Run modal (all run types)
 - Architecture: API routes are stateless; RunEngine manages execution state via SQLite + in-memory queue
 
 ## CONVENTIONS
@@ -39,6 +40,7 @@ web/
 - Frontend TypeScript compiled to JS in same directory via `tsc --project tsconfig.json`
 - Static files served with SPA fallback
 - RunEngine singleton pattern: `_set_engine()` / `_get_engine()` in API modules
+- **Event delegation**: Use for dynamically generated elements (e.g., `#run-strategy-checkboxes`) to avoid rebinding listeners
 
 ## ANTI-PATTERNS
 - Do NOT modify `app.ts` without re-running `tsc` to compile to `app.js`

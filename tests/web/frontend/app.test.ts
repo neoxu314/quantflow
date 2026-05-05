@@ -552,3 +552,277 @@ async function mockOpenFolder(runId: string) {
         toast(`Error: ${e.message}`);
     }
 }
+
+describe("updateCliPreview event listeners", () => {
+    function setupEventListenerEnvironment() {
+        document.body.innerHTML = `
+            <input id="run-stock-code" type="text">
+            <input id="run-start-date" type="date">
+            <input id="run-end-date" type="date">
+            <input id="run-output-path" type="text">
+            <select id="run-watchlist-select"><option value="watchlists/test.yaml">Test WL</option></select>
+            <select id="run-task-config-select"><option value="config/tasks_test.yaml">Test Tasks</option></select>
+            <input id="run-daily-mode" type="checkbox">
+            <div id="run-strategy-checkboxes"></div>
+            <label><input type="checkbox" value="kdj" checked class="run-indicator"> KDJ</label>
+            <label><input type="checkbox" value="dual_line" checked class="run-indicator"> DualLine</label>
+            <label><input type="checkbox" value="macd" class="run-indicator"> MACD</label>
+            <div id="run-cli-preview"></div>
+            <div id="run-config-stock_scan"></div>
+            <div id="run-config-watchlist_run"></div>
+            <div id="run-config-task_run"></div>
+        `;
+        (globalThis as any).selectedRunType = "";
+    }
+
+    function populateStrategyCheckboxes() {
+        const stratDiv = document.getElementById("run-strategy-checkboxes")!;
+        stratDiv.innerHTML = `
+            <input type="checkbox" value="daily_bull_oversold" checked>
+            <input type="checkbox" value="kdj_dead_cross">
+        `;
+    }
+
+    function setupEventListeners() {
+        const codeInput = document.getElementById("run-stock-code");
+        const startDateInput = document.getElementById("run-start-date");
+        const endDateInput = document.getElementById("run-end-date");
+        const outputPathInput = document.getElementById("run-output-path");
+        const watchlistSelect = document.getElementById("run-watchlist-select");
+        const taskConfigSelect = document.getElementById("run-task-config-select");
+        const dailyModeCheckbox = document.getElementById("run-daily-mode");
+        
+        if (codeInput) codeInput.addEventListener("input", () => updateCliPreview());
+        if (startDateInput) startDateInput.addEventListener("input", () => updateCliPreview());
+        if (endDateInput) endDateInput.addEventListener("input", () => updateCliPreview());
+        if (outputPathInput) outputPathInput.addEventListener("input", () => updateCliPreview());
+        if (watchlistSelect) watchlistSelect.addEventListener("change", () => updateCliPreview());
+        if (taskConfigSelect) taskConfigSelect.addEventListener("change", () => updateCliPreview());
+        if (dailyModeCheckbox) dailyModeCheckbox.addEventListener("change", () => updateCliPreview());
+        
+        document.querySelectorAll(".run-indicator").forEach(el => {
+            el.addEventListener("change", () => updateCliPreview());
+        });
+        
+        // Event delegation for dynamically generated strategy checkboxes
+        document.getElementById("run-strategy-checkboxes")?.addEventListener("change", (e) => {
+            if (e.target instanceof HTMLInputElement) {
+                updateCliPreview();
+            }
+        });
+    }
+
+    function updateCliPreview() {
+        const preview = document.getElementById("run-cli-preview")!;
+        if (!preview) return;
+        const selectedRunType = (globalThis as any).selectedRunType;
+        if (selectedRunType === "stock_scan") {
+            const code = (document.getElementById("run-stock-code") as HTMLInputElement).value || "CODE";
+            const start = (document.getElementById("run-start-date") as HTMLInputElement).value;
+            const end = (document.getElementById("run-end-date") as HTMLInputElement).value;
+            const inds = Array.from(document.querySelectorAll(".run-indicator:checked"))
+                .map((el: Element) => (el as HTMLInputElement).value).join(",");
+            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
+            let cmd = `python -m quantflow.cli scan --code ${code} --indicator ${inds || "kdj,dual_line"}`;
+            if (start) cmd += ` --start ${start}`;
+            if (end) cmd += ` --end ${end}`;
+            if (output) cmd += ` --output ${output}`;
+            preview.textContent = cmd;
+        } else if (selectedRunType === "watchlist_run") {
+            const wl = (document.getElementById("run-watchlist-select") as HTMLSelectElement)?.value || "WATCHLIST";
+            const strategies = Array.from(document.querySelectorAll("#run-strategy-checkboxes input:checked"))
+                .map((el: Element) => (el as HTMLInputElement).value).join(",");
+            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
+            let cmd = `python -m quantflow.cli monitor --watchlist ${wl}`;
+            if (strategies) cmd += ` --strategies ${strategies}`;
+            if (output) cmd += ` --output ${output}`;
+            preview.textContent = cmd;
+        } else if (selectedRunType === "task_run") {
+            const tc = (document.getElementById("run-task-config-select") as HTMLSelectElement)?.value || "CONFIG";
+            const daily = (document.getElementById("run-daily-mode") as HTMLInputElement).checked;
+            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
+            let cmd = `python -m quantflow.cli tasks --config ${tc}`;
+            if (daily) cmd += ` --daily`;
+            if (output) cmd += ` --output ${output}`;
+            preview.textContent = cmd;
+        }
+    }
+
+    it("has event listener on run-stock-code input", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "stock_scan";
+        
+        const codeInput = document.getElementById("run-stock-code") as HTMLInputElement;
+        expect(codeInput).not.toBeNull();
+        
+        setupEventListeners();
+        codeInput.value = "NVDA.US";
+        codeInput.dispatchEvent(new Event("input"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--code NVDA.US");
+    });
+
+    it("has event listener on run-start-date input", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "stock_scan";
+        
+        const startDateInput = document.getElementById("run-start-date") as HTMLInputElement;
+        expect(startDateInput).not.toBeNull();
+        
+        setupEventListeners();
+        startDateInput.value = "2026-05-01";
+        startDateInput.dispatchEvent(new Event("input"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--start 2026-05-01");
+    });
+
+    it("has event listener on run-end-date input", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "stock_scan";
+        
+        const endDateInput = document.getElementById("run-end-date") as HTMLInputElement;
+        expect(endDateInput).not.toBeNull();
+        
+        setupEventListeners();
+        endDateInput.value = "2026-05-05";
+        endDateInput.dispatchEvent(new Event("input"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--end 2026-05-05");
+    });
+
+    it("has event listener on run-output-path input", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "stock_scan";
+        
+        const outputPathInput = document.getElementById("run-output-path") as HTMLInputElement;
+        expect(outputPathInput).not.toBeNull();
+        
+        setupEventListeners();
+        outputPathInput.value = "/tmp/output";
+        outputPathInput.dispatchEvent(new Event("input"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--output /tmp/output");
+    });
+
+    it("has event listener on run-watchlist-select change", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "watchlist_run";
+        
+        const watchlistSelect = document.getElementById("run-watchlist-select") as HTMLSelectElement;
+        expect(watchlistSelect).not.toBeNull();
+        
+        setupEventListeners();
+        watchlistSelect.value = "watchlists/test.yaml";
+        watchlistSelect.dispatchEvent(new Event("change"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--watchlist watchlists/test.yaml");
+    });
+
+    it("uses event delegation for dynamically generated strategy checkboxes", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "watchlist_run";
+        
+        setupEventListeners();
+        
+        // Simulate dynamic generation (like populateRunFormFields does)
+        populateStrategyCheckboxes();
+        
+        const checkbox = document.querySelector("#run-strategy-checkboxes input[value='kdj_dead_cross']") as HTMLInputElement;
+        expect(checkbox).not.toBeNull();
+        
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--strategies");
+        expect(preview).toContain("kdj_dead_cross");
+    });
+
+    it("updates CLI preview when first strategy checkbox is unchecked", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "watchlist_run";
+        
+        setupEventListeners();
+        populateStrategyCheckboxes();
+        
+        // First checkbox is checked by default, second is unchecked
+        const firstCheckbox = document.querySelector("#run-strategy-checkboxes input[value='daily_bull_oversold']") as HTMLInputElement;
+        const secondCheckbox = document.querySelector("#run-strategy-checkboxes input[value='kdj_dead_cross']") as HTMLInputElement;
+        
+        expect(firstCheckbox.checked).toBe(true);
+        expect(secondCheckbox.checked).toBe(false);
+        
+        // Trigger initial preview to establish baseline
+        updateCliPreview();
+        const initialPreview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(initialPreview).toContain("daily_bull_oversold");
+        expect(initialPreview).toContain("--strategies");
+        
+        // Now uncheck the first and check the second
+        firstCheckbox.checked = false;
+        secondCheckbox.checked = true;
+        secondCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--strategies");
+        expect(preview).toContain("kdj_dead_cross");
+        expect(preview).not.toContain("daily_bull_oversold");
+    });
+
+    it("includes multiple checked strategies in CLI preview", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "watchlist_run";
+        
+        setupEventListeners();
+        populateStrategyCheckboxes();
+        
+        // Check both checkboxes
+        const checkboxes = document.querySelectorAll("#run-strategy-checkboxes input") as NodeListOf<HTMLInputElement>;
+        checkboxes[0].checked = true;  // daily_bull_oversold (already checked)
+        checkboxes[1].checked = true;  // kdj_dead_cross
+        
+        // Trigger event from second checkbox (which was unchecked before)
+        checkboxes[1].dispatchEvent(new Event("change", { bubbles: true }));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--strategies");
+        // Both strategies should appear (order may vary)
+        expect(preview).toContain("daily_bull_oversold");
+        expect(preview).toContain("kdj_dead_cross");
+    });
+
+    it("has event listener on run-task-config-select change", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "task_run";
+        
+        const taskConfigSelect = document.getElementById("run-task-config-select") as HTMLSelectElement;
+        expect(taskConfigSelect).not.toBeNull();
+        
+        setupEventListeners();
+        taskConfigSelect.value = "config/tasks_test.yaml";
+        taskConfigSelect.dispatchEvent(new Event("change"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--config config/tasks_test.yaml");
+    });
+
+    it("has event listener on run-daily-mode change", () => {
+        setupEventListenerEnvironment();
+        (globalThis as any).selectedRunType = "task_run";
+        
+        const dailyModeCheckbox = document.getElementById("run-daily-mode") as HTMLInputElement;
+        expect(dailyModeCheckbox).not.toBeNull();
+        
+        setupEventListeners();
+        dailyModeCheckbox.checked = true;
+        dailyModeCheckbox.dispatchEvent(new Event("change"));
+        
+        const preview = document.getElementById("run-cli-preview")!.textContent!;
+        expect(preview).toContain("--daily");
+    });
+});
