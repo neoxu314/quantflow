@@ -70,6 +70,7 @@ quantflow/
   - Data layer: 80 unit + 17 integration (sector cache) = 97 tests
   - Indicator layer: 112 unit + 14 integration (TDX reference values) = 126 tests
   - Config layer: 30 unit + 1 sanity (production config parsing) = 31 tests
+  - Orchestration layer: 35 unit + 11 integration (discovery, Orchestrator flow) = 46 tests
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces

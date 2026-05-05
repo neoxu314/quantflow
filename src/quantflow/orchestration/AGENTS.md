@@ -31,3 +31,15 @@ orchestration/
 - Calls `Executor.execute(job)` from the Execution Layer.
 - Uses `MarkdownReporter` to generate both per-task and combined reports.
 - Uses `Storage` to save `Combined_Results.json`.
+
+## TESTS
+
+| Category | Test File(s) | Tests | Type |
+|----------|--------------|-------|------|
+| Strategy registry | `tests/orchestration/test_registry.py` | 12 | Unit (lookup, invalid IDs, inheritance) |
+| Task config loader | `tests/orchestration/test_task_config.py` | 10 | Unit (YAML parsing, defaults, missing file) |
+| Orchestrator flow | `tests/orchestration/test_orchestrator.py` | 13 | Integration (run loop, daily mode, task failure, reports) |
+| Indicator discovery | `tests/orchestration/test_discovery.py` | 7 | Integration (standard + custom indicator metadata) |
+| Lookback integration | `tests/orchestration/test_orchestration.py` | 4 | Integration (real indicator instances with formula) |
+
+Run: `pytest tests/orchestration/ -v` for all orchestration tests.
