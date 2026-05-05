@@ -227,7 +227,6 @@ class TestConfigLoaderGetDefaults:
         assert "us" in defaults["data"]["markets"]
         assert "hk" in defaults["data"]["markets"]
         assert defaults["data"]["defaults"]["adjust"] == "qfq"
-        assert defaults["data"]["defaults"]["period"] == "d"
         assert defaults["logging"]["level"] == "INFO"
 
     def test_defaults_primary_sources(self):

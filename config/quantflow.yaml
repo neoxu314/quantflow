@@ -17,7 +17,6 @@ data:
       primary: akshare
   defaults:
     adjust: qfq
-    period: d
 tushare:
   token: ''
 logging:

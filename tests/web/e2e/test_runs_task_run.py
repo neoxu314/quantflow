@@ -371,7 +371,7 @@ class TestRunsTaskRunWorkflow:
         run_item.click()
         page.wait_for_selector("#runs-detail", state="visible")
 
-page.click('[data-runtab="files"]')
+        page.click('[data-runtab="files"]')
         page.wait_for_timeout(2000)
         
         # IMPROVED VALIDATION: Check specific file names

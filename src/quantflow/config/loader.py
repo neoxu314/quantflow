@@ -77,7 +77,7 @@ class ConfigLoader:
                     "kr": {"primary": "yfinance"},
                     "sector": {"primary": "akshare"},
                 },
-                "defaults": {"adjust": "qfq", "period": "d"},
+                "defaults": {"adjust": "qfq"},
             },
             "logging": {"level": "INFO"},
         }
