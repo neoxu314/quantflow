@@ -317,7 +317,11 @@ function renderFilesTab(run) {
             panel.innerHTML = '<div class="text-gray-500 text-center py-8">No files</div>';
             return;
         }
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm">
+        let html = `<div class="mb-3 flex justify-between items-center">
+                <span class="text-sm text-gray-500 font-mono">${run.output_path}</span>
+                <button onclick="openFolder('${run.id}')" class="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700">📁 Open Folder</button>
+            </div>`;
+        html += `<table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">File</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody>`;
@@ -582,6 +586,20 @@ function appendLog(container, message, level) {
 }
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => toast("Path copied"));
+}
+async function openFolder(runId) {
+    try {
+        const res = await api(`/api/runs/${runId}/open-folder`, { method: "POST" });
+        if (res.ok) {
+            toast("Folder opened");
+        }
+        else {
+            toast(res.message || "Failed to open folder");
+        }
+    }
+    catch (e) {
+        toast(`Error: ${e.message}`);
+    }
 }
 function runAgain(runId) {
     const orig = state.runsList.find(r => r.id === runId);
@@ -1560,6 +1578,7 @@ function setupEventListeners() {
     window.copyToClipboard = copyToClipboard;
     window.runAgain = runAgain;
     window.deleteRun = deleteRun;
+    window.openFolder = openFolder;
     // Browse directory buttons
     document.getElementById("btn-browse-dir")?.addEventListener("click", () => {
         const input = document.getElementById("run-output-path");

@@ -58,7 +58,7 @@ quantflow/
 | Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
 | Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` (reserved, not actively used) |
 | Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
-| Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data |
+| Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data, files, open-folder |
 | Runs engine | `web/engine/run_engine.py` | stock_scan (indicator output), watchlist_run, task_run |
 | Run history | `web/engine/run_history.py` | SQLite persistence for execution history |
 
@@ -120,7 +120,7 @@ python -m quantflow.cli web
   - `/api/config` (GET + PUT system config)
   - `/api/strategies` (read-only)
   - `/api/library/*` (library catalog: strategies + indicators + param updates)
-  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel, queue)
+  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel, queue, open-folder)
   - `/api/presets/` (GET, POST, PUT, DELETE, run from preset)
   - `/api/browse/` (directory browsing for file picker, mkdir)
 - **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)

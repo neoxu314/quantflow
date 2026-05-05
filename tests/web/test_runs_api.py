@@ -219,6 +219,55 @@ class TestFilesEndpoint:
         assert r.status_code == 404
 
 
+class TestOpenFolderEndpoint:
+    def test_open_folder_success(self, client, tmp_path):
+        folder = tmp_path / "output_test"
+        folder.mkdir()
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", output_path=str(folder))
+        r2 = client.post(f"/api/runs/{rid}/open-folder")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["ok"] is True
+        assert data["path"] == str(folder)
+
+    def test_open_folder_no_output_path(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        r2 = client.post(f"/api/runs/{rid}/open-folder")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["ok"] is False
+        assert "No output path" in data["message"]
+
+    def test_open_folder_nonexistent_path(self, client, tmp_path):
+        fake_path = str(tmp_path / "does_not_exist")
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", output_path=fake_path)
+        r2 = client.post(f"/api/runs/{rid}/open-folder")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["ok"] is False
+        assert "does not exist" in data["message"]
+
+    def test_open_folder_nonexistent_run(self, client):
+        r = client.post("/api/runs/nonexistent-id/open-folder")
+        assert r.status_code == 404
+
+
 class TestTaskRunNaming:
     def test_task_run_auto_name(self, client, tmp_path):
         from quantflow.web.engine import preflight

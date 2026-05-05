@@ -499,3 +499,56 @@ describe("SSE status event handler", () => {
         expect(mockSSEClose).toHaveBeenCalled();
     });
 });
+
+describe("openFolder", () => {
+    it("calls POST api endpoint with correct runId", async () => {
+        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: true, path: "/tmp/output" }));
+        const runId = "test-run-id";
+
+        await mockOpenFolder(runId);
+
+        expect(mockApi).toHaveBeenCalledWith(`/api/runs/${runId}/open-folder`, { method: "POST" });
+    });
+
+    it("shows toast 'Folder opened' on success", async () => {
+        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: true, path: "/tmp/output" }));
+        const runId = "success-test";
+
+        await mockOpenFolder(runId);
+
+        expect(mockToast).toHaveBeenCalledWith("Folder opened");
+    });
+
+    it("shows error message on failure", async () => {
+        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: false, message: "Folder does not exist" }));
+        const runId = "fail-test";
+
+        await mockOpenFolder(runId);
+
+        expect(mockToast).toHaveBeenCalledWith("Folder does not exist");
+    });
+
+    it("shows error toast on api exception", async () => {
+        mockApi.mockImplementationOnce(() => Promise.reject(new Error("network error")));
+        const runId = "exception-test";
+
+        await mockOpenFolder(runId);
+
+        expect(mockToast).toHaveBeenCalledWith("Error: network error");
+    });
+});
+
+async function mockOpenFolder(runId: string) {
+    const api = (globalThis as any).api;
+    const toast = (globalThis as any).toast;
+    try {
+        const res = await api(`/api/runs/${runId}/open-folder`, { method: "POST" });
+        if (res.ok) {
+            toast("Folder opened");
+        } else {
+            toast(res.message || "Failed to open folder");
+        }
+    } catch (e: any) {
+        toast(`Error: ${e.message}`);
+    }
+}

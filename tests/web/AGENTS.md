@@ -60,7 +60,7 @@ tests/web/
 ├── test_web_config.py       # WebConfig loading tests
 ├── frontend/                # Frontend TypeScript unit tests (Vitest)
 │   ├── utils.test.ts        # 49 unit tests for pure functions
-│   ├── app.test.ts          # 29 unit tests for app pure functions
+│   ├── app.test.ts          # 33 unit tests for app pure functions
 │   ├── vitest.config.ts     # Vitest configuration with @utils alias
 │   ├── tsconfig.json        # TypeScript configuration
 │   └── package.json         # npm dependencies (vitest, typescript)
@@ -86,7 +86,7 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 90 E2E tests + 13 Python test files (190 tests) + 78 frontend unit tests**
+**Total: 90 E2E tests + 13 Python test files (194 tests) + 82 frontend unit tests**
 
 ## Test Categories
 
@@ -97,7 +97,7 @@ src/quantflow/web/static/
 | Task API | `test_task_api.py` | 10 | CRUD, duplicate rejection, path traversal |
 | Library API | `test_library_api.py` | 9 | Strategies, indicators, param updates + round-trip |
 | Browse API | `test_browse_api.py` | 19 | Directory listing, mkdir, permissions, sorting |
-| Runs API | `test_runs_api.py` | 27 | CRUD, report, indicator-data, cancel, presets, helpers |
+| Runs API | `test_runs_api.py` | 41 | CRUD, report, indicator-data, cancel, presets, open-folder, helpers |
 | Runs Engine | `test_runs_engine.py` | 34 | RunHistory, RunQueue, SSE, Preflight, Presets |
 | Runs Integration | `test_runs_integration.py` | 18 | API→DB→API, file cleanup, output isolation |
 | NaN Serialization | `test_nan_serialization.py` | 11 | NaN/datetime/integer/string/inf handling |
@@ -118,7 +118,7 @@ src/quantflow/web/static/
 | Browse E2E | `test_browse_api.py` | 8 | Directory listing, mkdir, parent nav |
 | Presets E2E | `test_presets.py` | 8 | CRUD, run from preset, persistence, validation |
 | Frontend Utils | `utils.test.ts` | 49 | Pure functions (MARKET_SUFFIX, get/setNestedValue, formatStockCode) |
-| Frontend App | `app.test.ts` | 29 | Pure app functions (render helpers, formatters) |
+| Frontend App | `app.test.ts` | 33 | Pure app functions (render helpers, formatters, openFolder) |
 
 ### Frontend Unit Tests (utils.test.ts)
 

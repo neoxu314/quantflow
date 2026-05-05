@@ -171,6 +171,37 @@ def get_indicator_data(run_id: str):
     }
 
 
+@router.post("/{run_id}/open-folder")
+def open_folder(run_id: str):
+    """Open the output folder in system file browser."""
+    import platform
+    import subprocess
+
+    run = _get_engine()._history.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    folder_path = run.output_path
+    if not folder_path:
+        return {"ok": False, "message": "No output path"}
+
+    p = Path(folder_path)
+    if not p.exists():
+        return {"ok": False, "message": "Folder does not exist"}
+
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.run(["open", str(p)], check=True)
+        elif system == "Windows":
+            subprocess.run(["explorer", str(p)], check=True)
+        else:
+            subprocess.run(["xdg-open", str(p)], check=True)
+        return {"ok": True, "path": str(p)}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
 @router.get("/{run_id}/files")
 def get_files(run_id: str):
     run = _get_engine()._history.get_run(run_id)

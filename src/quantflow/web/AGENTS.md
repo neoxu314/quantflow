@@ -11,7 +11,7 @@ web/
 │   ├── tasks.py         # GET/POST/PUT/DELETE tasks, task-files
 │   ├── config.py        # GET/PUT system config
 │   ├── library.py       # Strategy/indicator catalog, parameter updates
-│   ├── runs.py          # Run CRUD, preflight, SSE logs, indicator data, files, cancel, queue
+│   ├── runs.py          # Run CRUD, preflight, SSE logs, indicator data, files, cancel, queue, open-folder
 │   ├── presets.py       # Preset CRUD + run from preset
 │   └── browse.py        # Directory browsing + mkdir
 ├── engine/              # Core execution engine
