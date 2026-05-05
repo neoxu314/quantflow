@@ -369,6 +369,7 @@ class TestCrossRunTypeFileCleanup:
             report_path=str(d / "Daily_Report.md"))
         (d / "Combined_Results.json").write_text("[]")
         (d / "Daily_Report.md").write_text("# Report")
+        (d / "TR Cleanup.json").write_text("{\"results\": []}")  # Executor output
 
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
@@ -376,6 +377,7 @@ class TestCrossRunTypeFileCleanup:
         # Task outputs deleted
         assert not (d / "Daily_Report.md").exists()
         assert not (d / "Combined_Results.json").exists()
+        assert not (d / "TR Cleanup.json").exists()  # Executor output also deleted
         
         # User file preserved
         assert user_file.exists()
@@ -434,6 +436,7 @@ class TestCrossRunTypeFileCleanup:
         
         (date_dir / "Daily_Report.md").write_text("# Report")
         (date_dir / "Combined_Results.json").write_text("[]")
+        (date_dir / "Daily Cleanup.json").write_text("{\"results\": []}")  # Executor output
         
         # Simulate daily mode paths
         h.update_status(rid, "completed",
@@ -448,6 +451,7 @@ class TestCrossRunTypeFileCleanup:
         assert not date_dir.exists(), "Date subdirectory should be deleted"
         assert not (date_dir / "Daily_Report.md").exists()
         assert not (date_dir / "Combined_Results.json").exists()
+        assert not (date_dir / "Daily Cleanup.json").exists()  # Executor output also deleted
         
         # User file in base directory preserved
         assert user_config.exists()

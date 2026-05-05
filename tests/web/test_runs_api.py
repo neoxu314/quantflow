@@ -183,9 +183,11 @@ class TestDeleteRunApi:
         task_report = output_dir / "Daily_Report.md"
         combined_json = output_dir / "Combined_Results.json"
         task_md = output_dir / "test_task.md"
+        task_json = output_dir / "test_task.json"  # Executor output
         task_report.write_text("# Report")
         combined_json.write_text("{\"signals\": []}")
         task_md.write_text("# Task Report")
+        task_json.write_text("{\"results\": []}")
         
         # Create task config file
         config_dir = tmp_path / "config"
@@ -238,6 +240,7 @@ class TestDeleteRunApi:
         assert not task_report.exists()
         assert not combined_json.exists()
         assert not task_md.exists()
+        assert not task_json.exists()  # Executor output also deleted
         
         # Verify: user files preserved
         assert user_photo.exists()
@@ -263,8 +266,10 @@ class TestDeleteRunApi:
         # Task outputs in date subdirectory (should be deleted)
         task_report = date_dir / "Daily_Report.md"
         combined_json = date_dir / "Combined_Results.json"
+        task_json = date_dir / "test_task.json"  # Executor output
         task_report.write_text("# Report")
         combined_json.write_text("{\"signals\": []}")
+        task_json.write_text("{\"results\": []}")
         
         # Create task config
         config_dir = tmp_path / "config"
@@ -314,6 +319,7 @@ class TestDeleteRunApi:
         assert not date_dir.exists()
         assert not task_report.exists()
         assert not combined_json.exists()
+        assert not task_json.exists()  # Executor output also deleted
         
         # Verify: user files in base output_dir preserved
         assert user_file.exists()

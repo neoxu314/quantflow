@@ -186,6 +186,10 @@ def _delete_task_run_outputs(run, output_dir: Path):
         base_dir / "Combined_Results.json",
     ]
     
+    # Always delete run.name.json (Executor output for single-task runs)
+    # This covers cases where task_config is missing or invalid
+    files_to_delete.append(base_dir / f"{run.name}.json")
+    
     # Load task config to get task names (for additional task reports)
     task_config_path = run.config.get("task_config")
     if task_config_path:
@@ -202,6 +206,7 @@ def _delete_task_run_outputs(run, output_dir: Path):
             
             for task_name in task_names:
                 files_to_delete.append(base_dir / f"{task_name}.md")
+                files_to_delete.append(base_dir / f"{task_name}.json")  # Executor output
         except Exception:
             # Failed to load, continue with generic files only
             pass
