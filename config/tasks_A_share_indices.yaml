@@ -1,0 +1,13 @@
+tasks:
+- name: chuangye
+  watchlist: watchlists/chuangyeban.yaml
+  strategies:
+  - daily_bull_oversold
+- name: hushen
+  watchlist: watchlists/hushen_300.yaml
+  strategies:
+  - daily_bull_oversold
+- name: zhongzheng
+  watchlist: watchlists/zhongzheng_500.yaml
+  strategies:
+  - daily_bull_oversold
