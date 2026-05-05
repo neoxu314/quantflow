@@ -7,9 +7,17 @@
 pytest tests/web/ -v                          # All tests (API + Integration + E2E)
 pytest tests/web/ -v --ignore=tests/web/e2e/  # API + Integration only (fast)
 pytest tests/web/e2e/ -v                      # E2E browser tests only (slow)
-pytest tests/web/e2e/test_data_boundary.py -v # Data boundary tests only
-pytest tests/web/e2e/test_yaml_sync.py -v     # YAML sync tests only
-pytest tests/web/test_config_api.py -v        # Single file
+pytest tests/web/e2e/test_runs_stock_scan.py -v    # Stock scan E2E only
+pytest tests/web/e2e/test_runs_cancel.py -v       # Cancel flow E2E only
+pytest tests/web/e2e/test_runs_indicator_data.py -v # Indicator data E2E only
+pytest tests/web/e2e/test_presets.py -v             # Presets E2E only
+pytest tests/web/e2e/test_runs_queue.py -v          # Queue E2E only
+pytest tests/web/e2e/test_browse_api.py -v          # Browse E2E only
+pytest tests/web/e2e/test_data_boundary.py -v       # Data boundary tests only
+pytest tests/web/e2e/test_yaml_sync.py -v           # YAML sync tests only
+pytest tests/web/test_runs_api.py -v            # Runs API tests only
+pytest tests/web/test_browse_api.py -v          # Browse API tests only
+pytest tests/web/test_config_api.py -v          # Single file
 
 # Frontend TypeScript unit tests (Vitest)
 cd tests/web/frontend && npm install   # Install dependencies
@@ -44,8 +52,15 @@ tests/web/
 ├── test_integration.py      # API→filesystem→API round-trip integration tests
 ├── test_static_serving.py   # Static file serving + 404 + security tests
 ├── test_library_api.py      # Library API unit tests (strategies + indicators + params)
+├── test_browse_api.py       # Browse API unit tests (directory listing + mkdir)
+├── test_runs_api.py         # Runs API unit tests (CRUD, report, indicator-data, cancel, presets)
+├── test_runs_engine.py      # Engine unit tests (RunHistory, RunQueue, SSE, Preflight, Presets)
+├── test_runs_integration.py # Runs integration tests (API→DB→API round-trip, file cleanup)
+├── test_nan_serialization.py # NaN handling in indicator DataFrame serialization
+├── test_web_config.py       # WebConfig loading tests
 ├── frontend/                # Frontend TypeScript unit tests (Vitest)
 │   ├── utils.test.ts        # 49 unit tests for pure functions
+│   ├── app.test.ts          # 29 unit tests for app pure functions
 │   ├── vitest.config.ts     # Vitest configuration with @utils alias
 │   ├── tsconfig.json        # TypeScript configuration
 │   └── package.json         # npm dependencies (vitest, typescript)
@@ -54,7 +69,16 @@ tests/web/
     ├── test_web_ui.py       # 22 basic UI tests (page load, create, navigation)
     ├── test_data_boundary.py # 8 data boundary tests (cancel without save, switch tab, refresh)
     ├── test_yaml_sync.py    # 11 YAML sync tests (edit→YAML consistency, format preservation)
-    └── test_error_handling.py # 7 error handling tests (500 error, network fail, validation)
+    ├── test_error_handling.py # 7 error handling tests (500 error, network fail, validation)
+    ├── test_runs_stock_scan.py     # 2 stock scan lifecycle E2E tests
+    ├── test_runs_watchlist_run.py  # 2 watchlist run lifecycle E2E tests
+    ├── test_runs_task_run.py       # 5 task run lifecycle E2E tests
+    ├── test_runs_cancel.py         # 4 cancel flow E2E tests
+    ├── test_runs_indicator_data.py # 6 indicator data accuracy E2E tests
+    ├── test_runs_watchlist_preflight.py # 4 watchlist preflight validation E2E tests
+    ├── test_runs_queue.py          # 3 queue ordering E2E tests
+    ├── test_browse_api.py          # 8 browse API E2E tests
+    └── test_presets.py             # 8 presets CRUD + run-from-preset E2E tests
 
 src/quantflow/web/static/
 ├── app.ts                   # Main frontend app (imports from utils.ts)
@@ -62,17 +86,39 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 48 E2E tests + 11 API test files + 49 frontend unit tests**
+**Total: 90 E2E tests + 13 Python test files (190 tests) + 78 frontend unit tests**
 
 ## Test Categories
 
 | Category | File | Tests | Purpose |
 |----------|------|-------|---------|
-| Basic UI | `test_web_ui.py` | 22 | Page loads, tab navigation, create/delete operations |
-| Data Boundary | `test_data_boundary.py` | 8 | Cancel without save, switch tab mid-edit, sequential saves |
-| YAML Sync | `test_yaml_sync.py` | 11 | Edit→YAML round-trip, unicode, field order preservation |
+| Config API | `test_config_api.py` | 12 | GET/PUT round-trip, YAML format preservation |
+| Watchlist API | `test_watchlist_api.py` | 9 | CRUD, search, fuzzy match, path traversal |
+| Task API | `test_task_api.py` | 10 | CRUD, duplicate rejection, path traversal |
+| Library API | `test_library_api.py` | 9 | Strategies, indicators, param updates + round-trip |
+| Browse API | `test_browse_api.py` | 19 | Directory listing, mkdir, permissions, sorting |
+| Runs API | `test_runs_api.py` | 27 | CRUD, report, indicator-data, cancel, presets, helpers |
+| Runs Engine | `test_runs_engine.py` | 34 | RunHistory, RunQueue, SSE, Preflight, Presets |
+| Runs Integration | `test_runs_integration.py` | 18 | API→DB→API, file cleanup, output isolation |
+| NaN Serialization | `test_nan_serialization.py` | 11 | NaN/datetime/integer/string/inf handling |
+| Integration | `test_integration.py` | 13 | Watchlist + Task API→filesystem round-trip |
+| Static Serving | `test_static_serving.py` | 4 | HTML/JS serving, 404, path traversal |
+| Web Config | `test_web_config.py` | 3 | WebConfig loading from YAML |
+| Basic UI | `test_web_ui.py` | 22 | Page loads, tab navigation, create/delete |
+| Data Boundary | `test_data_boundary.py` | 8 | Cancel without save, switch tab, sequential saves |
+| YAML Sync | `test_yaml_sync.py` | 11 | Edit→YAML round-trip, unicode, field order |
 | Error Handling | `test_error_handling.py` | 7 | Server 500, network disconnect, invalid input |
-| Frontend Utils | `utils.test.ts` | 49 | Pure function unit tests (MARKET_SUFFIX, getNestedValue, setNestedValue, formatStockCode) |
+| Stock Scan E2E | `test_runs_stock_scan.py` | 2 | Full lifecycle + modal reset |
+| Watchlist Run E2E | `test_runs_watchlist_run.py` | 2 | Full lifecycle + type lock |
+| Task Run E2E | `test_runs_task_run.py` | 5 | Full lifecycle, daily mode, progress, file isolation |
+| Cancel E2E | `test_runs_cancel.py` | 4 | Cancel active/queued runs, delete cancelled |
+| Indicator Data E2E | `test_runs_indicator_data.py` | 6 | JSON validity, NaN check, bar_count, files |
+| Preflight E2E | `test_runs_watchlist_preflight.py` | 4 | Empty watchlist, invalid strategy, validate_only |
+| Queue E2E | `test_runs_queue.py` | 3 | Active+pending status, sequential completion |
+| Browse E2E | `test_browse_api.py` | 8 | Directory listing, mkdir, parent nav |
+| Presets E2E | `test_presets.py` | 8 | CRUD, run from preset, persistence, validation |
+| Frontend Utils | `utils.test.ts` | 49 | Pure functions (MARKET_SUFFIX, get/setNestedValue, formatStockCode) |
+| Frontend App | `app.test.ts` | 29 | Pure app functions (render helpers, formatters) |
 
 ### Frontend Unit Tests (utils.test.ts)
 
@@ -140,3 +186,8 @@ This guarantees production configs are byte-identical to pre-test state even if 
 6. **Error handling?** → Add to `e2e/test_error_handling.py`
 7. **New static file?** → Add test to `test_static_serving.py`
 8. **New frontend utility function?** → Add to `src/quantflow/web/static/utils.ts` + `tests/web/frontend/utils.test.ts`
+9. **Run/execution logic changed?** → Add to `test_runs_api.py` (API) or `test_runs_engine.py` (engine)
+10. **New run lifecycle scenario?** → Add E2E to `e2e/test_runs_*.py`
+11. **Browse API changed?** → Add to `test_browse_api.py` (unit) or `e2e/test_browse_api.py` (E2E)
+12. **Preset behavior changed?** → Add to `test_runs_api.py` (unit) or `e2e/test_presets.py` (E2E)
+13. **Indicator serialization changed?** → Add to `test_nan_serialization.py`

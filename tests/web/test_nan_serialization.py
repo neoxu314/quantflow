@@ -96,3 +96,46 @@ class TestSerializeNaN:
         assert result[1]["close"] == 200.0
         assert result[1]["K"] is None
         assert result[1]["is_bull_zone"] is False
+
+    def test_datetime_serialization(self):
+        """datetime objects get isoformat."""
+        from datetime import datetime
+        df = pd.DataFrame({
+            "close": [100.0],
+            "date": [pd.Timestamp("2025-01-15")],
+        })
+        data = self._serialize_df(df)
+        assert isinstance(data[0]["date"], str)
+        assert "2025-01-15" in data[0]["date"]
+
+    def test_integer_values_preserved(self):
+        """Integer columns stay as integers."""
+        df = pd.DataFrame({
+            "volume": [1000000],
+            "close": [100.0],
+        })
+        data = self._serialize_df(df)
+        assert data[0]["volume"] == 1000000
+
+    def test_string_values_preserved(self):
+        """String columns stay as strings."""
+        df = pd.DataFrame({
+            "code": ["NVDA.US"],
+            "close": [100.0],
+        })
+        data = self._serialize_df(df)
+        assert data[0]["code"] == "NVDA.US"
+
+    def test_empty_dataframe(self):
+        """Empty DataFrame returns empty list."""
+        df = pd.DataFrame(columns=["close"])
+        data = self._serialize_df(df)
+        assert data == []
+
+    def test_inf_values(self):
+        """inf values are serialized (not NaN)."""
+        import math
+        df = pd.DataFrame({"close": [float("inf"), float("-inf")]})
+        data = self._serialize_df(df)
+        assert math.isinf(data[0]["close"])
+

@@ -169,7 +169,9 @@ class RunEngine:
         df = IndicatorComposer(indicators).compose(df)
 
         if "date" in df.columns:
-            dt_col = pd.to_datetime(df["date"])
+            # YFinance adds exchange-local timezone; strip it so date comparison
+            # with user-supplied strings works uniformly across all markets.
+            dt_col = pd.to_datetime(df["date"]).dt.tz_localize(None)
             mask = (dt_col >= pd.Timestamp(start_date)) & (dt_col <= pd.Timestamp(end_date))
             matched = mask.sum()
             if matched > 0:

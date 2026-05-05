@@ -5,7 +5,10 @@ src/quantflow/web/static/dist/
 src/quantflow/web/static/utils.js
 data/sectors/
 
+# Test artifacts and local data
+output/
 # E2E test artifacts
+
 config/quantflow.yaml.bak
 config/indicators.yaml.bak
 config/tasks_e2e_test.yaml

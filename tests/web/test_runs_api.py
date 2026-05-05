@@ -271,3 +271,311 @@ class TestMdToHtmlFrontend:
         md_body = "\n".join(lines[md_start:md_end + 1])
         assert "<li" in md_body
         assert "list-disc" in md_body
+
+
+class TestGetReportEndpoint:
+    def test_get_report_no_run(self, client):
+        r = client.get("/api/runs/nonexistent-id/report")
+        assert r.status_code == 404
+
+    def test_get_report_no_report_path(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed")
+        r2 = client.get(f"/api/runs/{rid}/report")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["report"] is None
+        assert data["message"] == "No report available"
+
+    def test_get_report_file_not_found(self, client, tmp_path):
+        fake_path = str(tmp_path / "missing.md")
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", report_path=fake_path)
+        r2 = client.get(f"/api/runs/{rid}/report")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["report"] is None
+        assert data["message"] == "Report file not found"
+
+    def test_get_report_success(self, client, tmp_path):
+        report_file = tmp_path / "report.md"
+        report_file.write_text("# Test Report\nHello world.")
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", report_path=str(report_file))
+        r2 = client.get(f"/api/runs/{rid}/report")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["report"] == "# Test Report\nHello world."
+        assert data["path"] == str(report_file)
+
+
+class TestGetIndicatorDataEndpoint:
+    def test_indicator_data_not_stock_scan(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "watchlist_run",
+            "watchlist": "watchlists/djia.yaml",
+            "strategies": ["daily_bull_oversold"],
+        })
+        rid = r.json()["run_id"]
+        r2 = client.get(f"/api/runs/{rid}/indicator-data")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["data"] is None
+        assert data["message"] == "Not a stock scan run"
+
+    def test_indicator_data_no_data_path(self, client):
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        r2 = client.get(f"/api/runs/{rid}/indicator-data")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["data"] is None
+        assert data["message"] == "No data available"
+
+    def test_indicator_data_file_not_found(self, client, tmp_path):
+        fake_path = str(tmp_path / "missing.json")
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", report_path=fake_path)
+        r2 = client.get(f"/api/runs/{rid}/indicator-data")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["data"] is None
+        assert data["message"] == "Data file not found"
+
+    def test_indicator_data_success(self, client, tmp_path):
+        data_file = tmp_path / "indicator_data.json"
+        import json
+        sample_data = [
+            {"date": "2025-01-01", "kdj_k": 50.0, "kdj_d": 45.0},
+            {"date": "2025-01-02", "kdj_k": 55.0, "kdj_d": 48.0},
+        ]
+        data_file.write_text(json.dumps(sample_data))
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", report_path=str(data_file))
+        r2 = client.get(f"/api/runs/{rid}/indicator-data")
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["data"] == sample_data
+        assert data["code"] == "NVDA.US"
+        assert data["bar_count"] == 2
+
+
+class TestCancelRunEndpoint:
+    def test_cancel_pending_run(self, client):
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
+
+        h = run_history.RunHistory()
+        sse = SSEManager()
+        queue = RunQueue(on_run_available=lambda rid: None)
+        engine = RunEngine(queue=queue, history=h, sse=sse)
+        runs_api._set_engine(engine)
+
+        r1 = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid1 = r1.json()["run_id"]
+        assert r1.json()["status"] == "active"
+
+        r2 = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "AAPL.US",
+        })
+        rid2 = r2.json()["run_id"]
+        assert r2.json()["status"] == "queued"
+
+        r3 = client.post(f"/api/runs/{rid2}/cancel")
+        assert r3.json()["ok"] is True
+        run2 = h.get_run(rid2)
+        assert run2.status == "cancelled"
+
+    def test_cancel_active_run(self, client):
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
+
+        h = run_history.RunHistory()
+        sse = SSEManager()
+        queue = RunQueue(on_run_available=lambda rid: None)
+        engine = RunEngine(queue=queue, history=h, sse=sse)
+        runs_api._set_engine(engine)
+
+        r = client.post("/api/runs/", json={
+            "run_type": "stock_scan",
+            "code": "NVDA.US",
+        })
+        rid = r.json()["run_id"]
+        assert r.json()["status"] == "active"
+
+        r2 = client.post(f"/api/runs/{rid}/cancel")
+        assert r2.json()["ok"] is True
+        run = h.get_run(rid)
+        assert run.status == "cancelled"
+
+    def test_cancel_nonexistent_run(self, client):
+        """Cancel for a run not in queue returns 200 (queue.active != run_id).
+        
+        NOTE: The cancel endpoint creates a cancelled status record even for
+        nonexistent run IDs because queue.active (None) != the fake run_id.
+        This is a known API issue — cancel should first verify the run exists.
+        """
+        r = client.post("/api/runs/fake-id/cancel")
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+
+class TestBuildConfigFunction:
+    def test_build_config_stock_scan_all_fields(self):
+        from quantflow.web.api.runs import _build_config
+        body = {
+            "code": "NVDA.US",
+            "start_date": "2025-01-01",
+            "end_date": "2025-03-01",
+            "indicators": ["macd", "rsi"],
+            "output_path": "/tmp/output",
+        }
+        result = _build_config("stock_scan", body)
+        assert result == {
+            "code": "NVDA.US",
+            "start_date": "2025-01-01",
+            "end_date": "2025-03-01",
+            "indicators": ["macd", "rsi"],
+            "output_path": "/tmp/output",
+        }
+
+    def test_build_config_stock_scan_defaults(self):
+        from quantflow.web.api.runs import _build_config
+        result = _build_config("stock_scan", {"code": "NVDA.US"})
+        assert result["code"] == "NVDA.US"
+        assert result["start_date"] is None
+        assert result["end_date"] is None
+        assert result["indicators"] == ["kdj", "dual_line"]
+        assert result["output_path"] is None
+
+    def test_build_config_watchlist_run(self):
+        from quantflow.web.api.runs import _build_config
+        body = {
+            "watchlist": "watchlists/djia.yaml",
+            "strategies": ["daily_bull_oversold"],
+            "output_path": "/tmp/output",
+        }
+        result = _build_config("watchlist_run", body)
+        assert result == {
+            "watchlist": "watchlists/djia.yaml",
+            "strategies": ["daily_bull_oversold"],
+            "output_path": "/tmp/output",
+        }
+
+    def test_build_config_task_run(self):
+        from quantflow.web.api.runs import _build_config
+        body = {
+            "task_config": "config/tasks_us_mac.yaml",
+            "output_path": "/tmp/output",
+        }
+        result = _build_config("task_run", body)
+        assert result["task_config"] == "config/tasks_us_mac.yaml"
+        assert result["output_path"] == "/tmp/output"
+        assert result["daily"] is False
+
+    def test_build_config_unknown_type(self):
+        from quantflow.web.api.runs import _build_config
+        result = _build_config("unknown_type", {"foo": "bar"})
+        assert result == {}
+
+    def test_build_config_presets_fields(self):
+        from quantflow.web.api.runs import _build_config
+        body = {
+            "code": "NVDA.US",
+            "validate_only": True,
+            "name": "Custom Name",
+            "preset_id": "preset-123",
+        }
+        result = _build_config("stock_scan", body)
+        assert "validate_only" not in result
+        assert "name" not in result
+        assert "preset_id" not in result
+        assert result["code"] == "NVDA.US"
+
+
+class TestToDictFunction:
+    def test_to_dict_all_fields(self):
+        from quantflow.web.api.runs import _to_dict
+
+        class FakeRun:
+            id = "run-1"
+            name = "Test Run"
+            run_type = "stock_scan"
+            config = {"code": "NVDA.US"}
+            status = "completed"
+            created_at = "2025-01-01T00:00:00+00:00"
+            started_at = "2025-01-01T00:01:00+00:00"
+            finished_at = "2025-01-01T00:02:00+00:00"
+            duration_ms = 60000
+            error = None
+            output_path = "/tmp/output"
+            report_path = "/tmp/report.md"
+            signal_count = 3
+            preset_id = "preset-123"
+
+        result = _to_dict(FakeRun())
+        assert result == {
+            "id": "run-1",
+            "name": "Test Run",
+            "run_type": "stock_scan",
+            "config": {"code": "NVDA.US"},
+            "status": "completed",
+            "created_at": "2025-01-01T00:00:00+00:00",
+            "started_at": "2025-01-01T00:01:00+00:00",
+            "finished_at": "2025-01-01T00:02:00+00:00",
+            "duration_ms": 60000,
+            "error": None,
+            "output_path": "/tmp/output",
+            "report_path": "/tmp/report.md",
+            "signal_count": 3,
+            "preset_id": "preset-123",
+        }
+
+
+class TestAutoNameFunction:
+    def test_auto_name_stock_scan(self):
+        from quantflow.web.api.runs import _auto_name
+        result = _auto_name("stock_scan", {"code": "NVDA.US"})
+        assert result == "NVDA.US Scan"
+
+    def test_auto_name_watchlist_run(self):
+        from quantflow.web.api.runs import _auto_name
+        result = _auto_name("watchlist_run", {"watchlist": "watchlists/my_watchlist.yaml"})
+        assert result == "my_watchlist Monitor"
+
+    def test_auto_name_task_run(self):
+        from quantflow.web.api.runs import _auto_name
+        result = _auto_name("task_run", {"task_config": "config/tasks_us_mac.yaml"})
+        assert result == "tasks_us_mac Task"

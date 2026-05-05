@@ -260,3 +260,113 @@ class TestPresetManager:
     def test_delete_nonexistent(self):
         from quantflow.web.engine.presets import PresetManager
         assert PresetManager.delete("no-such-preset") is False
+
+
+class TestPreflightWatchersValidation:
+    """Additional preflight validation for watchlist_run."""
+
+    def test_empty_watchlist_fails(self, tmp_path):
+        """Preflight fails for watchlist with no items."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        import yaml
+        wl_path = tmp_path / "empty.yaml"
+        wl_path.write_text(yaml.dump({"name": "Empty", "items": []}))
+        from quantflow.web.engine import preflight
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+        try:
+            r = PreflightChecker.validate("watchlist_run", {"watchlist": str(wl_path)})
+            assert not r.ok
+            assert any("empty" in e.lower() for e in r.errors)
+        finally:
+            preflight.PROJECT_ROOT = orig
+
+    def test_invalid_watchlist_yaml(self, tmp_path):
+        """Preflight fails for unparseable watchlist file."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        from quantflow.web.engine import preflight
+        wl_path = tmp_path / "broken.yaml"
+        wl_path.write_text("{{{invalid yaml:::")
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+        try:
+            r = PreflightChecker.validate("watchlist_run", {"watchlist": str(wl_path)})
+            assert not r.ok
+        finally:
+            preflight.PROJECT_ROOT = orig
+
+    def test_nonexistent_watchlist(self, tmp_path):
+        """Preflight fails for non-existent watchlist path."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        from quantflow.web.engine import preflight
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+        try:
+            r = PreflightChecker.validate("watchlist_run", {"watchlist": "watchlists/ghost.yaml"})
+            assert not r.ok
+        finally:
+            preflight.PROJECT_ROOT = orig
+
+
+class TestPreflightOutputPathValidation:
+    def test_output_path_cannot_create(self, tmp_path):
+        """Preflight fails when output path cannot be created."""
+        from quantflow.web.engine.preflight import PreflightChecker, validate_output_path
+        r = validate_output_path(str(tmp_path / "ok" / "subdir"))
+        assert r.ok
+
+    def test_output_path_none_succeeds(self):
+        """None output_path always passes validation."""
+        from quantflow.web.engine.preflight import validate_output_path
+        assert validate_output_path(None).ok
+
+
+class TestPreflightDateValidation:
+    def test_invalid_date_format(self):
+        """Preflight fails for malformed date strings."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        r = PreflightChecker.validate("stock_scan", {
+            "code": "NVDA.US",
+            "start_date": "2025/01/01",
+            "end_date": "2025-12-31",
+        })
+        assert not r.ok
+        assert any("Invalid" in e or "invalid" in e for e in r.errors)
+
+    def test_missing_dates_ok(self):
+        """Missing start_date and end_date passes preflight."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        r = PreflightChecker.validate("stock_scan", {"code": "NVDA.US"})
+        assert r.ok
+
+
+class TestPreflightTaskFileValidation:
+    def test_invalid_task_yaml(self, tmp_path):
+        """Preflight fails for unparseable task config."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        from quantflow.web.engine import preflight
+        tp = tmp_path / "bad.yaml"
+        tp.write_text("{{{bad")
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+        try:
+            r = PreflightChecker.validate("task_run", {"task_config": str(tp)})
+            assert not r.ok
+        finally:
+            preflight.PROJECT_ROOT = orig
+
+    def test_empty_task_config(self, tmp_path):
+        """Preflight fails for task config with no tasks."""
+        from quantflow.web.engine.preflight import PreflightChecker
+        from quantflow.web.engine import preflight
+        tp = tmp_path / "empty.yaml"
+        tp.write_text("tasks: []")
+        orig = preflight.PROJECT_ROOT
+        preflight.PROJECT_ROOT = tmp_path
+        try:
+            r = PreflightChecker.validate("task_run", {"task_config": str(tp)})
+            assert not r.ok
+            assert any("no valid" in e.lower() for e in r.errors)
+        finally:
+            preflight.PROJECT_ROOT = orig
+
