@@ -7,6 +7,9 @@ data/sectors/
 
 # Test artifacts and local data
 output/
+.coverage
+htmlcov/
+.pytest_cache/
 # E2E test artifacts
 TestWL/
 TestWatchlist/
