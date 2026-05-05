@@ -177,7 +177,148 @@ python -m quantflow.cli watchlist_run --watchlist watchlists/us_tech.yaml --stra
 - `--strategies`: Comma-separated strategy IDs (default: `daily_bull_oversold,daily_bull_mid_range`).
 - `--days-back`: Override auto-calculated lookback days (optional).
 
-## 3. Output & Results
+## 3. Web UI (Visual Interface)
+
+QuantFlow provides an optional web UI for managing watchlists, tasks, runs, and viewing results.
+
+### Starting the Web Server
+
+```bash
+# Install dependencies (includes fastapi, uvicorn)
+pip install -e .
+
+# Start the Web UI
+python -m quantflow.cli web
+```
+
+- **Default URL**: http://127.0.0.1:{port} (auto-opens in browser). Port configured in `config/quantflow.yaml` (default: 8082).
+- **Configuration**: Set port/host in `config/quantflow.yaml` under `web:` section
+
+### Web UI Features
+
+1. **Watchlists Management**:
+   - CRUD on `watchlists/*.yaml` files
+   - Search stocks across all watchlists
+   - Batch import
+   - **Inline delete button** (×) on each watchlist in the left sidebar
+
+2. **Tasks Management** (Left-Right Layout):
+   - **Left sidebar**: List of task config files (`config/tasks_*.yaml`) with inline delete (×)
+   - **Right panel**: Tasks table for the selected file
+   - Create, edit, and delete tasks via a simplified form
+   - Auto-select first task file on page load
+
+3. **Runs Panel** (Run History & Execution):
+   - **New Run Wizard**: Create runs for `stock_scan`, `watchlist_run`, or `task_run` via guided form
+   - **Stock Scan**: Outputs indicator calculation results (KDJ, MACD, DualLine, etc.), not strategy signals
+   - **Watchlist Run**: Runs watchlist with selected strategies, outputs JSON + Markdown report
+   - **Task Run**: Executes task file via Orchestrator
+   - **Run History**: List of all runs with status, signal count, config details
+   - **Run Details**: 4 sub-tabs — Config, Progress (SSE real-time log), Report, Files
+   - **Presets**: Save and reuse run configurations
+
+4. **Settings** (Interactive Form):
+   - Editable sections: Data Sources, Lookback Period, YFinance Batch, Web Server, Tushare Token
+   - Token management: Toggle visibility (👁️) and copy (📋)
+   - Save/Reset: Save button appears on modification
+   - API: `GET /api/config` (read), `PUT /api/config` (update YAML)
+
+5. **Library** (Strategy & Indicator Catalog):
+   - **Strategy Library**: View all registered strategies with descriptions, signal types, required indicators
+   - **Indicator Library**: Browse all available indicators with parameters, inputs/outputs, lookback requirements
+   - **Parameter Editing**: Click "Edit Params" on any indicator to modify configuration
+
+6. **Directory Browser** (File Picker):
+   - Navigate filesystem to select output paths
+   - Create new directories inline
+   - Available via browse icon in run wizard
+
+### Web UI vs CLI: Output Paths
+
+**Web UI uses different default output paths** to distinguish from CLI runs:
+
+| Run Type | CLI Default | Web UI Default | Key Difference |
+|----------|-------------|----------------|----------------|
+| **stock_scan** | `PROJECT_ROOT/output/cli_scans` | `./output/manual_scans` | Absolute vs Relative |
+| **watchlist_run** | `./output` | `./output/manual_watchlist` | Web adds `manual_watchlist` |
+| **task_run** | `./output` | `./output` | Same (no difference) |
+
+**Web UI File Naming:**
+- stock_scan: `{code}_indicators.json` (same as CLI)
+- watchlist_run: `web-{wl_name}.json` and `web-{wl_name}.md` (hyphen instead of colon, Windows-safe)
+- task_run: Same as CLI
+
+**Delete Behavior:**
+When deleting run history from Web UI, the system uses **precise file deletion**:
+- ✅ Deletes only generated output files (JSON, Markdown)
+- ✅ Preserves output directory and user files
+- ✅ Safe for shared output directories
+
+**Example:**
+```text
+Web UI watchlist_run output:
+  ./output/manual_watchlist/web-US_Tech.json
+  ./output/manual_watchlist/web-US_Tech.md
+
+Delete run from history:
+  ✅ Deletes: web-US_Tech.json, web-US_Tech.md
+  ✅ Preserves: ./output/manual_watchlist/ directory
+  ✅ Preserves: Other user files in same directory
+```
+
+### Why Different Paths?
+
+- **CLI**: Absolute paths for `stock_scan` (PROJECT_ROOT) ensure predictable location regardless of working directory
+- **Web UI**: Relative paths (`./output`) provide flexibility and align with user's working directory
+- **manual_ prefix**: Distinguishes Web UI runs from scheduled/CLI runs, prevents accidental overwrites
+
+### Using Web UI for Runs
+
+Via Web UI "Runs" panel:
+
+1. **Create Run**:
+   - Select run type (stock_scan, watchlist_run, task_run)
+   - Configure parameters (code, watchlist, strategies)
+   - Optionally specify custom `output_path`
+   
+2. **Execute**:
+   - Run starts immediately or queues if another run is active
+   - Real-time progress via SSE (Server-Sent Events)
+   - View logs, progress bar, signal count
+   
+3. **View Results**:
+   - Indicator data (stock_scan): JSON with calculated indicators
+   - Files list: All generated JSON/Markdown files
+   - Report: Markdown report content
+   - Open folder: System file browser integration
+
+4. **Manage History**:
+   - Delete runs: Removes database record + output files
+   - Preset system: Save run configuration for reuse
+
+### FAQ: Output Paths
+
+**Q: Why does Web UI use different paths than CLI?**
+
+A: Web UI uses relative paths (`./output/manual_*`) to provide flexibility and align with the user's working directory. CLI uses `PROJECT_ROOT` for stock_scan to ensure predictable location regardless of working directory. The `manual_` prefix distinguishes manual Web runs from scheduled/CLI runs.
+
+**Q: Can I use the same output_path for multiple runs?**
+
+A: Yes, but files will be overwritten. Use different `output_path` values or the preset system to save configurations with unique output paths. RunHistory database tracks all runs regardless of output_path.
+
+**Q: What happens when I delete a run from Web UI history?**
+
+A: Web UI deletes only generated output files (JSON, Markdown), preserving the output directory and user files. This prevents accidental data loss in shared directories.
+
+**Q: Why does watchlist_run use `web-{wl_name}` instead of `{wl_name}`?**
+
+A: The `web-` prefix distinguishes Web UI runs from CLI runs. Hyphens replace colons for Windows filename compatibility (e.g., `web-US_Tech.json` instead of `web:US_Tech.json`).
+
+**Q: How do I find files from a specific run?**
+
+A: Use Web UI "Runs" panel → click run → "Files" tab to see all generated files. Click "Open Folder" to open the output directory in system file browser.
+
+## 4. Output & Results
 
 The system produces **two tiers** of output for each run:
 
@@ -223,7 +364,7 @@ The JSON file contains an array of signals with enriched strategy matching info:
 ]
 ```
 
-## 4. Automation (Cron)
+## 5. Automation (Cron)
 
 To monitor daily with automatic date-based archiving:
 
@@ -244,102 +385,6 @@ reports/
     ├── Combined_Results.json
     └── Daily_Report.md
 ```
-
-## 5. Web UI
-
-QuantFlow provides an optional web UI for managing watchlists, tasks, and system settings visually.
-
-```bash
-# Install dependencies (includes fastapi, uvicorn)
-pip install -e .
-
-# Start the Web UI
-python -m quantflow.cli web
-```
-
-- **Default URL**: http://127.0.0.1:{port} (auto-opens in browser). 端口以 `config/quantflow.yaml` 为准（默认 8082）。
-- **Configuration**: Set port/host in `config/quantflow.yaml` under `web:` section
-
-### UI Features
-
-1. **Watchlists Management**:
-   - CRUD on `watchlists/*.yaml` files
-   - Search stocks across all watchlists
-   - Batch import
-   - **Inline delete button** (×) on each watchlist in the left sidebar
-
-2. **Tasks Management** (Left-Right Layout):
-   - **Left sidebar**: List of task config files (`config/tasks_*.yaml`) with inline delete (×)
-   - **Right panel**: Tasks table for the selected file
-   - Create, edit, and delete tasks via a simplified form
-   - Auto-select first task file on page load
-   - Fixed-width table columns with text wrapping/truncation
-
-3. **Settings** (Interactive Form):
-   - **Editable sections**: Data Sources, Lookback Period, YFinance Batch, Web Server, Tushare Token, Logging Level
-   - **Read-only display**: Config file path
-   - **Token management**: Toggle visibility (👁️) and copy (📋)
-   - **Save/Reset**: Save button appears on modification; requires restart for Web/Port changes
-   - **API**: `GET /api/config` (read), `PUT /api/config` (update YAML)
-4. **Library** (Strategy & Indicator Catalog):
-   - **Strategy Library**: View all registered strategies with descriptions, signal types, required indicators, and lookback days
-   - **Indicator Library**: Browse all available indicators with parameters, inputs/outputs, and lookback requirements
-   - **Parameter Editing**: Click "Edit Params" on any indicator to modify its configuration, persisted to `config/indicators.yaml`
-5. **Runs Panel** (New Run History):
-   - **New Run Wizard**: Create runs for `stock_scan`, `watchlist_run`, or `task_run` via guided form
-   - **Stock Scan**: Outputs indicator calculation results (KDJ, MACD, DualLine, etc.), not strategy signals — consistent with CLI `stock_scan`
-   - **Watchlist Run**: Runs watchlist with selected strategies, outputs JSON + Markdown report — consistent with CLI `watchlist_run`
-   - **Task Run**: Executes task file via Orchestrator — consistent with CLI `task_run`
-   - **Run History**: List of all runs with status, signal count, config details, progress log, report/files browser
-   - **Run Details**: 4 sub-tabs — Config, Progress (SSE real-time log), Report (indicator table for stock_scan, Markdown for others), Files
-
-### Available Indicators
-
-The system supports **8 indicators**:
-
-| Category | Indicators | Description |
-|----------|-----------|-------------|
-| Standard | KDJ, MACD, RSI, BOLL, VOL_MA | Built-in technical indicators |
-| Custom | DualLine, BrickChart, Washout | Extended/custom strategy indicators |
-
-> Full details: **Library** tab in Web UI. Parameter overrides: `config/indicators.yaml`.
-
-6. **Presets** (Saved Run Configurations):
-   - Create, save, and reuse run configurations
-   - Run directly from a saved preset
-   - CRUD via API: `/api/presets/`
-
-7. **Directory Browser** (File Picker):
-   - Navigate filesystem to select output paths
-   - Create new directories inline
-   - Available via browse icon in run wizard
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/watchlists/` | GET, POST, PUT, DELETE | Watchlist CRUD |
-| `/api/watchlists/search` | POST | Search stock across all lists |
-| `/api/tasks` | GET, POST, PUT, DELETE | Task CRUD |
-| `/api/task-files` | GET, POST, DELETE | Task file management |
-| `/api/config` | GET, **PUT** | System configuration (read + **write**) |
-| `/api/strategies` | GET | Available strategy list |
-| `/api/library/strategies` | GET | Strategy catalog with descriptions, indicators, lookback |
-| `/api/library/indicators` | GET | Indicator catalog with params, fields, lookback |
-| `/api/library/indicators/params` | PUT | Update indicator parameter configuration |
-| `/api/runs/` | GET, POST, DELETE | Run history CRUD + create runs |
-| `/api/runs/{id}` | GET | Single run details |
-| `/api/runs/{id}/indicator-data` | GET | Indicator results for stock_scan runs |
-| `/api/runs/{id}/report` | GET | Markdown report for watchlist/task runs |
-| `/api/runs/{id}/files` | GET | Output file listing |
-| `/api/runs/{id}/logs:sse` | GET | SSE real-time progress log |
-| `/api/runs/{id}/cancel` | POST | Cancel running/queued run |
-| `/api/runs/queue` | GET | Queue status (active/pending) |
-| `/api/presets/` | GET, POST | List and create run presets |
-| `/api/presets/{id}` | GET, PUT, DELETE | Preset details, update, delete |
-| `/api/presets/{id}/run` | POST | Run from saved preset |
-| `/api/browse/` | GET | Directory browsing for file picker |
-| `/api/browse/mkdir` | POST | Create directory via file picker |
 
 ## 6. Testing
 

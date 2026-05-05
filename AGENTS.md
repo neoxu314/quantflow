@@ -39,6 +39,7 @@ quantflow/
 | Run scan | `cli.py` | `stock_scan` (alias: `scan`), supports `--output` for JSON results (default: `output/cli_scans/`) |
 | Run watchlist | `cli.py` | `watchlist_run` (alias: `monitor`), supports `--strategies` and `--days-back` |
 | Run task file | `cli.py` | `task_run` (alias: `tasks`) |
+| Output logic | See below | CLI vs Web UI default paths differ; see OUTPUT LOGIC section |
 | Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
 | Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()` |
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
@@ -90,6 +91,61 @@ quantflow/
 - Do NOT bypass `DataSourceFactory` - it handles primary/fallback logic
 - Do NOT hardcode `adjustflag` - use config defaults (`qfq`)
 - Do NOT mix BaoStock format (`sh.600000`) with standard format (`600000.SH`)
+
+## OUTPUT LOGIC
+
+### Overview
+
+CLI and Web UI use **different default output paths** and **delete strategies**.
+
+### CLI Default Paths
+
+| Run Type | Default Path | Path Type | Output Files |
+|----------|--------------|-----------|--------------|
+| **stock_scan** | `PROJECT_ROOT/output/cli_scans` | Absolute (PROJECT_ROOT) | `{code}_indicators.json` |
+| **watchlist_run** | `./output` | Relative | `{watchlist_name}_results.json`<br>`{watchlist_name}_report.md` |
+| **task_run** | `./output` | Relative | `{task_name}.json`<br>`{task_name}.md`<br>`Daily_Report.md`<br>`Combined_Results.json` |
+
+### Web UI Default Paths
+
+| Run Type | Default Path | Path Type | Output Files |
+|----------|--------------|-----------|--------------|
+| **stock_scan** | `./output/manual_scans` | Relative | `{code}_indicators.json` |
+| **watchlist_run** | `./output/manual_watchlist` | Relative | `web-{wl_name}.json`<br>`web-{wl_name}.md` |
+| **task_run** | `./output` | Relative | Same as CLI |
+
+**Key Differences:**
+- CLI stock_scan uses `PROJECT_ROOT` (absolute), Web uses relative `./output/manual_scans`
+- Web UI adds `manual_` prefix to distinguish from CLI runs
+- Web watchlist_run uses `web-{wl_name}` prefix (Windows-safe, no colons)
+
+### Delete Behavior
+
+**Unified Strategy (All Run Types):**
+
+Web UI uses **precise file deletion** - only deletes generated files, preserves directory and user files.
+
+| Run Type | Deleted Files | Preserved |
+|----------|---------------|-----------|
+| **stock_scan** | `{code}_indicators.json` | Directory + user files |
+| **watchlist_run** | `web-{wl_name}.json`<br>`web-{wl_name}.md` | Directory + user files |
+| **task_run** | `Daily_Report.md`<br>`Combined_Results.json`<br>`{task_name}.md/.json` | Directory + user files |
+
+**Safety Guarantee:** Never deletes entire directory to prevent accidental loss of user files.
+
+### User Responsibility
+
+- **Output isolation**: Users control via different `output_path` values
+- **Preset system**: Save different output configurations for reuse
+- **RunHistory**: Database tracks all runs regardless of output_path
+
+### Implementation Details
+
+- **stock_scan**: File name from `run.config.code` (safe_code replacement)
+- **watchlist_run**: File name from `wl.name` (loaded from YAML, not file stem!)
+- **task_run**: File names from `task_config` task_names
+
+**Critical Note:** watchlist_run deletion must load YAML to get `wl.name` field, not use `Path(file).stem` (see runs.py:272-283).
 
 ## COMMANDS
 
