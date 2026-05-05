@@ -573,7 +573,8 @@ All run types follow "所见即所得" model:
 
 **Key changes from previous version:**
 - No run_id subdirectory injection (previously stock_scan/watchlist_run added `{run_id}/`)
-- Unified default paths: all use `./output` (相对路径)
+- Default paths: stock_scan uses `./output/manual_scans`, watchlist_run uses `./output/manual_watchlist`, task_run uses `./output`
+- User-specified paths: when `output_path` is provided, all types use it directly (consistent behavior)
 - Unified delete logic: precise file deletion (not entire directory)
 
 **User responsibility:**
