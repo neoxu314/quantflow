@@ -120,3 +120,18 @@ def fetch_cn_index(
 
     except Exception as e:
         logger.error(f"Failed to fetch {index_name}: {e}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
+    for cn_name, config in CN_INDICES.items():
+        fetch_cn_index(
+            index_name=cn_name,
+            symbol=config["symbol"],
+            en_name=config["name"],
+            filename=config["filename"]
+        )
