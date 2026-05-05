@@ -266,7 +266,7 @@ function renderReportTab(run) {
                 html += ` | Range: <span class="font-mono">${run.config.start_date} → ${run.config.end_date || run.config.start_date}</span>`;
             }
             html += ` | Total bars: ${data.bar_count || data.data.length}</div>`;
-            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-xs"><thead class="bg-gray-50"><tr>';
+            html += '<div style="overflow-x:auto"><table class="min-w-full divide-y divide-gray-200 text-xs"><thead class="bg-gray-50"><tr>';
             orderedCols.forEach(c => {
                 html += `<th class="px-2 py-1 text-left font-medium text-gray-500 uppercase tracking-wider">${c}</th>`;
             });
