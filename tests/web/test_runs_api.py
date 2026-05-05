@@ -218,6 +218,34 @@ class TestFilesEndpoint:
         r = client.get("/api/runs/nonexistent-id/files")
         assert r.status_code == 404
 
+    def test_files_endpoint_finds_files_in_subdirectory(self, client, tmp_path):
+        """Files in nested directories (daily mode) should be discovered."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        daily_dir = output_dir / "2026-05-05"
+        daily_dir.mkdir()
+        
+        json_file = daily_dir / "Combined_Results.json"
+        json_file.write_text("{\"signals\": []}")
+        md_file = daily_dir / "Daily_Report.md"
+        md_file.write_text("# Report")
+        
+        r = client.post("/api/runs/", json={
+            "run_type": "task_run",
+            "task_config": "config/tasks_test.yaml",
+        })
+        rid = r.json()["run_id"]
+        h = run_history.RunHistory()
+        h.update_status(rid, "completed", output_path=str(output_dir))
+        
+        files_resp = client.get(f"/api/runs/{rid}/files")
+        assert files_resp.status_code == 200
+        files = files_resp.json()["files"]
+        assert len(files) == 2
+        file_names = {f["name"] for f in files}
+        assert "Combined_Results.json" in file_names
+        assert "Daily_Report.md" in file_names
+
 
 class TestOpenFolderEndpoint:
     def test_open_folder_success(self, client, tmp_path):
