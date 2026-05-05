@@ -10,6 +10,9 @@ Run:
 """
 
 import pytest
+import pandas as pd
+import yaml
+from unittest.mock import Mock, patch, MagicMock
 
 
 class TestConvertCnCode:
@@ -90,3 +93,108 @@ class TestCNIndicesConfig:
         
         assert "创业板指" in CN_INDICES
         assert CN_INDICES["创业板指"]["symbol"] == "399006"
+
+
+class TestFetchCnIndex:
+    """Test fetch_cn_index() function."""
+
+    @patch("quantflow.data.fetch_cn_indices.ak")
+    def test_fetch_and_convert(self, mock_ak, tmp_path):
+        """Should fetch data, convert codes, write YAML."""
+        from quantflow.data.fetch_cn_indices import fetch_cn_index
+        
+        # Mock akshare response
+        mock_df = pd.DataFrame({
+            "品种代码": ["600000", "000001", "300001"],
+            "品种名称": ["浦发银行", "平安银行", "特锐德"]
+        })
+        mock_ak.index_stock_cons.return_value = mock_df
+        
+        # Mock project root path
+        with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            mock_project_root = MagicMock()
+            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
+            mock_path.return_value = mock_project_root
+            mock_path.__file__ = "dummy.py"
+            
+            # Call function
+            fetch_cn_index(
+                index_name="中证500",
+                symbol="000905",
+                en_name="CSI 500",
+                filename="test_output.yaml"
+            )
+        
+        # Verify akshare called with correct symbol
+        mock_ak.index_stock_cons.assert_called_once_with(symbol="000905")
+        
+        # Verify YAML file created
+        yaml_file = tmp_path / "test_output.yaml"
+        assert yaml_file.exists()
+        
+        # Verify YAML content
+        with open(yaml_file) as f:
+            data = yaml.safe_load(f)
+        
+        assert data["name"] == "中证500_Components"
+        assert "CSI 500" in data["description"]
+        assert len(data["items"]) == 3
+        
+        # Verify code format
+        codes = [item["code"] for item in data["items"]]
+        assert "600000.SH" in codes
+        assert "000001.SZ" in codes
+        assert "300001.SZ" in codes
+        
+        # Verify tags
+        for item in data["items"]:
+            assert "中证500" in item["tags"]
+
+    @patch("quantflow.data.fetch_cn_indices.ak")
+    def test_empty_dataframe(self, mock_ak, tmp_path):
+        """Should handle empty DataFrame gracefully."""
+        from quantflow.data.fetch_cn_indices import fetch_cn_index
+        
+        # Mock empty response
+        mock_ak.index_stock_cons.return_value = pd.DataFrame()
+        
+        with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            mock_project_root = MagicMock()
+            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
+            mock_path.return_value = mock_project_root
+            
+            fetch_cn_index(
+                index_name="中证500",
+                symbol="000905",
+                en_name="CSI 500",
+                filename="test_empty.yaml"
+            )
+        
+        # Should not create file for empty data
+        yaml_file = tmp_path / "test_empty.yaml"
+        assert not yaml_file.exists()
+
+    @patch("quantflow.data.fetch_cn_indices.ak")
+    def test_api_error(self, mock_ak, tmp_path):
+        """Should handle API errors gracefully."""
+        from quantflow.data.fetch_cn_indices import fetch_cn_index
+        
+        # Mock API error
+        mock_ak.index_stock_cons.side_effect = Exception("Network error")
+        
+        with patch("quantflow.data.fetch_cn_indices.Path") as mock_path:
+            mock_project_root = MagicMock()
+            mock_project_root.__truediv__ = lambda self, key: tmp_path / key
+            mock_path.return_value = mock_project_root
+            
+            # Should not raise, just log error
+            fetch_cn_index(
+                index_name="中证500",
+                symbol="000905",
+                en_name="CSI 500",
+                filename="test_error.yaml"
+            )
+        
+        # Should not create file on error
+        yaml_file = tmp_path / "test_error.yaml"
+        assert not yaml_file.exists()
