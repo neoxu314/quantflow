@@ -89,7 +89,7 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 92 E2E tests + 15 Python test files (209 tests) + 92 frontend unit tests**
+**Total: 91 E2E tests (13 files) + 210 Python tests (14 files) + 92 frontend tests (2 files)**
 
 ## Test Categories
 

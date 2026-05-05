@@ -63,15 +63,17 @@ data/
 
 | Category | Test File(s) | Test Count | Type |
 |----------|--------------|------------|------|
-| Base classes | `test_base.py` | 6 | Unit (StockCode, FundamentalData, DataSourceBase/SectorDataSource contracts) |
+| Base classes | `test_base.py` | 15 | Unit (StockCode, FundamentalData, DataSourceBase/SectorDataSource contracts) |
 | Factory | `test_factory.py` | 19 | Unit (source routing, batch OHLCV, fundamental, fallback, market detection) |
 | Config | `test_factory.py` | — | Indirect (via factory tests) |
 | BaoStock adapter | `test_baostock.py` | 3 | Unit |
 | YFinance batch | `test_yfinance_batch.py` | 11 | Unit (chunking, version check, jitter) |
 | AKShare adapter | `test_akshare.py` | 27 | Unit (sector classification, industry/concept, constituents, HK OHLCV) |
-| fetch_indices | `test_fetch_indices.py` | 10 | Unit (clean_ticker, INDICES structure, YAML output) |
+| fetch_indices | `test_fetch_indices.py` | 26 | Unit (clean_ticker, INDICES structure, YAML output) + 3 Integration (mocked HTTP) |
 | Sector cache | `test_sector_data.py` | 17 | Integration (EM/THS/SW sector lists, constituents, cache I/O) |
 | Data fetch (real data) | `test_data_fetch.py` | 24 | Integration (BaoStock/Tushare/YFinance against known reference values) |
+
+**Total: 137 unit + 10 integration = 147 tests**
 
 Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for network tests.
 

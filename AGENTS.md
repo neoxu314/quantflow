@@ -68,14 +68,17 @@ quantflow/
 - **Build**: `pip install -e .`, setuptools with `src/` layout
 - **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
-  - Data layer: 80 unit + 17 integration (sector cache) = 97 tests
-  - Indicator layer: 112 unit + 14 integration (TDX reference values) = 126 tests
-  - Config layer: 30 unit + 1 sanity (production config parsing) = 31 tests
-  - Orchestration layer: 35 unit + 11 integration (discovery, Orchestrator flow) = 46 tests
+  - Data layer: 137 unit + 10 integration (sector cache, fetch_indices) = 147 tests
+  - Indicator layer: 105 unit + 1 integration (TDX reference values) = 106 tests
+  - Config layer: 31 unit = 31 tests
+  - Orchestration layer: 42 unit = 42 tests
+  - Execution layer: 49 unit = 49 tests
   - Reports layer: 18 unit = 18 tests
-  - CLI layer: 16 unit + 8 integration (command routing) + 3 integration (TDX reference values) + 4 skipped (pending) = 27 tests
-  - Web layer: 209 tests (42 unit + 26 integration + 4 contract + 137 E2E)
+  - Strategies layer: 51 unit = 51 tests
+  - CLI layer: 24 unit + 6 skipped (pending expected values) = 30 tests
+  - Web layer: 301 tests (210 API/integration + 91 E2E) + 92 frontend TypeScript tests
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
+  - Total: ~785 Python tests (301 web + 其他层) + ~92 frontend tests
   - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
   - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
   - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)
