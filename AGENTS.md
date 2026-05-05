@@ -1,6 +1,6 @@
 # QUANTFLOW PROJECT KNOWLEDGE
 
-**Generated:** 2026-04-25 / Updated: 2026-05-03
+**Generated:** 2026-04-25 / Updated: 2026-05-05
 **Scope:** `quantflow/` - Main quant analysis system
 
 ## OVERVIEW
@@ -72,7 +72,9 @@ quantflow/
   - Config layer: 30 unit + 1 sanity (production config parsing) = 31 tests
   - Orchestration layer: 35 unit + 11 integration (discovery, Orchestrator flow) = 46 tests
   - Reports layer: 18 unit = 18 tests
+  - Web layer: 209 tests (42 unit + 26 integration + 4 contract + 137 E2E)
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
+  - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`

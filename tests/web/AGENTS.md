@@ -56,8 +56,11 @@ tests/web/
 ├── test_runs_api.py         # Runs API unit tests (CRUD, report, indicator-data, cancel, presets)
 ├── test_runs_engine.py      # Engine unit tests (RunHistory, RunQueue, SSE, Preflight, Presets)
 ├── test_runs_integration.py # Runs integration tests (API→DB→API round-trip, file cleanup)
+├── test_execution_api_consistency.py # Execution→API data flow integration tests (NEW)
+├── test_path_consistency_contract.py # Path structure contract tests (NEW)
 ├── test_nan_serialization.py # NaN handling in indicator DataFrame serialization
 ├── test_web_config.py       # WebConfig loading tests
+├── TEST_MATRIX.md           # Execution→API test coverage documentation (NEW)
 ├── frontend/                # Frontend TypeScript unit tests (Vitest)
 │   ├── utils.test.ts        # 49 unit tests for pure functions
 │   ├── app.test.ts          # 33 unit tests for app pure functions
@@ -72,7 +75,7 @@ tests/web/
     ├── test_error_handling.py # 7 error handling tests (500 error, network fail, validation)
     ├── test_runs_stock_scan.py     # 2 stock scan lifecycle E2E tests
     ├── test_runs_watchlist_run.py  # 2 watchlist run lifecycle E2E tests
-    ├── test_runs_task_run.py       # 5 task run lifecycle E2E tests
+    ├── test_runs_task_run.py       # 6 task run lifecycle E2E tests (updated: +1 daily mode)
     ├── test_runs_cancel.py         # 4 cancel flow E2E tests
     ├── test_runs_indicator_data.py # 6 indicator data accuracy E2E tests
     ├── test_runs_watchlist_preflight.py # 4 watchlist preflight validation E2E tests
@@ -86,7 +89,7 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 90 E2E tests + 13 Python test files (194 tests) + 82 frontend unit tests**
+**Total: 92 E2E tests + 15 Python test files (209 tests) + 82 frontend unit tests**
 
 ## Test Categories
 
@@ -97,9 +100,11 @@ src/quantflow/web/static/
 | Task API | `test_task_api.py` | 10 | CRUD, duplicate rejection, path traversal |
 | Library API | `test_library_api.py` | 9 | Strategies, indicators, param updates + round-trip |
 | Browse API | `test_browse_api.py` | 19 | Directory listing, mkdir, permissions, sorting |
-| Runs API | `test_runs_api.py` | 41 | CRUD, report, indicator-data, cancel, presets, open-folder, helpers |
+| Runs API | `test_runs_api.py` | 43 | CRUD, report, indicator-data, cancel, presets, open-folder, helpers |
 | Runs Engine | `test_runs_engine.py` | 34 | RunHistory, RunQueue, SSE, Preflight, Presets |
-| Runs Integration | `test_runs_integration.py` | 18 | API→DB→API, file cleanup, output isolation |
+| Runs Integration | `test_runs_integration.py` | 20 | API→DB→API, file cleanup, output isolation |
+| **Execution API Consistency** | `test_execution_api_consistency.py` | **8** | **Execution→API data flow (files/report/open_folder)** |
+| **Path Contract Tests** | `test_path_consistency_contract.py` | **4** | **Path structure invariants (output_path/report_path)** |
 | NaN Serialization | `test_nan_serialization.py` | 11 | NaN/datetime/integer/string/inf handling |
 | Integration | `test_integration.py` | 13 | Watchlist + Task API→filesystem round-trip |
 | Static Serving | `test_static_serving.py` | 4 | HTML/JS serving, 404, path traversal |
@@ -110,7 +115,7 @@ src/quantflow/web/static/
 | Error Handling | `test_error_handling.py` | 7 | Server 500, network disconnect, invalid input |
 | Stock Scan E2E | `test_runs_stock_scan.py` | 2 | Full lifecycle + modal reset |
 | Watchlist Run E2E | `test_runs_watchlist_run.py` | 2 | Full lifecycle + type lock |
-| Task Run E2E | `test_runs_task_run.py` | 5 | Full lifecycle, daily mode, progress, file isolation |
+| Task Run E2E | `test_runs_task_run.py` | 6 | Full lifecycle, daily mode, progress, file isolation |
 | Cancel E2E | `test_runs_cancel.py` | 4 | Cancel active/queued runs, delete cancelled |
 | Indicator Data E2E | `test_runs_indicator_data.py` | 6 | JSON validity, NaN check, bar_count, files |
 | Preflight E2E | `test_runs_watchlist_preflight.py` | 4 | Empty watchlist, invalid strategy, validate_only |
@@ -119,6 +124,8 @@ src/quantflow/web/static/
 | Presets E2E | `test_presets.py` | 8 | CRUD, run from preset, persistence, validation |
 | Frontend Utils | `utils.test.ts` | 49 | Pure functions (MARKET_SUFFIX, get/setNestedValue, formatStockCode) |
 | Frontend App | `app.test.ts` | 33 | Pure app functions (render helpers, formatters, openFolder) |
+
+**Note**: See `TEST_MATRIX.md` for detailed Execution → API test coverage per run_type × endpoint combination.
 
 ### Frontend Unit Tests (utils.test.ts)
 
