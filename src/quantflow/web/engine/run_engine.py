@@ -122,9 +122,7 @@ class RunEngine:
 
         cfg = run.config
         code = StockCode.from_standard(cfg["code"])
-        base_output = cfg.get("output_path") or str(
-            PROJECT_ROOT / "output" / "manual_scans")
-        output = str(Path(base_output) / run_id)
+        output = cfg.get("output_path") or "./output/manual_scans"
 
         start_date = cfg.get("start_date") or (
             dt.now() - timedelta(days=365)).strftime("%Y-%m-%d")
