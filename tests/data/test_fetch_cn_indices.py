@@ -1,4 +1,13 @@
-"""Unit tests for fetch_cn_indices.py."""
+"""Unit tests for fetch_cn_indices.py.
+
+Tests:
+1. convert_cn_code() - A-share code format conversion
+2. CN_INDICES - configuration structure validation
+3. fetch_cn_index() - API fetch and YAML generation (mocked)
+
+Run:
+    pytest tests/data/test_fetch_cn_indices.py -v
+"""
 
 import pytest
 
