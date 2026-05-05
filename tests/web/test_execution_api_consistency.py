@@ -221,3 +221,69 @@ class TestFilesEndpointExecutionConsistency:
         for f in files:
             assert "2026-05-05" in f["path"]
             assert Path(f["path"]).exists()
+
+
+class TestReportEndpointExecutionConsistency:
+    """Verify report endpoint returns correct report file content."""
+    
+    def test_task_run_daily_mode_report_endpoint_reads_correct_file(self, client, tmp_path):
+        """daily mode: report_path contains date, report endpoint should find it."""
+        h = run_history.RunHistory()
+        rid = h.create_run(
+            "Test Daily Report", "task_run",
+            {"task_config": "config/tasks.yaml", "daily": True}
+        )
+        
+        # Simulate daily mode output
+        output_dir = tmp_path / rid
+        date_dir = output_dir / "2026-05-05"
+        date_dir.mkdir(parents=True)
+        
+        report_file = date_dir / "Daily_Report.md"
+        report_content = "# Daily Report 2026-05-05\n\n## Signals\n- AAPL.US: buy"
+        report_file.write_text(report_content)
+        
+        # Update with report_path containing date
+        h.update_status(
+            rid, "completed",
+            output_path=str(output_dir),
+            report_path=str(report_file),
+            signal_count=1
+        )
+        
+        # Test report endpoint
+        report_resp = client.get(f"/api/runs/{rid}/report")
+        assert report_resp.status_code == 200
+        
+        data = report_resp.json()
+        assert data["report"] is not None
+        assert data["report"] == report_content
+        assert "2026-05-05" in data["path"]
+        
+    def test_watchlist_run_report_endpoint_reads_markdown(self, client, tmp_path):
+        """watchlist_run: report endpoint should return .md content."""
+        h = run_history.RunHistory()
+        rid = h.create_run(
+            "WL Report Test", "watchlist_run",
+            {"watchlist": "watchlists/test.yaml"}
+        )
+        
+        output_dir = tmp_path / rid
+        output_dir.mkdir()
+        
+        report_file = output_dir / "web:test.md"
+        report_content = "# Watchlist Report\n\n## Signals\n- NVDA.US"
+        report_file.write_text(report_content)
+        
+        h.update_status(
+            rid, "completed",
+            output_path=str(output_dir),
+            report_path=str(report_file)
+        )
+        
+        report_resp = client.get(f"/api/runs/{rid}/report")
+        assert report_resp.status_code == 200
+        
+        data = report_resp.json()
+        assert data["report"] == report_content
+        assert data["path"] == str(report_file)
