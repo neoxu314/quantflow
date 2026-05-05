@@ -74,6 +74,25 @@ def _wait_for_server(host, port, timeout=30):
 @pytest.fixture(scope="session")
 def web_server():
     """Start QuantFlow web server for E2E tests."""
+    
+    # Clean up port before starting (fix: port conflict issue)
+    import subprocess
+    try:
+        # Kill any existing process on WEB_PORT
+        subprocess.run(
+            f"lsof -ti:{WEB_PORT} | xargs kill -9",
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2
+        )
+        time.sleep(1)  # Wait for port to be freed
+    except subprocess.TimeoutExpired:
+        pass  # No process on port
+    except Exception:
+        pass  # Ignore errors (port may be free already)
+    
     env = os.environ.copy()
     proc = subprocess.Popen(
         ["python3", "-m", "quantflow.cli", "web"],

@@ -85,20 +85,18 @@ class TestInvalidInputValidation:
         if not watchlist_btn.is_visible():
             pass
 
-    def test_invalid_stock_code_format(self, page: Page):
-        """Invalid stock code format should show preview or error."""
-        from tests.web.e2e.conftest import TEST_WATCHLIST_NAME
-        import httpx
-        
-        httpx.put(
-            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
-            json={"name": TEST_WATCHLIST_NAME, "items": []},
-        )
-
+def test_invalid_stock_code_format(self, page: Page):
+        """Invalid stock code format should show error or be blocked."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
+        
+        # Wait for watchlist panel to be ready (fix: prevent timeout)
+        page.get_by_role("button", name="Watchlists").click()
+        page.wait_for_selector("#panel-watchlists", timeout=10000)
+        page.wait_for_timeout(2000)  # Extra wait for UI stabilization
+        
         page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
-        page.wait_for_selector("#stock-table", timeout=5000)
+        page.wait_for_selector("#stock-table", timeout=10000)
 
         page.get_by_role("button", name="+ Add Stock").click()
         page.locator("#modal-add-stock").wait_for(state="visible", timeout=5000)

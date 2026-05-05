@@ -39,6 +39,7 @@ class WebConfig:
             if default_candidate.exists():
                 yaml_path = str(default_candidate)
 
+        data = {}
         if yaml_path:
             p = Path(yaml_path)
             if not p.exists():
