@@ -123,7 +123,7 @@ def test_search_stock_not_found(client):
 
 
 def test_search_fuzzy_match(client, tmp_path):
-    """Fuzzy search finds partial matches."""
+    """Fuzzy search finds partial matches with watchlist field."""
     wpath = tmp_path / "watchlists"
     wpath.mkdir(exist_ok=True)
     (wpath / "fuzzy.yaml").write_text(
@@ -142,7 +142,9 @@ def test_search_fuzzy_match(client, tmp_path):
     data = resp.json()
     assert data["found"] is True
     assert isinstance(data["fuzzyMatches"], list)
-    assert any(m["code"] == "NVDA.US" for m in data["fuzzyMatches"])
+    match = next((m for m in data["fuzzyMatches"] if m["code"] == "NVDA.US"), None)
+    assert match is not None
+    assert match["watchlist"] == "fuzzy.yaml"
 
 
 def test_path_traversal_blocked(client):

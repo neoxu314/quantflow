@@ -1,9 +1,9 @@
 """Watchlist CRUD API."""
 from pathlib import Path
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
 
 router = APIRouter(prefix="/api", tags=["Watchlists"])
 
@@ -130,15 +130,12 @@ def delete_watchlist(filename: str):
 def search_stock(query: dict):
     """Search for a stock code across all watchlists."""
     import yaml
-    from quantflow.data.base import StockCode
 
     raw_code = query.get("code", "").strip()
     if not raw_code:
         raise HTTPException(status_code=400, detail="Code is required")
 
-    # Try to auto-complete format
     if "." not in raw_code:
-        # Fuzzy match: find watchlist items containing the code
         fuzzy_results = []
         in_lists = []
         _ensure_watchlists_dir()
@@ -148,7 +145,11 @@ def search_stock(query: dict):
             for item in data.get("items", []):
                 item_code = item.get("code", "")
                 if raw_code.upper() in item_code.upper():
-                    fuzzy_results.append({"code": item_code, "name": item.get("name")})
+                    fuzzy_results.append({
+                        "code": item_code,
+                        "name": item.get("name"),
+                        "watchlist": yfile.name,
+                    })
                     if yfile.name not in in_lists:
                         in_lists.append(yfile.name)
         return {
@@ -158,7 +159,6 @@ def search_stock(query: dict):
             "fuzzyMatches": fuzzy_results[:20],
         }
 
-    # Exact format search (contains .)
     _ensure_watchlists_dir()
     in_lists = []
     for yfile in WATCHLISTS_DIR.glob("*.yaml"):

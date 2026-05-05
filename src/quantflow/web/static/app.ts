@@ -1271,19 +1271,68 @@ async function handleSearch() {
     const resultsDiv = document.getElementById("search-results")!;
     const statusDiv = document.getElementById("search-status")!;
     if (input.length < 2) { resultsDiv.classList.add("hidden"); statusDiv.classList.add("hidden"); return; }
-    const res = await api<{ found: boolean; inLists?: string[]; fuzzyMatches?: { code: string; name?: string }[] }>("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code: input }) });
+    const res = await api<{ found: boolean; inLists?: string[]; fuzzyMatches?: { code: string; name?: string; watchlist?: string }[] }>("/api/watchlists/search", { method: "POST", body: JSON.stringify({ code: input }) });
     resultsDiv.classList.remove("hidden");
     if (res.found) {
         statusDiv.classList.remove("hidden");
         statusDiv.innerHTML = `<span class="text-green-600">Found in:</span> ${res.inLists.join(", ")}`;
-        resultsDiv.innerHTML = res.inLists.map(l => `<div class="px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">In: ${l}</div>`).join("");
+        if (res.fuzzyMatches?.length) {
+            renderFuzzyMatches(res.fuzzyMatches, resultsDiv);
+        } else {
+            resultsDiv.innerHTML = res.inLists.map(l => `<div class="px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">In: ${l}</div>`).join("");
+        }
     } else if (res.fuzzyMatches?.length) {
         statusDiv.classList.add("hidden");
-        resultsDiv.innerHTML = res.fuzzyMatches.map((m: any) => `<div class="px-3 py-2 text-sm hover:bg-gray-50"><span class="text-gray-900">${m.code}</span> <span class="text-gray-500 ml-2">${m.name || ""}</span></div>`).join("");
+        renderFuzzyMatches(res.fuzzyMatches, resultsDiv);
     } else {
         statusDiv.classList.remove("hidden");
         statusDiv.innerHTML = '<span class="text-red-500">Not found</span>';
         resultsDiv.innerHTML = '<div class="px-3 py-2 text-sm text-gray-400">No matches</div>';
+    }
+}
+
+function renderFuzzyMatches(matches: { code: string; name?: string; watchlist?: string }[], container: HTMLElement) {
+    const byWatchlist: Record<string, { code: string; name?: string }[]> = {};
+    for (const m of matches) {
+        const wl = m.watchlist || "Unknown";
+        if (!byWatchlist[wl]) byWatchlist[wl] = [];
+        byWatchlist[wl].push({ code: m.code, name: m.name });
+    }
+    let html = "";
+    for (const [wl, stocks] of Object.entries(byWatchlist)) {
+        html += `<div class="px-3 py-1 text-xs text-gray-500 bg-gray-50 font-medium">${wl} (${stocks.length})</div>`;
+        for (const s of stocks) {
+            html += `<div class="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer search-stock-item" data-code="${s.code}" data-watchlist="${wl}">
+                <span class="font-mono text-gray-900">${s.code}</span>
+                <span class="text-gray-500 ml-2">${s.name || ""}</span>
+            </div>`;
+        }
+    }
+    container.innerHTML = html;
+    container.querySelectorAll(".search-stock-item").forEach(el => {
+        el.addEventListener("click", async () => {
+            const code = (el as HTMLElement).dataset.code!;
+            const wl = (el as HTMLElement).dataset.watchlist!;
+            container.classList.add("hidden");
+            document.getElementById("search-status")!.classList.add("hidden");
+            (document.getElementById("search-input") as HTMLInputElement).value = "";
+            await selectWatchlist(wl);
+            highlightStockRow(code);
+        });
+    });
+}
+
+function highlightStockRow(code: string) {
+    const tbody = document.getElementById("stock-table")!;
+    const rows = tbody.querySelectorAll("tr");
+    for (const row of rows) {
+        const codeCell = row.querySelector("td:first-child");
+        if (codeCell && codeCell.textContent?.trim() === code) {
+            row.classList.add("bg-yellow-100");
+            row.scrollIntoView({ behavior: "smooth", block: "center" });
+            setTimeout(() => row.classList.remove("bg-yellow-100"), 3000);
+            break;
+        }
     }
 }
 
