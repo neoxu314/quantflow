@@ -349,10 +349,21 @@ class TestCrossRunTypeFileCleanup:
         assert not d.exists(), "Watchlist run output dir should be deleted"
 
     def test_task_run_cleanup_on_delete(self):
+        """task_run delete should remove task outputs but preserve directory.
+        
+        Safety: task_run output_path may contain user files (e.g., /Downloads).
+        Delete should only remove task output files, not entire directory.
+        """
         h, runs_api, engine = self._setup_engine()
 
         rid = h.create_run("TR Cleanup", "task_run", {"task_config": "tasks.yaml"})
         d = Path(tempfile.mkdtemp())
+        
+        # User files (should be preserved)
+        user_file = d / "user_document.pdf"
+        user_file.write_text("important data")
+        
+        # Task output files (should be deleted)
         h.update_status(rid, "completed",
             output_path=str(d),
             report_path=str(d / "Daily_Report.md"))
@@ -362,7 +373,15 @@ class TestCrossRunTypeFileCleanup:
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
 
-        assert not d.exists(), "Task run output dir should be deleted"
+        # Task outputs deleted
+        assert not (d / "Daily_Report.md").exists()
+        assert not (d / "Combined_Results.json").exists()
+        
+        # User file preserved
+        assert user_file.exists()
+        
+        # Directory preserved
+        assert d.exists(), "Task run output directory should be preserved (safety)"
 
     def test_output_files_actually_exist_on_disk(self):
         """Verify /files endpoint returns paths that exist."""
@@ -395,13 +414,21 @@ class TestCrossRunTypeFileCleanup:
         assert h.get_run(rid) is None, "DB record should be deleted"
 
     def test_task_run_daily_mode_cleanup_removes_subdirectory(self):
-        """daily mode: delete_run should remove date subdirectory and files."""
+        """daily mode: delete_run should remove date subdirectory but preserve base dir.
+        
+        Safety: base output_path may contain user files. Delete only removes
+        date subdirectory (created by task), not base directory.
+        """
         h, runs_api, engine = self._setup_engine()
         
         rid = h.create_run("Daily Cleanup", "task_run", {"daily": True})
         d = Path(tempfile.mkdtemp())
         
-        # Create date subdirectory
+        # User files in base directory (should be preserved)
+        user_config = d / "user_config.yaml"
+        user_config.write_text("important settings")
+        
+        # Create date subdirectory (created by task, should be deleted)
         date_dir = d / "2026-05-05"
         date_dir.mkdir()
         
@@ -411,13 +438,22 @@ class TestCrossRunTypeFileCleanup:
         # Simulate daily mode paths
         h.update_status(rid, "completed",
             output_path=str(d),
-            report_path=str(date_dir / "Daily_Report.md"))
+            report_path=str(date_dir / "Daily_Report.md"),
+            finished_at="2026-05-05T10:00:00Z")
         
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
         
-        # Verify entire output directory (including subdirs) is removed
-        assert not d.exists(), "Output directory with subdirs should be deleted"
+        # Date subdirectory deleted (task-created)
+        assert not date_dir.exists(), "Date subdirectory should be deleted"
+        assert not (date_dir / "Daily_Report.md").exists()
+        assert not (date_dir / "Combined_Results.json").exists()
+        
+        # User file in base directory preserved
+        assert user_config.exists()
+        
+        # Base directory preserved (may contain user files)
+        assert d.exists(), "Base output directory should be preserved (safety)"
         
     def test_delete_run_removes_report_path_file_first(self):
         """Verify report_path file is deleted before rmtree (edge case test)."""

@@ -159,6 +159,166 @@ class TestDeleteRunApi:
         client.delete(f"/api/runs/{rid}")
         assert not report_file.exists()
 
+    def test_delete_task_run_preserves_user_files(self, client, tmp_path):
+        """task_run delete should only remove task outputs, not user files.
+        
+        Safety check: if user sets Output Directory = /Downloads,
+        and Downloads contains user photos/documents, delete_run
+        should only remove task output files (Daily_Report.md, etc),
+        not the entire Downloads directory.
+        """
+        import yaml
+        
+        # Setup: create output directory with user files
+        output_dir = tmp_path / "user_downloads"
+        output_dir.mkdir()
+        
+        # User's other files (should be preserved)
+        user_photo = output_dir / "vacation.jpg"
+        user_doc = output_dir / "work.pdf"
+        user_photo.write_text("fake photo data")
+        user_doc.write_text("fake document")
+        
+        # Task output files (should be deleted)
+        task_report = output_dir / "Daily_Report.md"
+        combined_json = output_dir / "Combined_Results.json"
+        task_md = output_dir / "test_task.md"
+        task_report.write_text("# Report")
+        combined_json.write_text("{\"signals\": []}")
+        task_md.write_text("# Task Report")
+        
+        # Create task config file
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        task_config_file = config_dir / "tasks_test.yaml"
+        
+        # Create watchlist
+        watchlists_dir = tmp_path / "watchlists"
+        watchlists_dir.mkdir()
+        watchlist_file = watchlists_dir / "test.yaml"
+        watchlist_file.write_text(yaml.dump({
+            "name": "test",
+            "description": "test",
+            "items": [{"code": "AAPL.US", "name": "Apple", "tags": []}]
+        }))
+        
+        # Create task config (no output field)
+        task_config_file.write_text(yaml.dump({
+            "tasks": [{
+                "name": "test_task",
+                "watchlist": str(watchlist_file),
+                "strategies": ["daily_bull_oversold"]
+            }]
+        }))
+        
+        # Create task_run record
+        h = run_history.RunHistory()
+        rid = h.create_run("Test Task", "task_run", {
+            "task_config": str(task_config_file),
+            "output_path": str(output_dir),
+            "daily": False
+        })
+        h.update_status(rid, "completed", 
+            output_path=str(output_dir),
+            report_path=str(task_report))
+        
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine.run_engine import RunEngine
+        from quantflow.web.engine.run_queue import RunQueue
+        from quantflow.web.engine.sse import SSEManager
+        
+        engine = RunEngine(RunQueue(), h, SSEManager())
+        runs_api._set_engine(engine)
+        
+        # Delete the run
+        resp = client.delete(f"/api/runs/{rid}")
+        assert resp.json()["ok"] is True
+        
+        # Verify: task output files deleted
+        assert not task_report.exists()
+        assert not combined_json.exists()
+        assert not task_md.exists()
+        
+        # Verify: user files preserved
+        assert user_photo.exists()
+        assert user_doc.exists()
+        
+        # Verify: output directory still exists
+        assert output_dir.exists()
+
+    def test_delete_task_run_daily_mode_removes_date_dir(self, client, tmp_path):
+        """daily mode: delete should remove date subdirectory."""
+        import yaml
+        
+        # Setup: output directory with date subdirectory
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        date_dir = output_dir / "2026-05-05"
+        date_dir.mkdir()
+        
+        # User files in base output_dir (should be preserved)
+        user_file = output_dir / "config.yaml"
+        user_file.write_text("config: test")
+        
+        # Task outputs in date subdirectory (should be deleted)
+        task_report = date_dir / "Daily_Report.md"
+        combined_json = date_dir / "Combined_Results.json"
+        task_report.write_text("# Report")
+        combined_json.write_text("{\"signals\": []}")
+        
+        # Create task config
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        task_config_file = config_dir / "tasks_test.yaml"
+        watchlists_dir = tmp_path / "watchlists"
+        watchlists_dir.mkdir()
+        watchlist_file = watchlists_dir / "test.yaml"
+        watchlist_file.write_text(yaml.dump({
+            "name": "test",
+            "description": "test",
+            "items": [{"code": "AAPL.US", "name": "Apple", "tags": []}]
+        }))
+        task_config_file.write_text(yaml.dump({
+            "tasks": [{
+                "name": "test_task",
+                "watchlist": str(watchlist_file),
+                "strategies": ["daily_bull_oversold"]
+            }]
+        }))
+        
+        # Create task_run with daily=True
+        h = run_history.RunHistory()
+        rid = h.create_run("Daily Task", "task_run", {
+            "task_config": str(task_config_file),
+            "output_path": str(output_dir),
+            "daily": True
+        })
+        h.update_status(rid, "completed",
+            output_path=str(output_dir),
+            report_path=str(task_report),
+            finished_at="2026-05-05T10:00:00Z")
+        
+        from quantflow.web.api import runs as runs_api
+        from quantflow.web.engine.run_engine import RunEngine
+        from quantflow.web.engine.run_queue import RunQueue
+        from quantflow.web.engine.sse import SSEManager
+        
+        engine = RunEngine(RunQueue(), h, SSEManager())
+        runs_api._set_engine(engine)
+        
+        # Delete the run
+        resp = client.delete(f"/api/runs/{rid}")
+        assert resp.json()["ok"] is True
+        
+        # Verify: date subdirectory and task outputs deleted
+        assert not date_dir.exists()
+        assert not task_report.exists()
+        assert not combined_json.exists()
+        
+        # Verify: user files in base output_dir preserved
+        assert user_file.exists()
+        assert output_dir.exists()
+
 
 class TestTaskRunPreflight:
     def test_preflight_missing_task_config(self, client):

@@ -126,14 +126,100 @@ def delete_run(run_id: str):
 
     if run.output_path:
         op = Path(run.output_path)
-        if op.exists() and op.is_dir():
-            import shutil
-            shutil.rmtree(op, ignore_errors=True)
+        
+        # task_run: only delete task output files, not entire directory
+        # to prevent accidental deletion of user's other files
+        if run.run_type == "task_run":
+            if op.exists() and op.is_dir():
+                _delete_task_run_outputs(run, op)
+        else:
+            # stock_scan, watchlist_run: safe to delete entire directory
+            # (output_path contains run_id subdirectory)
+            if op.exists() and op.is_dir():
+                import shutil
+                shutil.rmtree(op, ignore_errors=True)
 
     engine._history.delete_run(run_id)
     engine._sse.disconnect_all(run_id)
 
     return {"ok": True}
+
+
+def _delete_task_run_outputs(run, output_dir: Path):
+    """Delete task_run output files without deleting entire directory.
+    
+    For task_run, output_path is user-specified directory that may contain
+    other user files. We only delete task-generated files:
+    - Daily_Report.md
+    - Combined_Results.json
+    - {task_name}.md (per-task reports)
+    
+    If daily mode, also delete date subdirectory.
+    """
+    import os
+    from datetime import datetime
+    
+    # Determine base directory (daily mode has date subdirectory)
+    daily = run.config.get("daily", False)
+    if daily:
+        # Extract date from run.finished_at or created_at
+        timestamp_str = run.finished_at or run.created_at
+        if timestamp_str:
+            try:
+                dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                date_str = dt.strftime("%Y-%m-%d")
+                base_dir = output_dir / date_str
+            except Exception:
+                # Fallback: try to find date directory
+                base_dir = output_dir
+        else:
+            base_dir = output_dir
+    else:
+        base_dir = output_dir
+    
+    if not base_dir.exists():
+        return
+    
+    # Files to delete
+    files_to_delete = [
+        base_dir / "Daily_Report.md",
+        base_dir / "Combined_Results.json",
+    ]
+    
+    # Load task config to get task names (for additional task reports)
+    task_config_path = run.config.get("task_config")
+    if task_config_path:
+        # Resolve absolute path
+        PROJECT_ROOT = Path(__file__).resolve().parents[4]
+        if not os.path.isabs(task_config_path):
+            task_config_path = PROJECT_ROOT / task_config_path
+        
+        # Load task names
+        try:
+            from quantflow.orchestration.loader import TaskConfig
+            configs = TaskConfig.load(str(task_config_path))
+            task_names = [cfg.name for cfg in configs]
+            
+            for task_name in task_names:
+                files_to_delete.append(base_dir / f"{task_name}.md")
+        except Exception:
+            # Failed to load, continue with generic files only
+            pass
+    
+    # Delete task output files
+    for f in files_to_delete:
+        if f.exists():
+            f.unlink()
+    
+    # If daily mode and date directory is now empty, delete it
+    if daily and base_dir != output_dir:
+        try:
+            # Check if directory is empty (or contains only empty subdirectories)
+            remaining = list(base_dir.iterdir())
+            if not remaining:
+                base_dir.rmdir()  # Use rmdir() for empty directories
+        except Exception:
+            pass
 
 
 @router.get("/{run_id}/report")
