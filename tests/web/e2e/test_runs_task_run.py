@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -370,9 +371,109 @@ class TestRunsTaskRunWorkflow:
         run_item.click()
         page.wait_for_selector("#runs-detail", state="visible")
 
+page.click('[data-runtab="files"]')
+        page.wait_for_timeout(2000)
+        
+        # IMPROVED VALIDATION: Check specific file names
+        file_rows = page.locator("#runtab-files table tbody tr").all()
+        assert len(file_rows) >= 1
+        
+        # Extract file names from table
+        file_names = []
+        for row in file_rows:
+            name_cell = row.locator("td").first
+            file_names.append(name_cell.text_content())
+        
+        # Verify expected files exist
+        expected_files = ["Daily_Report.md", "Combined_Results.json"]
+        for expected in expected_files:
+            assert any(expected in name for name in file_names), \
+                f"Expected {expected} in files, got: {file_names}"
+        
+        # Verify file paths contain run_id or task name
+        task_stem = TEST_TASK_FILE.replace('.yaml', '')
+        for row in file_rows[:3]:  # Check first 3 rows
+            cells = row.locator("td").all()
+            if len(cells) >= 2:
+                path_cell = cells[1]
+                if path_cell.count() > 0:
+                    path_text = path_cell.text_content()
+                    assert run["id"] in path_text or task_stem in path_text, \
+                        f"File path should contain run_id or task name: {path_text}"
+
+    def test_task_run_daily_mode_files_validation(self, page: Page, base_url: str):
+        """Daily mode: files tab should show files from YYYY-MM-DD subdirectory."""
+        setup_test_task_config(base_url)
+        
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.click('button[data-tab="runs"]')
+        page.click("#btn-new-run")
+        page.wait_for_selector("#modal-new-run", state="visible")
+        page.click("button[data-type='task_run']")
+        page.wait_for_selector("#run-config-task_run", state="visible")
+        
+        page.wait_for_timeout(500)
+        page.locator("#run-task-config-select").select_option(index=0)
+        page.wait_for_timeout(500)
+        
+        # Enable daily mode
+        daily_checkbox = page.locator("#run-daily-mode")
+        daily_checkbox.check()
+        page.wait_for_timeout(500)
+        
+        page.click("#btn-execute-run")
+        page.wait_for_selector("#modal-new-run", state="hidden", timeout=10000)
+        
+        run = self.wait_for_run_completion(base_url, "task_run")
+        assert run is not None
+        assert run["status"] == "completed"
+        
+        # Verify daily config
+        assert run.get("config", {}).get("daily") is True
+        
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        page.click('button[data-tab="runs"]')
+        
+        run_item = page.locator(
+            f"li[data-run-id]:has-text('{TEST_TASK_FILE.replace('.yaml', '')}')"
+        ).first
+        run_item.click()
+        page.wait_for_selector("#runs-detail", state="visible")
+        
+        # Check report tab - should have content
+        page.click('[data-runtab="report"]')
+        page.wait_for_timeout(1000)
+        expect(page.locator("#runtab-report")).not_to_contain_text("No report available")
+        
+        # Check files tab - should find files from subdirectory
         page.click('[data-runtab="files"]')
         page.wait_for_timeout(2000)
-
-        file_cells = page.locator("#runtab-files table tbody tr td").all()
-        file_names = [cell.text_content() for cell in file_cells]
-        assert len(file_names) > 0, "Files tab should show output files"
+        
+        file_rows = page.locator("#runtab-files table tbody tr").all()
+        assert len(file_rows) >= 1
+        
+        # Verify expected files from date subdirectory
+        file_names = []
+        for row in file_rows:
+            name_cell = row.locator("td").first
+            file_names.append(name_cell.text_content())
+        
+        # Daily mode should generate these files
+        expected_files = ["Daily_Report.md"]
+        for expected in expected_files:
+            assert any(expected in name for name in file_names), \
+                f"Daily mode should have {expected}, got: {file_names}"
+        
+        # Verify paths contain date directory (YYYY-MM-DD pattern)
+        today = datetime.now().strftime("%Y-%m-%d")
+        for row in file_rows[:3]:
+            cells = row.locator("td").all()
+            if len(cells) >= 2:
+                path_cell = cells[1]
+                if path_cell.count() > 0:
+                    path_text = path_cell.text_content()
+                    # Path should contain today's date directory or date pattern
+                    assert today in path_text or any(c.isdigit() for c in path_text), \
+                        f"Daily mode file path should contain date: {path_text}"
