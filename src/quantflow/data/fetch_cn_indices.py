@@ -127,7 +127,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
-    
+
     for cn_name, config in CN_INDICES.items():
         fetch_cn_index(
             index_name=cn_name,
