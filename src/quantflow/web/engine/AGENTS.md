@@ -17,17 +17,39 @@ engine/
 ### RunEngine (run_engine.py)
 - Entry: `start_processing(run_id)` spawns background thread
 - Execution methods: `_exec_stock_scan()`, `_exec_watchlist_run()`, `_exec_task_run()`
-  - **stock_scan**: Output to `{output_path}/{run_id}/` (isolated subdirectory)
-  - **watchlist_run**: Output to `{output_path}/{run_id}/` (isolated subdirectory)
-  - **task_run**: Output directly to `{output_path}/` (NO run_id subdirectory, user manages output)
-    - Daily mode: Output to `{output_path}/{YYYY-MM-DD}/`
 - Date handling: stock_scan fetches data from `fetch_start` (user start_date minus lookback warmup) to `end_date`, then trims result to user-specified date range using `df["date"]` column filter
 - Cancellation: `CancellationFlag` per run, checked between stock processing
 - Progress: calls `on_progress` callback with `ProgressEvent` objects (type=current/total/code/message/level)
-- Output paths:
-  - stock_scan: `{output_path}/{run_id}/{code}_indicators.json`
-  - watchlist_run: `{output_path}/{run_id}/` (JSON + Markdown)
-  - task_run: `{output_path}/` or `{output_path}/{date}/` (per-task + combined files)
+
+## Output Logic (Unified)
+
+All run types follow "所见即所得" (what-you-see-is-what-you-get) model:
+- **stock_scan**: Output directly to `./output/manual_scans/{code}_indicators.json`
+- **watchlist_run**: Output directly to `./output/manual_watchlist/{name}.json` and `.md`
+- **task_run**: Output directly to `./output` (or `./output/YYYY-MM-DD` if daily mode)
+
+**Key changes from previous version:**
+- No run_id subdirectory injection (previously stock_scan/watchlist_run added `{run_id}/`)
+- Unified default paths: all use `./output` (相对路径 relative paths)
+- Unified delete logic: precise file deletion (not entire directory)
+
+**User responsibility:**
+- Users control output isolation via different `output_path` values
+- Users can use preset system to save different output configurations
+- RunHistory database tracks all runs regardless of output_path
+
+**Delete behavior:**
+All run types use precise file deletion:
+- stock_scan: Delete `{code}_indicators.json`
+- watchlist_run: Delete `{run.name}.json` and `{run.name}.md`
+- task_run: Delete Daily_Report.md, Combined_Results.json, and per-task files
+
+This prevents accidental deletion of user files in output directory.
+
+**Watchlist run file naming:**
+- `{run.name}.json` - Executor output (e.g., `web-test_watchlist.json`)
+- `{run.name}.md` - Markdown report (e.g., `web-test_watchlist.md`)
+Note: job.name uses hyphen instead of colon for Windows compatibility
 
 ### RunHistory (run_history.py)
 - SQLite-backed persistent storage at `~/.quantflow/runs.db`
@@ -60,26 +82,6 @@ engine/
 - `create(name, run_type, config)` → returns preset_id
 - `list_presets()`, `get(id)`, `update(id, ...)`, `delete(id)`
 - Presets allow re-running with same parameters via `/api/presets/{id}/run`
-
-## TASK_RUN OUTPUT BEHAVIOR
-
-**Output directory** (user-specified, default `./output`):
-- No run_id subdirectory (unlike stock_scan/watchlist_run)
-- All output files in same directory, differentiated by filename
-
-**Generated files**:
-- `{task_name}.md` — per-task Markdown report
-- `{task_name}.json` — per-task JSON results (from Executor)
-- `Daily_Report.md` — combined Markdown report
-- `Combined_Results.json` — combined JSON results
-
-**Daily mode** (`daily=True`):
-- Date subdirectory: `{output_path}/{YYYY-MM-DD}/`
-- All files in date subdirectory
-
-**Delete behavior** (runs.py `delete_run`):
-- Only deletes task output files, preserves user files
-- Safe: Never deletes entire output directory
 
 ## CONVENTIONS
 - RunEngine singleton pattern: API modules call `_set_engine()` / `_get_engine()` from server.py

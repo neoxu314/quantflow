@@ -37,17 +37,26 @@ web/
 ## API DETAILS
 
 ### runs.py (Run Management)
-- `delete_run(run_id)`: **CRITICAL SAFETY** - safe delete logic
-  - **stock_scan/watchlist_run**: Delete entire output directory (contains run_id subdirectory)
-  - **task_run**: Only delete task output files, preserve user files
-    - Deleted: `Daily_Report.md`, `Combined_Results.json`, `{task_name}.md`, `{task_name}.json`
-    - Preserved: All other files in output directory (user photos, documents, etc.)
-    - Daily mode: Delete date subdirectory if empty
-  - **Safety guarantee**: Never delete user's non-task files
+- `delete_run(run_id)`: **CRITICAL SAFETY** - unified precise file deletion
+  - **stock_scan**: Delete `{code}_indicators.json` only
+  - **watchlist_run**: Delete `{run.name}.json` + `{run.name}.md`
+  - **task_run**: Delete Daily_Report.md, Combined_Results.json, and per-task files
+  - **Safety guarantee**: Never deletes entire directory or user files
 - `_delete_task_run_outputs()`: Helper function for safe task_run deletion
   - Reads task config to get task names
   - Deletes only task-generated files
   - Fallback: Delete `{run.name}.json` if task config missing
+
+## Runs API
+
+### Delete Run Endpoint
+- **Path**: `/api/runs/{run_id}`
+- **Method**: DELETE
+- **Behavior**: Unified precise file deletion for all run types
+  - stock_scan: Deletes indicator JSON only
+  - watchlist_run: Deletes Executor JSON + Markdown report
+  - task_run: Deletes Daily_Report.md, Combined_Results.json, and per-task files
+- **Safety**: Does NOT delete entire directory to prevent user file loss
 
 ### tasks.py (Task Management)
 - Task YAML format: **NO output field** (controlled by CLI/Web `--output`)
