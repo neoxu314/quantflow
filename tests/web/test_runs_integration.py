@@ -268,8 +268,8 @@ class TestRunsAPIDBRoundTrip:
             "code": "NVDA.US"})
         rid2 = h.create_run("Run 2", "stock_scan", {
             "code": "AAPL.US"})
-        d1 = Path(str(tmp_path / rid1))
-        d2 = Path(str(tmp_path / rid2))
+        d1 = tmp_path / "run1_output"
+        d2 = tmp_path / "run2_output"
         d1.mkdir()
         d2.mkdir()
         h.update_status(rid1, "completed", signal_count=1,
@@ -298,8 +298,7 @@ class TestCrossRunTypeFileCleanup:
 
     def _setup_engine(self):
         import sqlite3
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
+
         from quantflow.web.api import runs as runs_api
         from quantflow.web.engine.run_engine import RunEngine
         from quantflow.web.engine.run_history import RunHistory
@@ -378,11 +377,11 @@ class TestCrossRunTypeFileCleanup:
 
         rid = h.create_run("TR Cleanup", "task_run", {"task_config": "tasks.yaml"})
         d = Path(tempfile.mkdtemp())
-        
+
         # User files (should be preserved)
         user_file = d / "user_document.pdf"
         user_file.write_text("important data")
-        
+
         # Task output files (should be deleted)
         h.update_status(rid, "completed",
             output_path=str(d),
@@ -398,10 +397,10 @@ class TestCrossRunTypeFileCleanup:
         assert not (d / "Daily_Report.md").exists()
         assert not (d / "Combined_Results.json").exists()
         assert not (d / "TR Cleanup.json").exists()  # Executor output also deleted
-        
+
         # User file preserved
         assert user_file.exists()
-        
+
         # Directory preserved
         assert d.exists(), "Task run output directory should be preserved (safety)"
 
@@ -442,43 +441,43 @@ class TestCrossRunTypeFileCleanup:
         date subdirectory (created by task), not base directory.
         """
         h, runs_api, engine = self._setup_engine()
-        
+
         rid = h.create_run("Daily Cleanup", "task_run", {"daily": True})
         d = Path(tempfile.mkdtemp())
-        
+
         # User files in base directory (should be preserved)
         user_config = d / "user_config.yaml"
         user_config.write_text("important settings")
-        
+
         # Create date subdirectory (created by task, should be deleted)
         date_dir = d / "2026-05-05"
         date_dir.mkdir()
-        
+
         (date_dir / "Daily_Report.md").write_text("# Report")
         (date_dir / "Combined_Results.json").write_text("[]")
         (date_dir / "Daily Cleanup.json").write_text("{\"results\": []}")  # Executor output
-        
+
         # Simulate daily mode paths
         h.update_status(rid, "completed",
             output_path=str(d),
             report_path=str(date_dir / "Daily_Report.md"),
             finished_at="2026-05-05T10:00:00Z")
-        
+
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
-        
+
         # Date subdirectory deleted (task-created)
         assert not date_dir.exists(), "Date subdirectory should be deleted"
         assert not (date_dir / "Daily_Report.md").exists()
         assert not (date_dir / "Combined_Results.json").exists()
         assert not (date_dir / "Daily Cleanup.json").exists()  # Executor output also deleted
-        
+
         # User file in base directory preserved
         assert user_config.exists()
-        
+
         # Base directory preserved (may contain user files)
         assert d.exists(), "Base output directory should be preserved (safety)"
-        
+
     def test_delete_run_removes_report_path_file_first(self):
         """Verify report_path file and indicator file are deleted, directory preserved.
         
@@ -487,10 +486,10 @@ class TestCrossRunTypeFileCleanup:
         specific files, not the entire directory.
         """
         h, runs_api, engine = self._setup_engine()
-        
+
         rid = h.create_run("Report Delete", "stock_scan", {"code": "X"})
         d = Path(tempfile.mkdtemp())
-        
+
         # Indicator file (should be deleted)
         indicator_file = d / "X_indicators.json"
         indicator_file.write_text("[]")
@@ -500,14 +499,14 @@ class TestCrossRunTypeFileCleanup:
         # Other file from different run (should be preserved)
         other_file = d / "other.json"
         other_file.write_text("{}")
-        
+
         h.update_status(rid, "completed",
             output_path=str(d),
             report_path=str(report_file))
-        
+
         client = TestClient(_make_app(runs_api))
         client.delete(f"/api/runs/{rid}")
-        
+
         # Verify specific files are deleted
         assert not report_file.exists(), "report_path file should be deleted"
         assert not indicator_file.exists(), "indicator file should be deleted"
