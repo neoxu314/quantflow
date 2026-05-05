@@ -161,6 +161,17 @@ src/quantflow/web/static/
 ### API + Integration tests
 **Zero risk.** All file operations target `tmp_path` via monkey-patched module constants (`CONFIG_PATH`, `CONFIG_DIR`, `WATCHLISTS_DIR`). Temp dirs are destroyed by pytest after each test.
 
+### Session-level protection (conftest.py)
+Two safety hooks verify production files are never modified by tests:
+
+1. **pytest_sessionstart**: Snapshot file hashes for all production configs
+   - Snapshots: `config/quantflow.yaml`, `config/indicators.yaml`, `watchlists/*.yaml`
+   - Stores SHA256 hashes in-memory for later verification
+
+2. **pytest_sessionfinish**: Verify all hashes match
+   - Fails test session if any production file changed
+   - Catches accidental writes to production paths
+
 ### E2E tests
 Four-layer protection via `protect_production_configs` autouse fixture in `e2e/conftest.py`:
 
@@ -178,10 +189,20 @@ This guarantees production configs are byte-identical to pre-test state even if 
 **Protected files:**
 - `config/quantflow.yaml` (Settings)
 - `config/indicators.yaml` (Library indicator params)
+- All `watchlists/*.yaml` files
 
 **Test-only files (created/deleted per test):**
 - `watchlists/_test_e2e_wl.yaml`
 - `config/tasks_e2e_test.yaml`
+
+### Historical incident (resolved)
+**Commit 276996b**: Test code overwrote `watchlists/djia.yaml` (30 stocks → 1 stock) by writing to production path instead of tmp_path. Root cause: hardcoded path in test code.
+
+**Fix**: 
+- Added session-level hash verification (conftest.py)
+- Added E2E autouse fixture (e2e/conftest.py)
+- Restored djia.yaml from initial commit a78fec7
+- All tests now use tmp_path for file operations
 
 ## Add New Test
 
