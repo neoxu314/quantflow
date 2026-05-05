@@ -12,6 +12,20 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+CN_INDICES = {
+    "中证500": {
+        "symbol": "000905",
+        "name": "CSI 500",
+        "filename": "zhongzheng_500.yaml"
+    },
+    "创业板指": {
+        "symbol": "399006",
+        "name": "ChiNext",
+        "filename": "chuangyeban.yaml"
+    }
+}
+
+
 def convert_cn_code(code: str) -> str:
     """Convert A-share stock code to standard format.
     
