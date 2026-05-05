@@ -98,7 +98,7 @@ class TestCNIndicesConfig:
 class TestFetchCnIndex:
     """Test fetch_cn_index() function."""
 
-    @patch("quantflow.data.fetch_cn_indices.ak")
+    @patch("quantflow.data.fetch_cn_indices.ak", create=True)
     def test_fetch_and_convert(self, mock_ak, tmp_path):
         """Should fetch data, convert codes, write YAML."""
         from quantflow.data.fetch_cn_indices import fetch_cn_index
@@ -150,7 +150,7 @@ class TestFetchCnIndex:
         for item in data["items"]:
             assert "中证500" in item["tags"]
 
-    @patch("quantflow.data.fetch_cn_indices.ak")
+    @patch("quantflow.data.fetch_cn_indices.ak", create=True)
     def test_empty_dataframe(self, mock_ak, tmp_path):
         """Should handle empty DataFrame gracefully."""
         from quantflow.data.fetch_cn_indices import fetch_cn_index
@@ -174,7 +174,7 @@ class TestFetchCnIndex:
         yaml_file = tmp_path / "test_empty.yaml"
         assert not yaml_file.exists()
 
-    @patch("quantflow.data.fetch_cn_indices.ak")
+    @patch("quantflow.data.fetch_cn_indices.ak", create=True)
     def test_api_error(self, mock_ak, tmp_path):
         """Should handle API errors gracefully."""
         from quantflow.data.fetch_cn_indices import fetch_cn_index
