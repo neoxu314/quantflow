@@ -6,6 +6,7 @@ from akshare and saves them to watchlists/*.yaml.
 
 import logging
 from pathlib import Path
+from typing import Optional
 
 import akshare as ak
 import yaml
@@ -67,7 +68,8 @@ def fetch_cn_index(
     index_name: str,
     symbol: str,
     en_name: str,
-    filename: str
+    filename: str,
+    output_dir: Optional[Path] = None
 ) -> None:
     """Fetch A-share index constituents and save to YAML.
 
@@ -76,6 +78,7 @@ def fetch_cn_index(
         symbol: Index code (e.g., "000905")
         en_name: English name (e.g., "CSI 500")
         filename: Output YAML filename (e.g., "zhongzheng_500.yaml")
+        output_dir: Optional output directory (defaults to project_root/watchlists)
     """
     logger.info(f"Fetching {index_name} constituents...")
 
@@ -87,7 +90,7 @@ def fetch_cn_index(
             return
 
         # Expected columns: 品种代码, 品种名称
-        df = df[["品种代码", "品种名称"]].copy()
+        df = df.loc[:, ["品种代码", "品种名称"]].copy()
         df.columns = ["code", "name"]
 
         # Convert codes
@@ -112,9 +115,13 @@ def fetch_cn_index(
             ]
         }
 
-        # Find project root (4 levels up from this file)
-        project_root = Path(__file__).parent.parent.parent.parent
-        filepath = project_root / "watchlists" / filename
+        # Determine output path
+        if output_dir is None:
+            # Find project root (4 levels up from this file)
+            project_root = Path(__file__).parent.parent.parent.parent
+            filepath = project_root / "watchlists" / filename
+        else:
+            filepath = output_dir / filename
 
         # Write YAML
         filepath.parent.mkdir(parents=True, exist_ok=True)
