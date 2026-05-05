@@ -36,7 +36,7 @@ quantflow/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Run scan | `cli.py` | `stock_scan` (alias: `scan`) |
+| Run scan | `cli.py` | `stock_scan` (alias: `scan`), supports `--output` for JSON results (default: `output/cli_scans/`) |
 | Run watchlist | `cli.py` | `watchlist_run` (alias: `monitor`), supports `--strategies` and `--days-back` |
 | Run task file | `cli.py` | `task_run` (alias: `tasks`) |
 | Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
@@ -72,9 +72,12 @@ quantflow/
   - Config layer: 30 unit + 1 sanity (production config parsing) = 31 tests
   - Orchestration layer: 35 unit + 11 integration (discovery, Orchestrator flow) = 46 tests
   - Reports layer: 18 unit = 18 tests
+  - CLI layer: 16 unit + 8 integration (command routing) + 3 integration (TDX reference values) + 4 skipped (pending) = 27 tests
   - Web layer: 209 tests (42 unit + 26 integration + 4 contract + 137 E2E)
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
   - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
+  - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
+  - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`

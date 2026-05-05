@@ -1,9 +1,11 @@
 """CLI entry points."""
 
 import argparse
+import json
 import logging
 import math
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 
@@ -15,6 +17,8 @@ from quantflow.indicators.standard import KDJIndicator, MACDIndicator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def stock_scan():
     parser = argparse.ArgumentParser(description="Scan single stock")
@@ -22,6 +26,7 @@ def stock_scan():
     parser.add_argument("--start", default=None, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end", default=None, help="End date (YYYY-MM-DD)")
     parser.add_argument("--indicator", default="kdj,dual_line", help="Indicators to use")
+    parser.add_argument("--output", default=None, help="Output directory for indicator results")
 
     args = parser.parse_args()
     code = StockCode.from_standard(args.code)
@@ -81,6 +86,40 @@ def stock_scan():
     print(f"\n=== Scan Result for {args.code} ===")
     print(f"Date range: {start_date} to {end_date}")
     print(f"Data source: {source}")
+
+    output_dir = Path(args.output) if args.output else PROJECT_ROOT / "output" / "cli_scans"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_code = args.code.replace("/", "_").replace("\\", "_")
+    indicator_file = output_dir / f"{safe_code}_indicators.json"
+
+    def _serialize_df(df_to_save):
+        out = []
+        for row in df_to_save.to_dict(orient="records"):
+            clean = {}
+            for k, v in row.items():
+                if hasattr(v, "isoformat"):
+                    clean[k] = v.isoformat()
+                elif hasattr(v, "item"):
+                    try:
+                        val = v.item()
+                        if isinstance(val, float) and math.isnan(val):
+                            clean[k] = None
+                        else:
+                            clean[k] = val
+                    except Exception:
+                        clean[k] = str(v)
+                elif isinstance(v, float):
+                    clean[k] = None if math.isnan(v) else v
+                else:
+                    clean[k] = v
+            out.append(clean)
+        return out
+
+    indicator_data = _serialize_df(df)
+    indicator_file.write_text(json.dumps(indicator_data, indent=2))
+
+    print(f"Indicator data saved: {indicator_file}")
 
 
 def watchlist_run():

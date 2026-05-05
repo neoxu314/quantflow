@@ -126,16 +126,20 @@ This means a 700-stock list with 200 yFinance stocks takes ~6-8 minutes with jit
 You can run scans manually or via automation. Run these from the project root directory (`quantflow/`).
 
 ### Command 1: Single Stock Scan
-For quick, ad-hoc analysis of one stock (outputs indicator values).
+For quick, ad-hoc analysis of one stock (outputs indicator values to JSON file).
 ```bash
 python -m quantflow.cli stock_scan --code NVDA.US
+python -m quantflow.cli stock_scan --code 002594.SZ --indicator kdj,macd --output ./my_results
 ```
 - `--code`: Stock code (Standard format, e.g., `600519.SH` for A-share, `NVDA.US` for US).
 - `--start`: Start date for data (YYYY-MM-DD). Default: 1 year ago.
 - `--end`: End date. Default: Today.
 - `--indicator`: Indicators to calculate (default: `kdj,dual_line`).
+- `--output`: Output directory for JSON results (default: `output/cli_scans/`).
 
 > **Note on date range**: `--start` / `--end` define the **report output date range**. The system automatically fetches additional historical data before `--start` as warmup for indicator calculation, based on the lookback formula. Only data within the user-specified range appears in the output.
+
+> **Output format**: Generates `{code}_indicators.json` containing OHLCV + indicator values (K, D, J, MACD, etc.), consistent with Web UI stock_scan output.
 
 ### Command 2: Run Orchestration Tasks (Recommended)
 This runs the strategies defined in your `tasks_*.yaml` file, producing both **per-task** and **combined** outputs.
@@ -335,3 +339,42 @@ The system supports **8 indicators**:
 | `/api/presets/{id}/run` | POST | Run from saved preset |
 | `/api/browse/` | GET | Directory browsing for file picker |
 | `/api/browse/mkdir` | POST | Create directory via file picker |
+
+## 6. Testing
+
+The project has comprehensive test coverage across all layers. Run tests with pytest:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run tests excluding integration (network-dependent)
+pytest tests/ -m "not integration"
+
+# Run CLI layer tests only
+pytest tests/test_cli.py -v
+
+# Run with coverage
+pytest tests/ --cov=quantflow
+```
+
+### Test Coverage Summary
+
+| Layer | Unit Tests | Integration Tests | Total |
+|-------|-----------|------------------|-------|
+| Data | 80 | 17 | 97 |
+| Indicators | 112 | 14 | 126 |
+| Config | 30 | 1 | 31 |
+| Orchestration | 35 | 11 | 46 |
+| Reports | 18 | 0 | 18 |
+| CLI | 16 | 11 | 27 |
+| Web | 42 + 26 + 4 | 137 (E2E) | 209 |
+| **Total** | **333** | **180** | **513** |
+
+### CLI Test Highlights
+
+- **Structural validation**: 26 tests covering parameter parsing, command routing, output format
+- **Reference value validation**: BYD (002594.SZ) 2026-04-01 KDJ values verified against TongDaXin reference (error <0.02%)
+- **Pending tests**: watchlist_run and task_run expected signal counts (4 tests marked as `@pytest.mark.skip`, see `tests/CLI_TODO_TESTS.md`)
+
+For detailed test coverage, see `AGENTS.md` and `tests/web/TEST_MATRIX.md`.
