@@ -394,6 +394,53 @@ class TestCrossRunTypeFileCleanup:
 
         assert h.get_run(rid) is None, "DB record should be deleted"
 
+    def test_task_run_daily_mode_cleanup_removes_subdirectory(self):
+        """daily mode: delete_run should remove date subdirectory and files."""
+        h, runs_api, engine = self._setup_engine()
+        
+        rid = h.create_run("Daily Cleanup", "task_run", {"daily": True})
+        d = Path(tempfile.mkdtemp())
+        
+        # Create date subdirectory
+        date_dir = d / "2026-05-05"
+        date_dir.mkdir()
+        
+        (date_dir / "Daily_Report.md").write_text("# Report")
+        (date_dir / "Combined_Results.json").write_text("[]")
+        
+        # Simulate daily mode paths
+        h.update_status(rid, "completed",
+            output_path=str(d),
+            report_path=str(date_dir / "Daily_Report.md"))
+        
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+        
+        # Verify entire output directory (including subdirs) is removed
+        assert not d.exists(), "Output directory with subdirs should be deleted"
+        
+    def test_delete_run_removes_report_path_file_first(self):
+        """Verify report_path file is deleted before rmtree (edge case test)."""
+        h, runs_api, engine = self._setup_engine()
+        
+        rid = h.create_run("Report Delete", "stock_scan", {"code": "X"})
+        d = Path(tempfile.mkdtemp())
+        
+        report_file = d / "data.json"
+        report_file.write_text("[]")
+        (d / "other.json").write_text("{}")
+        
+        h.update_status(rid, "completed",
+            output_path=str(d),
+            report_path=str(report_file))
+        
+        client = TestClient(_make_app(runs_api))
+        client.delete(f"/api/runs/{rid}")
+        
+        # Verify both report_path and output_path are cleaned
+        assert not report_file.exists(), "report_path file should be deleted"
+        assert not d.exists(), "output_path directory should be deleted"
+
 
 def _make_app(runs_api_module):
     from fastapi import FastAPI
