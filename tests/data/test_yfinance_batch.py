@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+from unittest.mock import patch
 
 
 def _make_multi_index_df(tickers_data):
@@ -223,3 +224,85 @@ class TestYFinanceChunking:
         source = YFinanceDataSource(sleep_min=3, sleep_max=8)
         dur = source._jitter_sleep()
         assert 2.9 <= dur <= 8.1
+
+
+class TestYFinanceRetryMechanism:
+
+    def test_retry_with_backoff_success_after_retry(self):
+        """Test retry mechanism succeeds on second attempt"""
+        from quantflow.data.adapters.yfinance import YFinanceDataSource
+
+        adapter = YFinanceDataSource(
+            chunk_size=5,
+            retry_max_attempts=3,
+            retry_base_delay=30,
+        )
+
+        call_count = 0
+        def flaky_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("YFRateLimitError: Rate limited")
+            return "success"
+
+        with patch("time.sleep"):
+            result, attempts, error = adapter._retry_with_backoff(
+                flaky_func,
+                max_attempts=3,
+                base_delay=30,
+                error_types=[Exception],
+            )
+
+        assert result == "success"
+        assert attempts == 2
+        assert error is None
+
+    def test_retry_with_backoff_exhausted(self):
+        """Test retry mechanism exhausts attempts and returns error"""
+        from quantflow.data.adapters.yfinance import YFinanceDataSource
+
+        adapter = YFinanceDataSource(retry_max_attempts=3)
+
+        def always_fail():
+            raise Exception("YFRateLimitError: Rate limited")
+
+        with patch("time.sleep"):
+            result, attempts, error = adapter._retry_with_backoff(
+                always_fail,
+                max_attempts=3,
+                base_delay=30,
+                error_types=[Exception],
+            )
+
+        assert result is None
+        assert attempts == 3
+        assert error is not None
+        assert "RateLimitError" in str(error)
+
+    def test_retry_exponential_backoff_timing(self):
+        """Test exponential backoff delays: 30, 60 seconds (between 3 attempts)"""
+        from quantflow.data.adapters.yfinance import YFinanceDataSource
+
+        adapter = YFinanceDataSource()
+
+        sleep_times = []
+        def record_sleep(duration):
+            sleep_times.append(duration)
+
+        def always_fail():
+            raise Exception("Rate limited")
+
+        with patch("time.sleep", side_effect=record_sleep):
+            adapter._retry_with_backoff(
+                always_fail,
+                max_attempts=3,
+                base_delay=30,
+                error_types=[Exception],
+            )
+
+        # With 3 attempts, sleep happens after attempts 1 and 2 (not after final attempt)
+        # Attempt 1: delay = 30 * (2 ** 0) = 30
+        # Attempt 2: delay = 30 * (2 ** 1) = 60
+        # Attempt 3: no sleep (final attempt)
+        assert sleep_times == [30, 60]

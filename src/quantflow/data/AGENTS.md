@@ -61,6 +61,15 @@ data/
 | **Volume unit** | Shares (股) | Lots (手=100股) | Shares |
 | **Adjust flag** | `"2"` for qfq | API default | `qfq`/`hfq`/`none` |
 
+## YFINANCE SPECIAL
+
+- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 35/ticker** (down from 50) with jittered sleep 10-20s to avoid 429.
+- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max, retry_max_attempts, retry_base_delay)` — values passed from `DataSourceFactory` via `yfinance_config`.
+- **Retry mechanism**: On YFRateLimitError, retries up to `retry_max_attempts` (default 3) with exponential backoff: `base_delay * 2^(attempt-1)` (30s, 60s, 120s).
+- **Enhanced logging**: Per-symbol success/failure logging, SSL compatibility warnings for LibreSSL users.
+- **SSL compatibility**: LibreSSL 2.8.3 incompatible with urllib3 v2. Solution: `brew install openssl && export PATH="/opt/homebrew/opt/openssl/bin:$PATH"`
+- `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)` with retry wrapper.
+
 ## TESTS
 
 | Category | Test File(s) | Test Count | Type |
@@ -83,7 +92,7 @@ Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for ne
 ## NOTES
 
 - Sector constituents: SW works fully, THS list-only, EM blocked by network
-- YFinance: 60 req/min rate limit, **batch fetch uses chunking** (50 tickers/batch, jitter sleep 5–12s) configured in `quantflow.yaml`
+- YFinance: 60 req/min rate limit, **batch fetch uses chunking** (35 tickers/batch, jitter sleep 10-20s) configured in `quantflow.yaml`
 - Tushare: Token required - `TUSHARE_TOKEN` env var or config file
-- `DataSourceFactory` accepts `yfinance_config` dict to pass chunk size/sleep to adapter
+- `DataSourceFactory` accepts `yfinance_config` dict to pass chunk size/sleep/retry parameters to adapter
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.

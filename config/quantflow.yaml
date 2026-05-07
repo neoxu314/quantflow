@@ -27,9 +27,11 @@ lookback:
   buffer_days: 30
 yfinance:
   batch:
-    chunk_size: 50
-    sleep_min: 5
-    sleep_max: 12
+    chunk_size: 35
+    sleep_min: 10
+    sleep_max: 20
+    retry_max_attempts: 3
+    retry_base_delay: 30
 web:
   port: 8082
   host: 127.0.0.1

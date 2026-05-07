@@ -52,6 +52,8 @@ class DataSourceFactory:
                 chunk_size=self._yfinance.get("chunk_size"),
                 sleep_min=self._yfinance.get("sleep_min"),
                 sleep_max=self._yfinance.get("sleep_max"),
+                retry_max_attempts=self._yfinance.get("retry_max_attempts"),
+                retry_base_delay=self._yfinance.get("retry_base_delay"),
             )
         else:
             adapter = adapter_cls()

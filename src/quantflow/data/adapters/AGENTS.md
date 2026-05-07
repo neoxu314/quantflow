@@ -24,15 +24,19 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 
 ## YFINANCE SPECIAL
 
-- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 50/ticker** with jittered sleep to avoid 429.
-- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max)` — values passed from `DataSourceFactory` via `yfinance_config`.
-- `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)`.
+- Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 35/ticker** with jittered sleep 10-20s to avoid 429.
+- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max, retry_max_attempts, retry_base_delay)` — values passed from `DataSourceFactory` via `yfinance_config`.
+- `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)` with retry wrapper.
 - Internal chunking: splits N tickers into batches of `chunk_size`, sleeps `random(sleep_min, sleep_max)` between batches.
 - Returns `Dict[str, DataFrame]` with same column format as single-stock `fetch_ohlcv`.
 - Uses `curl_cffi` for Chrome TLS fingerprint bypass
 - **Market suffix mapping**: KR→.KS (Korean), JP→.T (Japanese), HK→.HK (Hong Kong), US→no suffix
 - Hong Kong: `hk` prefix handling, USD conversion needed for `total_mv`
 - Fundamental data: `pe_ttm`, `pb`, `total_mv` (ps_ttm not available)
+- **Retry mechanism**: `_retry_with_backoff()` handles YFRateLimitError with exponential backoff (30s, 60s, 120s for 3 attempts)
+- **Config parameters**: `retry_max_attempts` (default 3), `retry_base_delay` (default 30s)
+- **SSL detection**: `_check_ssl_compatibility()` logs warning for LibreSSL users
+- **Enhanced logging**: Detailed per-symbol failure logging with error classification
 
 ## ANTI-PATTERNS
 

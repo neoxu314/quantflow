@@ -46,6 +46,25 @@ class TestDataSourceFactory:
         source2 = factory.get_source("cn")
         assert source1 is source2
 
+    def test_yfinance_config_passed_to_adapter(self):
+        """Verify yfinance config (including retry params) is passed to adapter."""
+        yf_config = {
+            "chunk_size": 42,
+            "sleep_min": 7.5,
+            "sleep_max": 15.2,
+            "retry_max_attempts": 5,
+            "retry_base_delay": 60,
+        }
+        factory = DataSourceFactory(yfinance_config=yf_config)
+        yf_adapter = factory.get_source("us")  # US market uses yfinance
+
+        assert yf_adapter.get_name() == "YFinance"
+        assert yf_adapter._chunk_size == 42
+        assert yf_adapter._sleep_min == 7.5
+        assert yf_adapter._sleep_max == 15.2
+        assert yf_adapter._retry_max_attempts == 5
+        assert yf_adapter._retry_base_delay == 60
+
 
 class TestDataSourceFallback:
     """Test automatic fallback when end_date = today but no data available."""
