@@ -306,3 +306,58 @@ class TestYFinanceRetryMechanism:
         # Attempt 2: delay = 30 * (2 ** 1) = 60
         # Attempt 3: no sleep (final attempt)
         assert sleep_times == [30, 60]
+
+    def test_retry_on_low_success_rate(self, monkeypatch):
+        """Test retry triggers when success rate < 50%"""
+        from quantflow.data.base import StockCode
+        from quantflow.data.adapters.yfinance import YFinanceDataSource
+
+        call_count = 0
+
+        def mock_download(**kwargs):
+            nonlocal call_count
+            call_count += 1
+
+            tickers = kwargs["tickers"]
+
+            if call_count == 1:
+                # First call: 2/5 success (40% < 50%) - only AAPL and MSFT have data
+                return _make_multi_index_df({
+                    "AAPL": SAMPLE_ROWS,
+                    "MSFT": SAMPLE_ROWS,
+                    # GOOGL, AMZN, NVDA have no data (empty DataFrames)
+                })
+            else:
+                # Second call: all 5 success (100% >= 50%)
+                return _make_multi_index_df({
+                    t: SAMPLE_ROWS for t in tickers
+                })
+
+        monkeypatch.setattr("yfinance.download", mock_download)
+        monkeypatch.setattr("time.sleep", lambda x: None)  # Skip actual sleep
+
+        adapter = YFinanceDataSource(
+            chunk_size=5,
+            retry_max_attempts=3,
+            retry_base_delay=5,
+        )
+
+        codes = [
+            StockCode(code="AAPL", exchange="US"),
+            StockCode(code="MSFT", exchange="US"),
+            StockCode(code="GOOGL", exchange="US"),
+            StockCode(code="AMZN", exchange="US"),
+            StockCode(code="NVDA", exchange="US"),
+        ]
+
+        results = adapter.fetch_batch_ohlcv(codes, "2026-05-01", "2026-05-08")
+
+        # Should retry because first call had <50% success rate
+        assert call_count >= 2  # At least 2 download calls
+        # Should have all 5 tickers after successful retry
+        assert len(results) == 5
+        assert "AAPL.US" in results
+        assert "MSFT.US" in results
+        assert "GOOGL.US" in results
+        assert "AMZN.US" in results
+        assert "NVDA.US" in results

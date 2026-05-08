@@ -115,6 +115,7 @@ class RunEngine:
 
         import pandas as pd
 
+        from quantflow.config.loader import ConfigLoader
         from quantflow.config.lookback import load_lookback_config
         from quantflow.data.base import StockCode
         from quantflow.data.factory import DataSourceFactory
@@ -144,7 +145,8 @@ class RunEngine:
         else:
             fetch_start = start_date
 
-        factory = DataSourceFactory()
+        config_loader = ConfigLoader()
+        factory = DataSourceFactory(yfinance_config=config_loader.get_yfinance_config())
         df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
 
         if df.empty:

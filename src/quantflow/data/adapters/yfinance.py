@@ -167,39 +167,67 @@ class YFinanceDataSource(DataSourceBase):
     ) -> Dict[str, pd.DataFrame]:
         import yfinance as yf
 
-        retryable_errors = [
-            Exception,
-        ]
+        max_attempts = self._retry_max_attempts
+        base_delay = self._retry_base_delay
 
-        def _do_download():
-            return yf.download(
-                tickers=yf_symbols,
-                start=start_date,
-                end=end_date,
-                interval=interval,
-                group_by="ticker",
-                threads=True,
-                session=self._session,
-                progress=False,
-                timeout=30,
-            )
+        df_multi = None
+        for attempt in range(1, max_attempts + 1):
+            logger.info(f"  Download attempt {attempt}/{max_attempts}: {len(yf_symbols)} tickers")
 
-        df_multi, attempts, last_error = self._retry_with_backoff(
-            _do_download,
-            self._retry_max_attempts,
-            self._retry_base_delay,
-            retryable_errors,
-        )
+            try:
+                df_multi = yf.download(
+                    tickers=yf_symbols,
+                    start=start_date,
+                    end=end_date,
+                    interval=interval,
+                    group_by="ticker",
+                    threads=True,
+                    session=self._session,
+                    progress=False,
+                    timeout=30,
+                )
+            except Exception as e:
+                logger.warning(f"  Exception during download: {type(e).__name__}: {e}")
+                if attempt < max_attempts:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    logger.warning(f"  Retry in {delay:.0f}s...")
+                    time.sleep(delay)
+                continue
 
-        if last_error and attempts > 1:
-            logger.error(
-                f"Chunk download failed after {attempts} retries: "
-                f"{type(last_error).__name__}: {last_error}"
-            )
+            if df_multi is None or df_multi.empty:
+                logger.warning(f"  Empty DataFrame returned")
+                if attempt < max_attempts:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    logger.warning(f"  Retry in {delay:.0f}s...")
+                    time.sleep(delay)
+                continue
+
+            success_count = 0
+            for sym in yf_symbols:
+                try:
+                    if sym in df_multi and not df_multi[sym].empty:
+                        success_count += 1
+                except (KeyError, AttributeError):
+                    pass
+
+            success_rate = success_count / len(yf_symbols)
+
+            if success_rate >= 0.5:
+                logger.info(f"  Success rate {success_rate:.0%} >= 50% - accepted")
+                break
+            elif attempt == max_attempts:
+                logger.warning(f"  Success rate {success_rate:.0%} < 50% but max attempts reached")
+                break
+            else:
+                logger.warning(f"  Success rate {success_rate:.0%} < 50% - retrying...")
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(f"  Retry in {delay:.0f}s...")
+                time.sleep(delay)
 
         if df_multi is None or df_multi.empty:
             logger.warning(
-                f"Chunk returned empty data (symbols: {', '.join(yf_symbols[:5])}...)"
+                f"Chunk returned empty data after {max_attempts} attempts "
+                f"(symbols: {', '.join(yf_symbols[:5])}...)"
             )
             return {}
 
