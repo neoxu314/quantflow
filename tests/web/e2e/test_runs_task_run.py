@@ -13,7 +13,7 @@ from playwright.sync_api import Page, expect
 
 from .conftest import PROJECT_ROOT, SERVER_URL, TEST_TASK_FILE, TEST_WATCHLIST_NAME
 
-DB_PATH = PROJECT_ROOT / ".quantflow" / "runs.db"
+DB_PATH = Path.home() / ".quantflow" / "runs.db"
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 180
 TASK_CONFIG_PATH = PROJECT_ROOT / "config" / TEST_TASK_FILE

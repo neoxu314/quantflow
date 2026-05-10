@@ -19,12 +19,11 @@ def app():
     from quantflow.web.api import runs as runs_api
     from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
 
-    run_history._MEMORY_CONN = None
     run_history.DB_PATH = Path(":memory:")
-
+    run_history._ConnectionManager.reset()
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.executescript(run_history._INIT_SQL)
-    run_history._MEMORY_CONN = conn
+    run_history._ConnectionManager._conn = conn
 
     api_app = FastAPI()
 
@@ -255,13 +254,13 @@ class TestRunsAPIDBRoundTrip:
         from quantflow.web.engine.run_queue import RunQueue
         from quantflow.web.engine.sse import SSEManager
 
-        run_history._MEMORY_CONN = None
         run_history.DB_PATH = Path(":memory:")
+        run_history._ConnectionManager.reset()
 
         import sqlite3
         conn = sqlite3.connect(":memory:", check_same_thread=False)
         conn.executescript(run_history._INIT_SQL)
-        run_history._MEMORY_CONN = conn
+        run_history._ConnectionManager._conn = conn
 
         h = RunHistory()
         rid1 = h.create_run("Run 1", "stock_scan", {
@@ -305,11 +304,11 @@ class TestCrossRunTypeFileCleanup:
         from quantflow.web.engine.run_queue import RunQueue
         from quantflow.web.engine.sse import SSEManager
 
-        run_history._MEMORY_CONN = None
         run_history.DB_PATH = Path(":memory:")
+        run_history._ConnectionManager.reset()
         conn = sqlite3.connect(":memory:", check_same_thread=False)
         conn.executescript(run_history._INIT_SQL)
-        run_history._MEMORY_CONN = conn
+        run_history._ConnectionManager._conn = conn
         h = RunHistory()
         engine = RunEngine(RunQueue(on_run_available=lambda rid: None), h, SSEManager())
         runs_api._set_engine(engine)

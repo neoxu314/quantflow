@@ -64,8 +64,11 @@ data/
 ## YFINANCE SPECIAL
 
 - Rate limits: 60/min, 360/hr, 8000/day. **Batch fetch auto-chunks to 35/ticker** (down from 50) with jittered sleep 10-20s to avoid 429.
-- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max, retry_max_attempts, retry_base_delay)` — values passed from `DataSourceFactory` via `yfinance_config`.
-- **Retry mechanism**: On YFRateLimitError, retries up to `retry_max_attempts` (default 3) with exponential backoff: `base_delay * 2^(attempt-1)` (30s, 60s, 120s).
+- `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max, retry_max_attempts, retry_base_delay, cooldown_base, recovery_max_passes, recovery_chunk_size)` — values passed from `DataSourceFactory` via `yfinance_config`.
+- **Retry mechanism**: On YFRateLimitError (empty DataFrame), retries up to `retry_max_attempts` (default 3) with exponential backoff: `base_delay * 2^(attempt-1)` (30s, 60s, 120s). Three additional recovery layers:
+  1. **Adaptive cooling** — exponential cooldown between chunks when rate-limited
+  2. **Chunk sub-division** — failed chunks split into ≤10-ticker sub-chunks and retried
+  3. **Global recovery pass** — all missed tickers retried up to 3 passes after main loop
 - **Enhanced logging**: Per-symbol success/failure logging, SSL compatibility warnings for LibreSSL users.
 - **SSL compatibility**: LibreSSL 2.8.3 incompatible with urllib3 v2. This causes `TypeError("'NoneType' object is not subscriptable")` and `OperationalError('unable to open database file')` in yfinance batch downloads. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv: `brew install python@3.12 && /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate && pip install -e .`
 - `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)` with retry wrapper.
@@ -78,14 +81,14 @@ data/
 | Factory | `test_factory.py` | 19 | Unit (source routing, batch OHLCV, fundamental, fallback, market detection) |
 | Config | `test_factory.py` | — | Indirect (via factory tests) |
 | BaoStock adapter | `test_baostock.py` | 3 | Unit |
-| YFinance batch | `test_yfinance_batch.py` | 11 | Unit (chunking, version check, jitter) |
+| YFinance batch | `test_yfinance_batch.py` | 16 | Unit (chunking, version check, jitter, adaptive cooling, recovery) |
 | AKShare adapter | `test_akshare.py` | 27 | Unit (sector classification, industry/concept, constituents, HK OHLCV) |
 | fetch_indices | `test_fetch_indices.py` | 26 | Unit (clean_ticker, INDICES structure, YAML output) + 3 Integration (mocked HTTP) |
 | fetch_cn_indices | `test_fetch_cn_indices.py` | 14 | Unit (convert_cn_code, CN_INDICES structure, fetch_cn_index with mock) |
 | Sector cache | `test_sector_data.py` | 17 | Integration (EM/THS/SW sector lists, constituents, cache I/O) |
 | Data fetch (real data) | `test_data_fetch.py` | 24 | Integration (BaoStock/Tushare/YFinance against known reference values) |
 
-**Total: 151 unit + 10 integration = 161 tests**
+**Total: 156 unit + 10 integration = 166 tests**
 
 Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for network tests.
 

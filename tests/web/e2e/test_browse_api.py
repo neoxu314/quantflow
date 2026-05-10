@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from pathlib import Path
 
 import httpx
 import pytest
 
 from .conftest import PROJECT_ROOT, SERVER_URL
 
-TEST_TMP_DIR = PROJECT_ROOT / ".quantflow" / "e2e_browse_test"
+TEST_TMP_DIR = Path.home() / ".quantflow" / "e2e_browse_test"
 
 
 @pytest.fixture(autouse=True)

@@ -21,17 +21,15 @@ def app():
     from quantflow.web.api import runs as runs_api
     from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
 
-    # Reset memory connection for each test
-    run_history._MEMORY_CONN = None
     run_history.DB_PATH = Path(":memory:")
+    run_history._ConnectionManager.reset()
 
     app = FastAPI()
 
-    # Use sqlite:// memory connection (not file)
     import sqlite3
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.executescript(run_history._INIT_SQL)
-    run_history._MEMORY_CONN = conn
+    run_history._ConnectionManager._conn = conn
 
     history = RunHistory()
     sse = SSEManager()

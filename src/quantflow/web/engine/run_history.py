@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-QUANTFLOW_DIR = PROJECT_ROOT / ".quantflow"
+logger = logging.getLogger(__name__)
+
+QUANTFLOW_DIR = Path.home() / ".quantflow"
 DB_PATH = QUANTFLOW_DIR / "runs.db"
 
 _INIT_SQL = """
@@ -46,29 +49,6 @@ class RunRecord:
     preset_id: Optional[str] = None
 
 
-_MEMORY_CONN: Optional[sqlite3.Connection] = None
-
-
-def _connect() -> sqlite3.Connection:
-    global _MEMORY_CONN
-    if DB_PATH == Path(":memory:"):
-        if _MEMORY_CONN is None:
-            _MEMORY_CONN = sqlite3.connect(":memory:")
-            _MEMORY_CONN.executescript(_INIT_SQL)
-        return _MEMORY_CONN
-    QUANTFLOW_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(_INIT_SQL)
-    conn.commit()
-    return conn
-
-
-def _close(conn: sqlite3.Connection) -> None:
-    if conn is not _MEMORY_CONN:
-        conn.close()
-
-
 def _row_to_record(row: tuple) -> RunRecord:
     return RunRecord(
         id=row[0], name=row[1], run_type=row[2], config=json.loads(row[3]),
@@ -77,6 +57,36 @@ def _row_to_record(row: tuple) -> RunRecord:
         output_path=row[10], report_path=row[11],
         signal_count=row[12] or 0, preset_id=row[13],
     )
+
+
+class _ConnectionManager:
+    _lock = threading.RLock()
+    _conn: Optional[sqlite3.Connection] = None
+
+    @classmethod
+    def get(cls) -> sqlite3.Connection:
+        with cls._lock:
+            conn = cls._conn
+            if conn is not None:
+                return conn
+            QUANTFLOW_DIR.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(DB_PATH), timeout=15,
+                                   check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(_INIT_SQL)
+            conn.commit()
+            cls._conn = conn
+            return conn
+
+    @classmethod
+    def reset(cls) -> None:
+        with cls._lock:
+            if cls._conn is not None:
+                try:
+                    cls._conn.close()
+                except Exception:
+                    pass
+                cls._conn = None
 
 
 class RunHistory:
@@ -88,8 +98,8 @@ class RunHistory:
             raise ValueError(f"Invalid run_type '{run_type}'")
         run_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        conn = _connect()
-        try:
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
             conn.execute(
                 "INSERT INTO run_history "
                 "(id,name,run_type,config,status,created_at,preset_id) "
@@ -97,8 +107,6 @@ class RunHistory:
                 (run_id, name, run_type, json.dumps(config), now, preset_id),
             )
             conn.commit()
-        finally:
-            _close(conn)
         return run_id
 
     def update_status(self, run_id: str, status: str, **kwargs) -> None:
@@ -119,22 +127,20 @@ class RunHistory:
             fields.append("signal_count = ?")
             values.append(int(kwargs["signal_count"]))
         values.append(run_id)
-        conn = _connect()
-        try:
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
             conn.execute(
                 f"UPDATE run_history SET {', '.join(fields)} WHERE id = ?",
                 values)
             conn.commit()
-        finally:
-            _close(conn)
 
     def get_run(self, run_id: str) -> Optional[RunRecord]:
         return self._get_one("SELECT * FROM run_history WHERE id = ?", (run_id,))
 
     def list_runs(self, status: Optional[str] = None,
                   limit: int = 50, offset: int = 0) -> list[RunRecord]:
-        conn = _connect()
-        try:
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
             if status:
                 rows = conn.execute(
                     "SELECT * FROM run_history WHERE status=? "
@@ -145,25 +151,19 @@ class RunHistory:
                     "SELECT * FROM run_history "
                     "ORDER BY created_at DESC LIMIT ? OFFSET ?",
                     (limit, offset)).fetchall()
-            return [_row_to_record(r) for r in rows]
-        finally:
-            _close(conn)
+        return [_row_to_record(r) for r in rows]
 
     def _get_one(self, sql: str, params: tuple) -> Optional[RunRecord]:
-        conn = _connect()
-        try:
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
             row = conn.execute(sql, params).fetchone()
-            return _row_to_record(row) if row else None
-        finally:
-            _close(conn)
+        return _row_to_record(row) if row else None
 
     def delete_run(self, run_id: str) -> bool:
         """Delete a run record from the database. Returns True if found."""
-        conn = _connect()
-        try:
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
             cursor = conn.execute(
                 "DELETE FROM run_history WHERE id = ?", (run_id,))
             conn.commit()
-            return cursor.rowcount > 0
-        finally:
-            _close(conn)
+        return cursor.rowcount > 0

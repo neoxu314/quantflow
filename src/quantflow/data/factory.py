@@ -2,17 +2,18 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Dict, List, Optional
+
 import pandas as pd
 
-from quantflow.data.base import DataSourceBase, SectorDataSource, StockCode, FundamentalData
-from quantflow.data.config import MarketDataSourceConfig, DEFAULT_CONFIG
 from quantflow.data.adapters import (
+    AKShareDataSource,
     BaoStockDataSource,
     TushareDataSource,
     YFinanceDataSource,
-    AKShareDataSource,
 )
+from quantflow.data.base import DataSourceBase, FundamentalData, SectorDataSource, StockCode
+from quantflow.data.config import DEFAULT_CONFIG, MarketDataSourceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,9 @@ class DataSourceFactory:
                 sleep_max=self._yfinance.get("sleep_max"),
                 retry_max_attempts=self._yfinance.get("retry_max_attempts"),
                 retry_base_delay=self._yfinance.get("retry_base_delay"),
+                cooldown_base=self._yfinance.get("cooldown_base"),
+                recovery_max_passes=self._yfinance.get("recovery_max_passes"),
+                recovery_chunk_size=self._yfinance.get("recovery_chunk_size"),
             )
         else:
             adapter = adapter_cls()
@@ -166,21 +170,21 @@ class DataSourceFactory:
     def fetch_fundamental(self, code: StockCode, market: Optional[str] = None) -> Optional[FundamentalData]:
         if market is None:
             market = self._detect_market(code)
-        
+
         source_name = self.config.get_fundamental_source(market)
         if not source_name:
             return None
-        
+
         try:
             adapter = self._get_adapter(source_name)
             return adapter.fetch_fundamental(code)
         except Exception as e:
             logger.warning(f"Failed to fetch fundamental: {e}")
             return None
-    
+
     def get_sector_source(self) -> SectorDataSource:
         return self._get_adapter("akshare")
-    
+
     def _detect_market(self, code: StockCode) -> str:
         if code.exchange in ["SH", "SZ"]:
             return "cn"

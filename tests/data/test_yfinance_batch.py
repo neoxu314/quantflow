@@ -36,6 +36,7 @@ class TestYFinanceBatchFetch:
             "MSFT": SAMPLE_ROWS,
         }))
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource
@@ -45,7 +46,8 @@ class TestYFinanceBatchFetch:
             StockCode(code="MSFT", exchange="US"),
             StockCode(code="GOOG", exchange="US"),
         ]
-        result = YFinanceDataSource().fetch_batch_ohlcv(
+        source = YFinanceDataSource(cooldown_base=0.01)
+        result = source.fetch_batch_ohlcv(
             codes, "2025-01-01", "2025-12-31"
         )
 
@@ -59,6 +61,7 @@ class TestYFinanceBatchFetch:
             "AAPL": SAMPLE_ROWS,
         }))
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource
@@ -79,6 +82,7 @@ class TestYFinanceBatchFetch:
             "DEL": [],
         }))
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource
@@ -87,7 +91,8 @@ class TestYFinanceBatchFetch:
             StockCode(code="AAPL", exchange="US"),
             StockCode(code="DEL", exchange="US"),
         ]
-        result = YFinanceDataSource().fetch_batch_ohlcv(
+        source = YFinanceDataSource(cooldown_base=0.01)
+        result = source.fetch_batch_ohlcv(
             codes, "2025-01-01", "2025-12-31"
         )
 
@@ -98,12 +103,14 @@ class TestYFinanceBatchFetch:
         import yfinance
         monkeypatch.setattr(yfinance, "download", lambda **kw: (_ for _ in ()).throw(Exception("Network error")))
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource
 
         codes = [StockCode(code="AAPL", exchange="US")]
-        result = YFinanceDataSource().fetch_batch_ohlcv(
+        source = YFinanceDataSource(retry_base_delay=0.01, cooldown_base=0.01)
+        result = source.fetch_batch_ohlcv(
             codes, "2025-01-01", "2025-12-31"
         )
         assert result == {}
@@ -168,6 +175,7 @@ class TestYFinanceChunking:
 
         monkeypatch.setattr(yfinance, "download", mock_download)
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource
@@ -209,6 +217,7 @@ class TestYFinanceChunking:
 
         monkeypatch.setattr(yfinance, "download", mock_download)
         monkeypatch.setattr(yfinance, "__version__", "0.2.40")
+        monkeypatch.setattr("time.sleep", lambda d: None)
 
         from quantflow.data.base import StockCode
         from quantflow.data.adapters.yfinance import YFinanceDataSource

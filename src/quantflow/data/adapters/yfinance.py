@@ -40,7 +40,7 @@ def _check_ssl_compatibility() -> Optional[str]:
     Returns: Warning message if incompatible, None if OK
     """
     import ssl
-    
+
     ssl_version = ssl.OPENSSL_VERSION
     if 'LibreSSL' in ssl_version:
         return (
@@ -96,6 +96,8 @@ class YFinanceDataSource(DataSourceBase):
     _session = None
     _ssl_warning_logged = False
 
+    _SUB_CHUNK_SIZE = 10
+
     def __init__(
         self,
         chunk_size: Optional[int] = None,
@@ -103,20 +105,26 @@ class YFinanceDataSource(DataSourceBase):
         sleep_max: Optional[float] = None,
         retry_max_attempts: Optional[int] = None,
         retry_base_delay: Optional[float] = None,
+        cooldown_base: Optional[float] = None,
+        recovery_max_passes: Optional[int] = None,
+        recovery_chunk_size: Optional[int] = None,
     ):
         if YFinanceDataSource._session is None:
             YFinanceDataSource._session = _get_chrome_session()
-        
+
         ssl_warning = _check_ssl_compatibility()
         if ssl_warning and not YFinanceDataSource._ssl_warning_logged:
             logger.warning(ssl_warning)
             YFinanceDataSource._ssl_warning_logged = True
-        
+
         self._chunk_size = chunk_size or 50
         self._sleep_min = sleep_min if sleep_min is not None else 5
         self._sleep_max = sleep_max if sleep_max is not None else 12
         self._retry_max_attempts = retry_max_attempts if retry_max_attempts is not None else 3
         self._retry_base_delay = retry_base_delay if retry_base_delay is not None else 30
+        self._cooldown_base = cooldown_base if cooldown_base is not None else 60
+        self._recovery_max_passes = recovery_max_passes if recovery_max_passes is not None else 3
+        self._recovery_chunk_size = recovery_chunk_size if recovery_chunk_size is not None else 10
 
     def get_name(self) -> str:
         return "YFinance"
@@ -196,13 +204,14 @@ class YFinanceDataSource(DataSourceBase):
 
     def _download_chunk(
         self, yf_symbols: List[str], start_date: str, end_date: str, interval: str
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> tuple[Dict[str, pd.DataFrame], bool]:
         import yfinance as yf
 
         max_attempts = self._retry_max_attempts
         base_delay = self._retry_base_delay
 
         df_multi = None
+        was_rate_limited = False
         for attempt in range(1, max_attempts + 1):
             logger.info(f"  Download attempt {attempt}/{max_attempts}: {len(yf_symbols)} tickers")
 
@@ -231,7 +240,8 @@ class YFinanceDataSource(DataSourceBase):
                 continue
 
             if df_multi is None or df_multi.empty:
-                logger.warning(f"  Empty DataFrame returned")
+                logger.warning("  Empty DataFrame returned")
+                was_rate_limited = True
                 if attempt < max_attempts:
                     delay = base_delay * (2 ** (attempt - 1))
                     logger.warning(f"  Retry in {delay:.0f}s...")
@@ -253,6 +263,7 @@ class YFinanceDataSource(DataSourceBase):
                 break
             elif attempt == max_attempts:
                 logger.warning(f"  Success rate {success_rate:.0%} < 50% but max attempts reached")
+                was_rate_limited = True
                 break
             else:
                 logger.warning(f"  Success rate {success_rate:.0%} < 50% - retrying...")
@@ -265,7 +276,7 @@ class YFinanceDataSource(DataSourceBase):
                 f"Chunk returned empty data after {max_attempts} attempts "
                 f"(symbols: {', '.join(yf_symbols[:5])}...)"
             )
-            return {}
+            return {}, was_rate_limited
 
         chunk_results: Dict[str, pd.DataFrame] = {}
         failed_symbols: List[str] = []
@@ -298,7 +309,7 @@ class YFinanceDataSource(DataSourceBase):
                 f"{', '.join(failed_symbols[:10])}"
             )
 
-        return chunk_results
+        return chunk_results, was_rate_limited
 
     def _jitter_sleep(self) -> float:
         duration = random.uniform(self._sleep_min, self._sleep_max)
@@ -344,6 +355,32 @@ class YFinanceDataSource(DataSourceBase):
 
         return (None, max_attempts, last_error)
 
+    def _split_and_retry(
+        self,
+        yf_symbols: List[str],
+        start_date: str,
+        end_date: str,
+        interval: str,
+        all_results: Dict[str, pd.DataFrame],
+        symbol_to_code: Dict[str, str],
+    ) -> None:
+        sub_size = min(self._SUB_CHUNK_SIZE, len(yf_symbols))
+        num_subs = (len(yf_symbols) + sub_size - 1) // sub_size
+        logger.info(
+            f"  Sub-dividing failed chunk ({len(yf_symbols)} tickers) "
+            f"into {num_subs} sub-chunks of ≤{sub_size}"
+        )
+        for j in range(0, len(yf_symbols), sub_size):
+            sub_batch = yf_symbols[j:j + sub_size]
+            sub_result, sub_rate_limited = self._download_chunk(
+                sub_batch, start_date, end_date, interval)
+            for yf_sym, df in sub_result.items():
+                all_results[symbol_to_code[yf_sym]] = df
+            if sub_rate_limited:
+                time.sleep(self._cooldown_base)
+            elif j + sub_size < len(yf_symbols):
+                self._jitter_sleep()
+
     def fetch_batch_ohlcv(
         self,
         codes: List["StockCode"],
@@ -380,13 +417,15 @@ class YFinanceDataSource(DataSourceBase):
 
         all_results: Dict[str, pd.DataFrame] = {}
         num_chunks = (total + chunk_size - 1) // chunk_size
+        consecutive_rate_limits = 0
 
         for i in range(0, total, chunk_size):
             batch = yf_symbols[i:i + chunk_size]
             chunk_num = (i // chunk_size) + 1
 
             t0 = time.time()
-            chunk_result = self._download_chunk(batch, start_date, end_date, interval)
+            chunk_result, was_rate_limited = self._download_chunk(
+                batch, start_date, end_date, interval)
             elapsed = time.time() - t0
             success_count = len(chunk_result)
             fail_count = len(batch) - success_count
@@ -399,9 +438,57 @@ class YFinanceDataSource(DataSourceBase):
             for yf_sym, df in chunk_result.items():
                 all_results[symbol_to_code[yf_sym]] = df
 
+            if was_rate_limited:
+                consecutive_rate_limits += 1
+            else:
+                consecutive_rate_limits = 0
+
+            if was_rate_limited and success_count == 0 and fail_count > 0:
+                failed_syms = [s for s in batch if symbol_to_code[s] not in all_results]
+                self._split_and_retry(
+                    failed_syms, start_date, end_date, interval,
+                    all_results, symbol_to_code)
+
             if i + chunk_size < total:
-                sleep_duration = self._jitter_sleep()
-                logger.info(f"  Sleep {sleep_duration:.1f}s...")
+                if consecutive_rate_limits > 0:
+                    cooldown = self._cooldown_base * (2 ** (consecutive_rate_limits - 1))
+                    cooldown = min(cooldown, 300)
+                    logger.info(
+                        f"  Rate-limit cooldown: {cooldown:.0f}s "
+                        f"(consecutive={consecutive_rate_limits})"
+                    )
+                    time.sleep(cooldown)
+                else:
+                    sleep_duration = self._jitter_sleep()
+                    logger.info(f"  Sleep {sleep_duration:.1f}s...")
+
+        for pass_num in range(1, self._recovery_max_passes + 1):
+            missed = [s for s in yf_symbols if symbol_to_code[s] not in all_results]
+            if not missed:
+                break
+            logger.info(
+                f"Recovery pass {pass_num}/{self._recovery_max_passes}: "
+                f"{len(missed)} missed tickers"
+            )
+            time.sleep(self._cooldown_base)
+
+            recovery_chunk = min(self._recovery_chunk_size, len(missed))
+            for j in range(0, len(missed), recovery_chunk):
+                batch = missed[j:j + recovery_chunk]
+                chunk_result, _ = self._download_chunk(
+                    batch, start_date, end_date, interval)
+                for yf_sym, df in chunk_result.items():
+                    all_results[symbol_to_code[yf_sym]] = df
+                if j + recovery_chunk < len(missed):
+                    time.sleep(self._cooldown_base)
+
+            remaining = [s for s in yf_symbols if symbol_to_code[s] not in all_results]
+            if remaining:
+                logger.info(
+                    f"Recovery pass {pass_num} result: "
+                    f"{len(missed) - len(remaining)}/{len(missed)} recovered, "
+                    f"{len(remaining)} still missing"
+                )
 
         logger.info(
             f"Batch complete: {len(all_results)}/{total} tickers with data"

@@ -15,11 +15,11 @@ from quantflow.web.engine.sse import SSEManager
 @pytest.fixture
 def setup_db():
     import sqlite3
-    run_history._MEMORY_CONN = None
     run_history.DB_PATH = Path(":memory:")
+    run_history._ConnectionManager.reset()
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.executescript(run_history._INIT_SQL)
-    run_history._MEMORY_CONN = conn
+    run_history._ConnectionManager._conn = conn
 
 
 @pytest.fixture

@@ -12,12 +12,12 @@ class TestRunHistory:
 
     def setup_method(self):
         run_history.DB_PATH = Path(":memory:")
-        run_history._MEMORY_CONN = None
-        run_history._connect()
+        run_history._ConnectionManager._conn = None
+        run_history._ConnectionManager.get()
 
     def teardown_method(self):
+        run_history._ConnectionManager.reset()
         run_history.DB_PATH = _ORIG_DB_PATH
-        run_history._MEMORY_CONN = None
 
     def test_create_and_get_run(self):
         from quantflow.web.engine.run_history import RunHistory

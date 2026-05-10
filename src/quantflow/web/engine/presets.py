@@ -10,8 +10,8 @@ from typing import Optional
 
 import yaml
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-PRESETS_DIR = PROJECT_ROOT / ".quantflow" / "presets"
+QUANTFLOW_DIR = Path.home() / ".quantflow"
+PRESETS_DIR = QUANTFLOW_DIR / "presets"
 
 
 @dataclass
