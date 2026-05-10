@@ -12,10 +12,12 @@ src/quantflow.egg-info/top_level.txt
 src/quantflow/backtest/__init__.py
 src/quantflow/config/__init__.py
 src/quantflow/config/loader.py
+src/quantflow/config/lookback.py
 src/quantflow/data/__init__.py
 src/quantflow/data/base.py
 src/quantflow/data/config.py
 src/quantflow/data/factory.py
+src/quantflow/data/fetch_cn_indices.py
 src/quantflow/data/fetch_indices.py
 src/quantflow/data/sector_cache.py
 src/quantflow/data/adapters/__init__.py
@@ -33,6 +35,7 @@ src/quantflow/execution/alerts/base.py
 src/quantflow/indicators/__init__.py
 src/quantflow/indicators/base.py
 src/quantflow/indicators/composer.py
+src/quantflow/indicators/factory.py
 src/quantflow/indicators/custom/__init__.py
 src/quantflow/indicators/custom/brick_chart.py
 src/quantflow/indicators/custom/dual_line.py
@@ -45,6 +48,7 @@ src/quantflow/indicators/standard/rsi.py
 src/quantflow/indicators/standard/vol_ma.py
 src/quantflow/orchestration/__init__.py
 src/quantflow/orchestration/app.py
+src/quantflow/orchestration/discovery.py
 src/quantflow/orchestration/loader.py
 src/quantflow/orchestration/registry.py
 src/quantflow/reports/__init__.py
@@ -56,7 +60,6 @@ src/quantflow/strategies/base.py
 src/quantflow/strategies/composite.py
 src/quantflow/strategies/buy/__init__.py
 src/quantflow/strategies/buy/dual_line_bull.py
-src/quantflow/strategies/buy/kdj_golden_cross.py
 src/quantflow/strategies/buy/oversold_rebound.py
 src/quantflow/strategies/sell/__init__.py
 src/quantflow/strategies/sell/dual_line_bear.py
@@ -64,3 +67,20 @@ src/quantflow/strategies/sell/kdj_dead_cross.py
 src/quantflow/strategies/sell/stop_loss.py
 src/quantflow/web/__init__.py
 src/quantflow/web/config.py
+src/quantflow/web/server.py
+src/quantflow/web/api/__init__.py
+src/quantflow/web/api/browse.py
+src/quantflow/web/api/config.py
+src/quantflow/web/api/library.py
+src/quantflow/web/api/presets.py
+src/quantflow/web/api/runs.py
+src/quantflow/web/api/tasks.py
+src/quantflow/web/api/watchlists.py
+src/quantflow/web/engine/__init__.py
+src/quantflow/web/engine/preflight.py
+src/quantflow/web/engine/presets.py
+src/quantflow/web/engine/run_engine.py
+src/quantflow/web/engine/run_history.py
+src/quantflow/web/engine/run_queue.py
+src/quantflow/web/engine/sse.py
+tests/test_cli.py

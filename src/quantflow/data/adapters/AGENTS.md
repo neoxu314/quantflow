@@ -35,7 +35,7 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 - Fundamental data: `pe_ttm`, `pb`, `total_mv` (ps_ttm not available)
 - **Retry mechanism**: `_retry_with_backoff()` handles YFRateLimitError with exponential backoff (30s, 60s, 120s for 3 attempts)
 - **Config parameters**: `retry_max_attempts` (default 3), `retry_base_delay` (default 30s)
-- **SSL detection**: `_check_ssl_compatibility()` logs warning for LibreSSL users
+- **SSL detection**: `_check_ssl_compatibility()` logs warning for LibreSSL users. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv: `brew install python@3.12 && /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate && pip install -e .`
 - **Enhanced logging**: Detailed per-symbol failure logging with error classification
 
 ## ANTI-PATTERNS

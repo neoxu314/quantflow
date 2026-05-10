@@ -1,6 +1,6 @@
 # QUANTFLOW PROJECT KNOWLEDGE
 
-**Generated:** 2026-04-25 / Updated: 2026-05-05
+**Generated:** 2026-04-25 / Updated: 2026-05-10
 **Scope:** `quantflow/` - Main quant analysis system
 
 ## OVERVIEW
@@ -70,7 +70,14 @@ quantflow/
 
 ## CONVENTIONS
 
-- **Build**: `pip install -e .`, setuptools with `src/` layout
+- **Build**: `pip install -e .`, setuptools with `src/` layout. **macOS users must use Homebrew Python + venv** (system Python uses LibreSSL which causes yfinance errors — see SSL note below)
+- **SSL/LibreSSL**: macOS system Python 3.9 ships with LibreSSL 2.8.3, incompatible with urllib3 v2. This causes `TypeError("'NoneType' object is not subscriptable")` and `OperationalError('unable to open database file')` in yfinance batch downloads. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv:
+  ```bash
+  brew install python@3.12
+  /opt/homebrew/bin/python3.12 -m venv .venv
+  source .venv/bin/activate  # or: .venv/bin/python -m quantflow.cli web
+  pip install -e .
+  ```
 - **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
   - Data layer: 151 unit + 10 integration (sector cache, fetch_indices, fetch_cn_indices) = 161 tests
@@ -90,7 +97,7 @@ quantflow/
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
-- **YFinance batch**: Auto-chunked (50 tickers/chunk, jitter sleep 5–12s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
+- **YFinance batch**: Auto-chunked (35 tickers/chunk, jitter sleep 10–20s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 - **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
 
 ## ANTI-PATTERNS
@@ -158,7 +165,10 @@ Web UI uses **precise file deletion** - only deletes generated files, preserves 
 ## COMMANDS
 
 ```bash
-# Install
+# Install (macOS: use Homebrew Python + venv, see SSL note above)
+brew install python@3.12
+/opt/homebrew/bin/python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 
 # Install dev deps

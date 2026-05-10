@@ -10,6 +10,15 @@ Market suffix mapping handled via MARKET_SUFFIX dictionary:
 - KR → .KS (Korean stocks)
 - JP → .T (Japanese stocks)
 - HK → .HK (Hong Kong stocks)
+
+SSL Note (macOS):
+  System Python 3.9 uses LibreSSL 2.8.3, which is incompatible with urllib3 v2.
+  This causes intermittent yfinance errors (TypeError, OperationalError) in batch downloads.
+  Fix: use Homebrew Python (linked with OpenSSL) in a venv:
+    brew install python@3.12
+    /opt/homebrew/bin/python3.12 -m venv .venv
+    source .venv/bin/activate
+    pip install -e .
 """
 
 import logging
@@ -37,8 +46,12 @@ def _check_ssl_compatibility() -> Optional[str]:
         return (
             f"SSL compatibility issue detected: {ssl_version}. "
             f"urllib3 v2 requires OpenSSL 1.1.1+. "
-            f"This may cause 'Response object is not subscriptable' errors. "
-            f"Solution: brew install openssl && export PATH=\"/opt/homebrew/opt/openssl/bin:$PATH\""
+            f"This may cause 'NoneType object is not subscriptable' and "
+            f"'unable to open database file' errors in yfinance batch downloads. "
+            f"Fix: use Homebrew Python (linked with OpenSSL) in a venv: "
+            f"brew install python@3.12 && "
+            f"/opt/homebrew/bin/python3.12 -m venv .venv && "
+            f"source .venv/bin/activate && pip install -e ."
         )
     return None
 

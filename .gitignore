@@ -1,4 +1,5 @@
 .env
+.venv/
 .quantflow/
 src/quantflow/web/static/dist/
 *.d.ts

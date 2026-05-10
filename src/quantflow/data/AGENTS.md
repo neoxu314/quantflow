@@ -33,7 +33,7 @@ data/
 | Generate Watchlists | `fetch_indices.py` | `fetch_and_save()` - Downloads index components (S&P500, Nasdaq100) |
 | Generate CN Watchlists | `fetch_cn_indices.py` | `fetch_cn_index()` - Downloads CSI 500 & ChiNext constituents |
 | BaoStock adapter | `adapters/baostock.py` | `BaoStockDataSource` - `adjust_map = {"qfq": "2", "hfq": "1", "none": "3"}` |
-| YFinance adapter | `adapters/yfinance.py` | `YFinanceDataSource` - handles `hk` prefix, **batch fetch with chunking** (chunk_size=50, jitter sleep 5–12s) |
+| YFinance adapter | `adapters/yfinance.py` | `YFinanceDataSource` - handles `hk` prefix, **batch fetch with chunking** (chunk_size=35, jitter sleep 10–20s) |
 | Tushare adapter | `adapters/tushare.py` | `TushareDataSource` - token required, `daily()` API |
 | AKShare adapter | `adapters/akshare.py` | `AKShareDataSource` - `get_industry_list()`, `get_industry_constituents()` |
 | Sector classification | `adapters/akshare.py` | `SectorClassification` enum: em, ths, sw_l1, sw_l2, sw_l3 |
@@ -67,7 +67,7 @@ data/
 - `YFinanceDataSource.__init__(chunk_size, sleep_min, sleep_max, retry_max_attempts, retry_base_delay)` — values passed from `DataSourceFactory` via `yfinance_config`.
 - **Retry mechanism**: On YFRateLimitError, retries up to `retry_max_attempts` (default 3) with exponential backoff: `base_delay * 2^(attempt-1)` (30s, 60s, 120s).
 - **Enhanced logging**: Per-symbol success/failure logging, SSL compatibility warnings for LibreSSL users.
-- **SSL compatibility**: LibreSSL 2.8.3 incompatible with urllib3 v2. Solution: `brew install openssl && export PATH="/opt/homebrew/opt/openssl/bin:$PATH"`
+- **SSL compatibility**: LibreSSL 2.8.3 incompatible with urllib3 v2. This causes `TypeError("'NoneType' object is not subscriptable")` and `OperationalError('unable to open database file')` in yfinance batch downloads. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv: `brew install python@3.12 && /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate && pip install -e .`
 - `fetch_batch_ohlcv(codes, ...)` uses `yf.download(tickers, group_by='ticker', threads=True, timeout=30)` with retry wrapper.
 
 ## TESTS
@@ -92,7 +92,7 @@ Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for ne
 ## NOTES
 
 - Sector constituents: SW works fully, THS list-only, EM blocked by network
-- YFinance: 60 req/min rate limit, **batch fetch uses chunking** (35 tickers/batch, jitter sleep 10-20s) configured in `quantflow.yaml`
+- YFinance: 60 req/min rate limit, **batch fetch uses chunking** (35 tickers/batch, jitter sleep 10–20s) configured in `quantflow.yaml`
 - Tushare: Token required - `TUSHARE_TOKEN` env var or config file
 - `DataSourceFactory` accepts `yfinance_config` dict to pass chunk size/sleep/retry parameters to adapter
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.

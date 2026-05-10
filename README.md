@@ -21,10 +21,18 @@ src/quantflow/
 
 Before running tasks, ensure your environment is ready:
 
-1. **Python Environment**: Python 3.9 or higher.
+1. **Python Environment**: Python 3.9 or higher. **macOS users must use Homebrew Python + venv** (system Python 3.9 ships with LibreSSL 2.8.3, which is incompatible with urllib3 v2 and causes intermittent yfinance batch download errors):
+   ```bash
+   # macOS: Install Homebrew Python (linked with OpenSSL, not LibreSSL)
+   brew install python@3.12
+
+   # Create and activate a virtual environment
+   /opt/homebrew/bin/python3.12 -m venv .venv
+   source .venv/bin/activate
+   ```
 2. **Dependencies**:
    ```bash
-   pip install pandas numpy pyyaml baostock yfinance
+   pip install -e .
    ```
 3. **Stock Code Format**:
     The system strictly requires standard formats. Do **not** use standalone codes (e.g., just `MSFT`).
@@ -133,16 +141,16 @@ Yahoo Finance enforces strict rate limits (60 req/min, 360/hr). The system autom
 # config/quantflow.yaml
 yfinance:
   batch:
-    chunk_size: 50              # tickers per yf.download() call
-    sleep_min: 5                # minimum seconds between batches
-    sleep_max: 12               # maximum seconds (jitter for human-like behavior)
+    chunk_size: 35              # tickers per yf.download() call
+    sleep_min: 10               # minimum seconds between batches
+    sleep_max: 20               # maximum seconds (jitter for human-like behavior)
 ```
 
 For a watchlist of 700 mixed stocks, the system partitions by data source:
-- **yFinance stocks** (HK/US/JP/KR): fetched in batches of 50 with 5–12s random sleep between batches.
+- **yFinance stocks** (HK/US/JP/KR): fetched in batches of 35 with 10–20s random sleep between batches.
 - **BaoStock stocks** (A-share): fetched sequentially (unchanged).
 
-This means a 700-stock list with 200 yFinance stocks takes ~6-8 minutes with jittered delays, avoiding rate-limit detection.
+This means a 700-stock list with 200 yFinance stocks takes ~8-12 minutes with jittered delays, avoiding rate-limit detection.
 
 ## 2. Execution (Commands)
 

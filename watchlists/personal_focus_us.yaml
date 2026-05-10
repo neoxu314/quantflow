@@ -33,3 +33,33 @@ items:
   name: Circle
   tags:
   - 稳定币
+- code: APLD.US
+  name: Applied Digital
+  tags:
+  - AI
+  - 数据中心建设
+- code: MP.US
+  name: MP Materials
+  tags:
+  - 稀土
+- code: RDDT.US
+  name: Reddit
+  tags:
+  - 社交
+- code: OKLO.US
+  name: Oklo
+  tags:
+  - 小型核电
+- code: NOK.US
+  name: 诺基亚
+  tags:
+  - AI概念
+  - 通信
+- code: RKLB.US
+  name: Rocket Lab
+  tags:
+  - 太空
+- code: SMCI.US
+  name: 超微电脑
+  tags:
+  - 高性能服务器
