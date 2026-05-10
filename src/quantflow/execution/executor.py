@@ -128,15 +128,20 @@ class Executor:
                 f"yFinance batch complete: {len(yf_data)}/{len(yfinance_items)} stocks"
             )
 
+        data_ok = 0
+        no_data = 0
+        errors = 0
         for idx, (item, code) in enumerate(yfinance_items, 1):
             df = yf_data.get(code.standard)
             _emit(code.standard, f"[{idx}/{total}] {code.standard}",
                   "info", "stock_start", idx)
             if df is None or df.empty:
+                no_data += 1
                 logger.warning(f"No data for {item.code}")
                 _emit(code.standard, f"No data: {code.standard}",
                       "warning", "stock_done", idx)
                 continue
+            data_ok += 1
             result = self._process_single(item, code, df, job)
             sigs = result.buy_signals + result.sell_signals if result else 0
             if result:
@@ -156,10 +161,12 @@ class Executor:
                     code, start_date=start_date, end_date=end_date
                 )
                 if df.empty:
+                    no_data += 1
                     logger.warning(f"No data for {item.code}")
                     _emit(code.standard, f"No data: {code.standard}",
                           "warning", "stock_done", idx)
                     continue
+                data_ok += 1
                 result = self._process_single(item, code, df, job)
                 sigs = result.buy_signals + result.sell_signals if result else 0
                 if result:
@@ -170,6 +177,7 @@ class Executor:
                     _emit(code.standard, f"Done: {code.standard} (0 signals)",
                           "info", "stock_done", idx)
             except Exception as e:
+                errors += 1
                 logger.error(f"Failed {item.code}: {e}")
                 _emit(code.standard, f"Failed: {code.standard} - {e}",
                       "error", "stock_done", idx)
@@ -178,5 +186,11 @@ class Executor:
         path = f"{job.output_dir}/{job.name}.json"
         self.storage.save_results(path, results)
         logger.info(f"Saved results to {path}")
+
+        logger.info(
+            f"Task {job.name} complete: {total} stocks | "
+            f"{data_ok} analyzed, {no_data} no data, {errors} errors | "
+            f"{len(results)} with signals"
+        )
 
         return results

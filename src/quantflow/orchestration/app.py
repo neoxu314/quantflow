@@ -93,4 +93,13 @@ class Orchestrator:
 
         total_signals = sum(
             len(r) for _, r, _, _ in task_runs)
+
+        task_count = len(self.tasks)
+        completed = len(task_runs)
+        total_stocks = sum(len(wl.items) for _, _, wl, _ in task_runs)
+        logger.info(
+            f"All tasks complete: {completed}/{task_count} tasks, "
+            f"{total_stocks} stocks scanned, {total_signals} signals"
+        )
+
         return total_signals

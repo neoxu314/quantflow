@@ -19,7 +19,7 @@ orchestration/
 
 ## KEY CLASSES
 
-- `Orchestrator`: Loads YAML, resolves strategies, computes `days_back` via `config.lookback`, dispatches jobs, and aggregates results for combined reporting. Returns total signal count from `.run()`.
+- `Orchestrator`: Loads YAML, resolves strategies, computes `days_back` via `config.lookback`, dispatches jobs, and aggregates results for combined reporting. Returns total signal count from `.run()`. Logs overall summary at end: `All tasks complete: {completed}/{task_count} tasks, {total_stocks} stocks scanned, {total_signals} signals`.
 - `TaskConfig`: Dataclass with `name`, `watchlist_path`, `strategy_names`, `days_back`. **NO output_dir field** (output controlled by CLI/Web `--output` parameter).
   - **Validation**: Rejects duplicate task names in same file with ValueError.
 - `compute_days_back()` (shared): Located in `config/lookback.py`. Calculates calendar days = `max(lookback_bars) * calendar_multiplier + buffer_days`. Used by CLI, Web, and Orchestrator.

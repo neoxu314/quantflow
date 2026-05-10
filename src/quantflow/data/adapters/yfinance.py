@@ -175,6 +175,25 @@ class YFinanceDataSource(DataSourceBase):
         except Exception:
             return False
 
+    @staticmethod
+    def _suppress_yfinance_logs():
+        """Suppress yfinance internal ERROR logs during download.
+
+        yfinance emits misleading errors (e.g. 'possibly delisted', 'OperationalError')
+        that are noise — data is still returned successfully in the DataFrame.
+        Temporarily elevate yfinance logger to CRITICAL to suppress them.
+        """
+        import logging
+        yf_logger = logging.getLogger("yfinance")
+        original_level = yf_logger.level
+        yf_logger.setLevel(logging.CRITICAL)
+        return original_level
+
+    @staticmethod
+    def _restore_yfinance_logs(original_level):
+        """Restore yfinance logger to its original level after download."""
+        logging.getLogger("yfinance").setLevel(original_level)
+
     def _download_chunk(
         self, yf_symbols: List[str], start_date: str, end_date: str, interval: str
     ) -> Dict[str, pd.DataFrame]:
@@ -188,17 +207,21 @@ class YFinanceDataSource(DataSourceBase):
             logger.info(f"  Download attempt {attempt}/{max_attempts}: {len(yf_symbols)} tickers")
 
             try:
-                df_multi = yf.download(
-                    tickers=yf_symbols,
-                    start=start_date,
-                    end=end_date,
-                    interval=interval,
-                    group_by="ticker",
-                    threads=True,
-                    session=self._session,
-                    progress=False,
-                    timeout=30,
-                )
+                saved_level = self._suppress_yfinance_logs()
+                try:
+                    df_multi = yf.download(
+                        tickers=yf_symbols,
+                        start=start_date,
+                        end=end_date,
+                        interval=interval,
+                        group_by="ticker",
+                        threads=True,
+                        session=self._session,
+                        progress=False,
+                        timeout=30,
+                    )
+                finally:
+                    self._restore_yfinance_logs(saved_level)
             except Exception as e:
                 logger.warning(f"  Exception during download: {type(e).__name__}: {e}")
                 if attempt < max_attempts:

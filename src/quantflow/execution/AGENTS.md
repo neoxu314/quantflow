@@ -22,10 +22,11 @@ execution/
 
 - `Executor`: Main class. Loads `ConfigLoader` at init, dispatches yFinance items to batch fetch, processes sequential items individually. `execute(job)` order:
   1. Partition items by primary data source.
-  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking: 50/batch, jitter sleep 5–12s to avoid 429).
+  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking: 35/batch, jitter sleep 10–20s to avoid 429).
   3. yFinance signals processed in-memory.
   4. Other items (A-share) → sequential `fetch_ohlcv()`.
   - **Progress Logging**: Via optional `on_progress` callback emitting `ProgressEvent` objects (`type="stock_start"|"stock_done"`, with `current`, `total`, `code`, `message`, `level`). Used by Web UI RunEngine for SSE real-time updates.
+  - **Summary Logging**: At end of `execute()`, logs task summary: `Task {name} complete: {total} stocks | {data_ok} analyzed, {no_data} no data, {errors} errors | {len(results)} with signals`.
   - **Helper**: `_process_single()` for indicator + signal generation per stock.
   - **Enrichment**: Extracts `matched_*_strategies` lists and passes `name` from `WatchlistItem`.
 
