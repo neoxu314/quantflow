@@ -142,83 +142,44 @@
                 <fieldset class="border rounded-lg p-4">
                     <legend class="text-sm font-semibold text-gray-700 px-2">📡 Data Sources</legend>
                     <div class="space-y-3 mt-2">
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                CN A-Share
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    A股数据源。可选 <code class="bg-gray-700 px-1 rounded">baostock</code>（免费无需token）、<code class="bg-gray-700 px-1 rounded">tushare</code>（需配置token）、<code class="bg-gray-700 px-1 rounded">yfinance</code>。不同数据源的数据质量、延迟和字段完整性有差异。
-                                    <br><span class="text-gray-400">A-share data source. Options: <code class="bg-gray-700 px-1 rounded">baostock</code> (free, no token), <code class="bg-gray-700 px-1 rounded">tushare</code> (requires token), <code class="bg-gray-700 px-1 rounded">yfinance</code>. Data quality and fields vary by source.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-cn-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.cn.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm font-medium text-gray-500">
+                            <span>Market</span><span>Primary</span><span>Fallback</span><span></span><span></span>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                HK Stocks
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    港股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>，备选 <code class="bg-gray-700 px-1 rounded">akshare</code>。修改后影响港股行情获取方式。
-                                    <br><span class="text-gray-400">HK stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>, fallback: <code class="bg-gray-700 px-1 rounded">akshare</code>. Changes affect how HK market data is fetched.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-hk-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.hk.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">CN A-Share</label>
+                            <input id="cfg-cn-primary" class="border rounded px-2 py-1" data-path="data.markets.cn.primary" />
+                            <input id="cfg-cn-fallback" class="border rounded px-2 py-1" data-path="data.markets.cn.fallback" />
+                            <span class="text-xs text-gray-400">Primary: baostock, Fallback: tushare</span>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                US Stocks
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    美股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>，数据覆盖最全。受Yahoo反爬策略影响，可能需要配合调整Batch参数。
-                                    <br><span class="text-gray-400">US stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code> (most comprehensive). May need to adjust Batch settings due to Yahoo anti-scraping.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-us-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.us.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">HK Stocks</label>
+                            <input id="cfg-hk-primary" class="border rounded px-2 py-1" data-path="data.markets.hk.primary" />
+                            <input id="cfg-hk-fallback" class="border rounded px-2 py-1" data-path="data.markets.hk.fallback" />
+                            <span class="text-xs text-gray-400">yfinance / yahooquery</span>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                JP Stocks
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    日股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>。
-                                    <br><span class="text-gray-400">JP stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-jp-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.jp.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">US Stocks</label>
+                            <input id="cfg-us-primary" class="border rounded px-2 py-1" data-path="data.markets.us.primary" />
+                            <input id="cfg-us-fallback" class="border rounded px-2 py-1" data-path="data.markets.us.fallback" />
+                            <span class="text-xs text-gray-400">yfinance / yahooquery</span>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                KR Stocks
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    韩股数据源。推荐 <code class="bg-gray-700 px-1 rounded">yfinance</code>。
-                                    <br><span class="text-gray-400">KR stock data source. Recommended: <code class="bg-gray-700 px-1 rounded">yfinance</code>.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-kr-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.kr.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">JP Stocks</label>
+                            <input id="cfg-jp-primary" class="border rounded px-2 py-1" data-path="data.markets.jp.primary" />
+                            <input id="cfg-jp-fallback" class="border rounded px-2 py-1" data-path="data.markets.jp.fallback" />
+                            <span class="text-xs text-gray-400">yfinance / yahooquery</span>
                         </div>
-                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                Sector Data
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    板块分类数据来源。推荐 <code class="bg-gray-700 px-1 rounded">akshare</code>，获取申万/同花顺板块信息，用于策略信号分类展示。
-                                    <br><span class="text-gray-400">Sector classification data source. Recommended: <code class="bg-gray-700 px-1 rounded">akshare</code> for SW/THS sector info, used in signal grouping.</span>
-                                </span>
-                            </label>
-                            <input id="cfg-sector-primary" class="col-span-1 border rounded px-2 py-1" data-path="data.markets.sector.primary" />
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">KR Stocks</label>
+                            <input id="cfg-kr-primary" class="border rounded px-2 py-1" data-path="data.markets.kr.primary" />
+                            <input id="cfg-kr-fallback" class="border rounded px-2 py-1" data-path="data.markets.kr.fallback" />
+                            <span class="text-xs text-gray-400">yfinance / yahooquery</span>
+                        </div>
+                        <div class="grid grid-cols-5 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sector Data</label>
+                            <input id="cfg-sector-primary" class="border rounded px-2 py-1" data-path="data.markets.sector.primary" />
+                            <input class="border rounded px-2 py-1 bg-gray-100" disabled value="—" />
+                            <span class="text-xs text-gray-400">akshare only</span>
                         </div>
                         <hr class="my-2"/>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
@@ -278,43 +239,46 @@
                     <legend class="text-sm font-semibold text-gray-700 px-2">🔄 YFinance Batch</legend>
                     <div class="space-y-3 mt-2">
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                Chunk Size
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    每批请求的股票数量。Yahoo Finance 限制 60次/分钟、360次/小时、8000次/天。系统自动将股票按此大小分块并随机延迟。批次越大请求次数越少（速度快），但单次负载越高易触发限流。700只股票（约200只yFinance标的）通常耗时5-8分钟。默认值 50。
-                                    <br><span class="text-gray-400">Number of stocks per batch request. Yahoo Finance limits: 60 req/min, 360 req/hr, 8000 req/day. System auto-chunks stocks and adds random delays. Larger chunks = fewer requests (faster), but higher per-request load risks rate-limiting. ~700 stocks (~200 yFinance targets) typically take 5-8 minutes. Default: 50.</span>
-                                </span>
-                            </label>
+                            <label class="text-gray-600 font-medium">Chunk Size</label>
                             <input id="cfg-yf-chunk" type="number" min="10" max="100" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.chunk_size" />
+                            <span class="text-xs text-gray-400">Stocks per batch. Default: 35</span>
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                Sleep Min
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    批次请求间最小等待秒数。系统使用 <code class="bg-gray-700 px-1 rounded">[min, max]</code> 范围的随机延迟（jitter），模拟人类访问行为避免触发反爬检测。设太小（&lt;3秒）易被封禁，设太大会显著拖慢扫描速度。需与 Sleep Max 配合使用。默认值 5。
-                                    <br><span class="text-gray-400">Minimum wait (seconds) between batch requests. System uses random jitter in <code class="bg-gray-700 px-1 rounded">[min, max]</code> range to simulate human behavior and avoid anti-scraping detection. Too low (&lt;3s) risks banning; too high significantly slows scanning. Must be paired with Sleep Max. Default: 5.</span>
-                                </span>
-                            </label>
+                            <label class="text-gray-600 font-medium">Sleep Min</label>
                             <input id="cfg-yf-min" type="number" min="1" max="30" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_min" />
+                            <span class="text-xs text-gray-400">Min delay (s). Default: 10</span>
                         </div>
                         <div class="grid grid-cols-4 gap-2 items-center text-sm">
-                            <label class="text-gray-600 font-medium flex items-center gap-1 group cursor-help relative">
-                                Sleep Max
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                    批次请求间最大等待秒数。与 Sleep Min 组成随机等待区间 <code class="bg-gray-700 px-1 rounded">[min, max]</code>。建议 Min 和 Max 之间保持一定差距（如5-12），随机性更好，更像人类访问模式。差距过小则接近固定延迟。默认值 12。
-                                    <br><span class="text-gray-400">Maximum wait (seconds) between batch requests. Together with Sleep Min, forms the random jitter range <code class="bg-gray-700 px-1 rounded">[min, max]</code>. Recommended: keep a gap between Min and Max (e.g., 5-12) for better randomness — mimics human access patterns better. Too narrow a gap ≈ fixed delay. Default: 12.</span>
-                                </span>
-                            </label>
+                            <label class="text-gray-600 font-medium">Sleep Max</label>
                             <input id="cfg-yf-max" type="number" min="1" max="60" class="col-span-1 border rounded px-2 py-1" data-path="yfinance.batch.sleep_max" />
+                            <span class="text-xs text-gray-400">Max delay (s). Default: 20</span>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- YahooQuery -->
+                <fieldset class="border rounded-lg p-4">
+                    <legend class="text-sm font-semibold text-gray-700 px-2">⚡ YahooQuery Batch</legend>
+                    <div class="space-y-3 mt-2">
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Chunk Size</label>
+                            <input id="cfg-yq-chunk" type="number" min="10" max="500" class="col-span-1 border rounded px-2 py-1" data-path="yahooquery.batch.chunk_size" />
+                            <span class="text-xs text-gray-400">Stocks per batch. Default: 200</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sleep Min</label>
+                            <input id="cfg-yq-min" type="number" min="0" max="10" step="0.5" class="col-span-1 border rounded px-2 py-1" data-path="yahooquery.batch.sleep_min" />
+                            <span class="text-xs text-gray-400">Min delay (s). Default: 1</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Sleep Max</label>
+                            <input id="cfg-yq-max" type="number" min="0" max="30" step="0.5" class="col-span-1 border rounded px-2 py-1" data-path="yahooquery.batch.sleep_max" />
+                            <span class="text-xs text-gray-400">Max delay (s). Default: 3</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 items-center text-sm">
+                            <label class="text-gray-600 font-medium">Max Workers</label>
+                            <input id="cfg-yq-workers" type="number" min="1" max="50" class="col-span-1 border rounded px-2 py-1" data-path="yahooquery.batch.max_workers" />
+                            <span class="text-xs text-gray-400">Concurrent requests. Default: 20</span>
                         </div>
                     </div>
                 </fieldset>

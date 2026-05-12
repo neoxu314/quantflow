@@ -1199,7 +1199,7 @@ function collectFormValues() {
             continue;
         const rawVal = els[0].value;
         let parsed = rawVal;
-        if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer")) {
+        if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer") || dataPath.includes("workers")) {
             const num = Number(rawVal);
             if (!isNaN(num))
                 parsed = num;

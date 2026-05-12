@@ -141,7 +141,7 @@ class TestConfigLoaderGetDataConfig:
 
         assert isinstance(result, MarketDataSourceConfig)
         assert result.get_primary("cn") == "baostock"
-        assert result.get_primary("us") == "yfinance"
+        assert result.get_primary("us") == "yahooquery"
         assert result.get_fallback("cn") == "tushare"
 
     def test_empty_data_section(self, config_file: Path):
@@ -235,13 +235,22 @@ class TestConfigLoaderGetDefaults:
         markets = defaults["data"]["markets"]
 
         assert markets["cn"]["primary"] == "baostock"
-        assert markets["us"]["primary"] == "yfinance"
-        assert markets["hk"]["primary"] == "yfinance"
-        assert markets["jp"]["primary"] == "yfinance"
-        assert markets["kr"]["primary"] == "yfinance"
+        assert markets["us"]["primary"] == "yahooquery"
+        assert markets["hk"]["primary"] == "yahooquery"
+        assert markets["jp"]["primary"] == "yahooquery"
+        assert markets["kr"]["primary"] == "yahooquery"
         assert markets["sector"]["primary"] == "akshare"
 
     def test_defaults_cn_fallback(self):
+        loader = ConfigLoader()
+        defaults = loader._get_defaults()
+        markets = defaults["data"]["markets"]
+        assert markets["cn"]["fallback"] == "tushare"
+        assert markets["us"]["fallback"] == "yfinance"
+        assert markets["hk"]["fallback"] == "yfinance"
+        assert markets["jp"]["fallback"] == "yfinance"
+        assert markets["kr"]["fallback"] == "yfinance"
+        assert "fallback" not in markets["sector"]  # sector has no fallback
         loader = ConfigLoader()
         defaults = loader._get_defaults()
         assert defaults["data"]["markets"]["cn"]["fallback"] == "tushare"

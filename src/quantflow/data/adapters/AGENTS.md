@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Individual data source implementations, each extending `DataSourceBase`. 4 adapters: BaoStock, Tushare, YFinance, AKShare.
+Individual data source implementations, each extending `DataSourceBase`. 5 adapters: BaoStock, Tushare, YFinance, YahooQuery, AKShare.
 
 ## ADAPTERS
 
@@ -13,6 +13,7 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 | BaoStock | `baostock.py` | A-share CN | None | `login()`, `query()`, `logout()` |
 | Tushare | `tushare.py` | A-share CN | Token required | `pro_api()`, `daily()` |
 | YFinance | `yfinance.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(chunked)**, `check_version()` |
+| YahooQuery | `yahooquery.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(async)**, `fetch_fundamental()` |
 | AKShare | `akshare.py` | Sectors (EM/THS/SW) | None | `get_industry_list()`, `get_industry_constituents()` |
 
 ## CONVENTIONS
@@ -41,6 +42,16 @@ Individual data source implementations, each extending `DataSourceBase`. 4 adapt
 - **SSL detection**: `_check_ssl_compatibility()` logs warning for LibreSSL users. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv: `brew install python@3.12 && /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate && pip install -e .`
 - **Log suppression**: `_suppress_yfinance_logs()` / `_restore_yfinance_logs()` temporarily elevate yfinance logger to CRITICAL during `yf.download()`, suppressing misleading internal errors (`possibly delisted`, `OperationalError`). Data is still retrieved successfully from the returned DataFrame.
 - **Enhanced logging**: Detailed per-symbol failure logging with error classification
+
+## YAHOOQUERY SPECIAL
+
+- **No rate limits**: Uses `asynchronous=True` with `requests-futures` for concurrent individual requests (not Yahoo batch API), avoiding the 429 rate-limit issues that plague yfinance for 700+ ticker batches.
+- `YahooQueryDataSource.__init__(chunk_size, sleep_min, sleep_max, max_workers)` — values passed from `DataSourceFactory` via `yahooquery_config`.
+- `fetch_batch_ohlcv(codes, ...)` uses `Ticker("...", asynchronous=True, max_workers=N)` with per-ticker concurrent fetch. MultiIndex (symbol, date) is normalized via `reset_index()` + `groupby('symbol')`.
+- **Adjust handling**: `adj_ohlc=True` for qfq (uses `adjclose` instead of `close`).
+- **Chunk strategy**: Default 100/chunk (configurable via `chunk_size`), with short jitter sleep 0.5-2s between chunks (no rate-limit concern).
+- **Fundamental data**: Combines `key_stats` (PB, forwardPE) + `summary_detail` (marketCap, trailingPE) for PE/PB/MCap.
+- **Market suffix mapping**: Same as yfinance — KR→.KS, JP→.T, HK→.HK, US→no suffix.
 
 ## ANTI-PATTERNS
 

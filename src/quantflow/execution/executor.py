@@ -34,6 +34,7 @@ class Executor:
         self.factory = DataSourceFactory(
             tushare_token=config.get_tushare_token(),
             yfinance_config=config.get_yfinance_config(),
+            yahooquery_config=config.get_yahooquery_config(),
         )
         self.storage = Storage()
         self.composer = IndicatorComposer([
@@ -111,7 +112,7 @@ class Executor:
                 code = StockCode.from_standard(code)
             market = self.factory._detect_market(code)
             primary = self.factory.config.get_primary(market)
-            if primary == "yfinance":
+            if self.factory.has_batch_support(primary, market):
                 yfinance_items.append((item, code))
             else:
                 other_items.append((item, code))
@@ -125,7 +126,7 @@ class Executor:
             for code_str, (df, _src) in batch_result.items():
                 yf_data[code_str] = df
             logger.info(
-                f"yFinance batch complete: {len(yf_data)}/{len(yfinance_items)} stocks"
+                f"Batch complete: {len(yf_data)}/{len(yfinance_items)} stocks"
             )
 
         data_ok = 0

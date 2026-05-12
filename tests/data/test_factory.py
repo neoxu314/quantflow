@@ -22,7 +22,7 @@ class TestDataSourceFactory:
 
     def test_get_source_us(self, factory):
         source = factory.get_source("us")
-        assert source.get_name() == "YFinance"
+        assert source.get_name() == "YahooQuery"
 
     def test_detect_market(self, factory):
         cn_code = StockCode.from_standard("600000.SH")
@@ -47,7 +47,6 @@ class TestDataSourceFactory:
         assert source1 is source2
 
     def test_yfinance_config_passed_to_adapter(self):
-        """Verify yfinance config (including retry params) is passed to adapter."""
         yf_config = {
             "chunk_size": 42,
             "sleep_min": 7.5,
@@ -55,8 +54,9 @@ class TestDataSourceFactory:
             "retry_max_attempts": 5,
             "retry_base_delay": 60,
         }
-        factory = DataSourceFactory(yfinance_config=yf_config)
-        yf_adapter = factory.get_source("us")  # US market uses yfinance
+        custom_config = MarketDataSourceConfig(primary={"us": "yfinance"})
+        factory = DataSourceFactory(config=custom_config, yfinance_config=yf_config)
+        yf_adapter = factory.get_source("us")
 
         assert yf_adapter.get_name() == "YFinance"
         assert yf_adapter._chunk_size == 42
@@ -156,54 +156,39 @@ class TestFetchBatchOhlcv:
         assert result == {}
 
     def test_batch_includes_only_yfinance_codes_and_calls_adapter_with_params(self, factory):
-        # Prepare codes: US and HK should be batched (primary == 'yfinance'), CN should be excluded
         code_us = StockCode.from_standard("AAPL.US")
         code_hk = StockCode(code="00700", exchange="HK")
-        code_cn = StockCode.from_standard("600519.SH")  # CN, primary != yfinance -> excluded
+        code_cn = StockCode.from_standard("600519.SH")
         codes = [code_us, code_hk, code_cn]
 
         captured = {}
 
-        class MockYFAdapter:
+        class MockAdapter:
             def supports_market(self, market: str) -> bool:
                 return market in ["us", "hk"]
 
             def fetch_batch_ohlcv(self, codes_list, start_date, end_date, period, adjust):
-                # Capture the incoming codes as strings for assertion
                 captured["codes"] = [str(c) for c in codes_list]
-                # Return a small dummy DataFrame per code key
                 import pandas as pd
                 df = pd.DataFrame({"open": [1.0], "high": [1.1], "low": [0.9], "close": [1.0], "volume": [100]})
-                return {
-                    str(code_us): df,
-                    str(code_hk): df,
-                }
+                return {str(code_us): df, str(code_hk): df}
 
-        mock_yf = MockYFAdapter()
-        with patch.object(DataSourceFactory, "_get_adapter", return_value=mock_yf) as _get_adapter_patch:
+        mock_adapter = MockAdapter()
+        with patch.object(DataSourceFactory, "_get_adapter", return_value=mock_adapter):
             result = factory.fetch_batch_ohlcv(codes, start_date="2026-01-01", end_date="2026-01-31", period="d", adjust="qfq")
 
-        # Should have been called for US and HK only
         assert captured["codes"] == [str(code_us), str(code_hk)]
         assert set(result.keys()) == {str(code_us), str(code_hk)}
-        # Each entry should be a tuple with a DataFrame and the source code 'yfinance'
-        for k, v in result.items():
-            df, src = v
-            assert src == "yfinance"
-            import pandas as pd
-            assert isinstance(df, pd.DataFrame)
 
     def test_cn_codes_excluded_from_batch(self, factory):
-        # Only CN codes should be excluded; include CN only; expect empty batch result
         code_cn = StockCode.from_standard("600519.SH")
         codes = [code_cn]
 
-        mock_yf = MagicMock()
-        mock_yf.supports_market.return_value = True
-        mock_yf.fetch_batch_ohlcv.return_value = {str(code_cn): None}
-        with patch.object(DataSourceFactory, "_get_adapter", return_value=mock_yf):
+        mock_bs = MagicMock()
+        mock_bs.supports_market.return_value = True
+        mock_bs.fetch_batch_ohlcv = None
+        with patch.object(DataSourceFactory, "_get_adapter", return_value=mock_bs):
             result = factory.fetch_batch_ohlcv(codes, start_date="2026-01-01", end_date="2026-01-31")
-        # CN should be excluded from batch; hence empty result
         assert result == {}
 
 

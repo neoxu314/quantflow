@@ -1255,7 +1255,7 @@ function collectFormValues(): Record<string, unknown> {
         if (els.length === 0) continue;
         const rawVal = (els[0] as HTMLInputElement | HTMLSelectElement).value;
         let parsed: unknown = rawVal;
-        if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer")) {
+        if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer") || dataPath.includes("workers")) {
             const num = Number(rawVal);
             if (!isNaN(num)) parsed = num;
         }

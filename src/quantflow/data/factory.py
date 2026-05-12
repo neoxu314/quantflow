@@ -10,6 +10,7 @@ from quantflow.data.adapters import (
     AKShareDataSource,
     BaoStockDataSource,
     TushareDataSource,
+    YahooQueryDataSource,
     YFinanceDataSource,
 )
 from quantflow.data.base import DataSourceBase, FundamentalData, SectorDataSource, StockCode
@@ -25,6 +26,7 @@ class DataSourceFactory:
         "tushare": TushareDataSource,
         "yfinance": YFinanceDataSource,
         "akshare": AKShareDataSource,
+        "yahooquery": YahooQueryDataSource,
     }
 
     def __init__(
@@ -32,10 +34,12 @@ class DataSourceFactory:
         config: Optional[MarketDataSourceConfig] = None,
         tushare_token: Optional[str] = None,
         yfinance_config: Optional[dict] = None,
+        yahooquery_config: Optional[dict] = None,
     ):
         self.config = config or DEFAULT_CONFIG
         self.tushare_token = tushare_token
         self._yfinance = yfinance_config or {}
+        self._yahooquery = yahooquery_config or {}
         self._adapters: Dict[str, DataSourceBase] = {}
 
     def _get_adapter(self, source_name: str) -> DataSourceBase:
@@ -58,6 +62,13 @@ class DataSourceFactory:
                 cooldown_base=self._yfinance.get("cooldown_base"),
                 recovery_max_passes=self._yfinance.get("recovery_max_passes"),
                 recovery_chunk_size=self._yfinance.get("recovery_chunk_size"),
+            )
+        elif source_name == "yahooquery":
+            adapter = adapter_cls(
+                chunk_size=self._yahooquery.get("chunk_size"),
+                sleep_min=self._yahooquery.get("sleep_min"),
+                sleep_max=self._yahooquery.get("sleep_max"),
+                max_workers=self._yahooquery.get("max_workers"),
             )
         else:
             adapter = adapter_cls()
@@ -138,6 +149,13 @@ class DataSourceFactory:
             return idx.strftime("%Y-%m-%d")
         return str(idx)
 
+    def has_batch_support(self, source_name: str, market: str) -> bool:
+        adapter = self._get_adapter(source_name)
+        return (
+            adapter.supports_market(market)
+            and callable(getattr(adapter, "fetch_batch_ohlcv", None))
+        )
+
     def fetch_batch_ohlcv(
         self,
         codes: List[StockCode],
@@ -149,23 +167,77 @@ class DataSourceFactory:
         if not codes:
             return {}
 
-        yf_codes: List[StockCode] = []
-        yf_adapter = self._get_adapter("yfinance")
-
+        source_groups: Dict[str, List[StockCode]] = {}
         for code_obj in codes:
             market = self._detect_market(code_obj)
             primary = self.config.get_primary(market)
-            if primary == "yfinance" and yf_adapter.supports_market(market):
-                yf_codes.append(code_obj)
+            if self.has_batch_support(primary, market):
+                source_groups.setdefault(primary, []).append(code_obj)
 
-        if not yf_codes:
+        if not source_groups:
             return {}
 
-        batch_result = yf_adapter.fetch_batch_ohlcv(
-            yf_codes, start_date, end_date, period, adjust
-        )
+        all_results: Dict[str, tuple[pd.DataFrame, Optional[str]]] = {}
+        failed_codes: List[StockCode] = []
 
-        return {code_str: (df, "yfinance") for code_str, df in batch_result.items()}
+        for source_name, group_codes in source_groups.items():
+            adapter = self._get_adapter(source_name)
+            try:
+                batch_result = adapter.fetch_batch_ohlcv(
+                    group_codes, start_date, end_date, period, adjust
+                )
+                for code_str, df in batch_result.items():
+                    all_results[code_str] = (df, source_name)
+
+                for code_obj in group_codes:
+                    if code_obj.standard not in batch_result:
+                        failed_codes.append(code_obj)
+
+                logger.info(
+                    f"Batch from {source_name}: "
+                    f"{len(batch_result)}/{len(group_codes)} ok"
+                )
+            except Exception as e:
+                logger.warning(f"Batch from {source_name} failed: {e}")
+                failed_codes.extend(group_codes)
+
+        if failed_codes:
+            self._batch_fallback(
+                failed_codes, start_date, end_date, period, adjust, all_results
+            )
+
+        return all_results
+
+    def _batch_fallback(
+        self,
+        failed_codes: List[StockCode],
+        start_date: str,
+        end_date: str,
+        period: str,
+        adjust: str,
+        all_results: Dict[str, tuple[pd.DataFrame, Optional[str]]],
+    ) -> None:
+        fallback_groups: Dict[str, List[StockCode]] = {}
+        for code_obj in failed_codes:
+            market = self._detect_market(code_obj)
+            fallback = self.config.get_fallback(market)
+            if fallback and self.has_batch_support(fallback, market):
+                fallback_groups.setdefault(fallback, []).append(code_obj)
+
+        for source_name, group_codes in fallback_groups.items():
+            adapter = self._get_adapter(source_name)
+            try:
+                batch_result = adapter.fetch_batch_ohlcv(
+                    group_codes, start_date, end_date, period, adjust
+                )
+                for code_str, df in batch_result.items():
+                    all_results[code_str] = (df, source_name)
+                logger.info(
+                    f"Fallback batch from {source_name}: "
+                    f"{len(batch_result)}/{len(group_codes)} recovered"
+                )
+            except Exception as e:
+                logger.warning(f"Fallback batch from {source_name} failed: {e}")
 
     def fetch_fundamental(self, code: StockCode, market: Optional[str] = None) -> Optional[FundamentalData]:
         if market is None:

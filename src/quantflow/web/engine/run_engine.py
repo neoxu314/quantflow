@@ -146,7 +146,10 @@ class RunEngine:
             fetch_start = start_date
 
         config_loader = ConfigLoader()
-        factory = DataSourceFactory(yfinance_config=config_loader.get_yfinance_config())
+        factory = DataSourceFactory(
+            yfinance_config=config_loader.get_yfinance_config(),
+            yahooquery_config=config_loader.get_yahooquery_config(),
+        )
         df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
 
         if df.empty:

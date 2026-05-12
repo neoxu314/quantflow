@@ -31,6 +31,7 @@ from quantflow.data.base import StockCode
 from quantflow.data.adapters.baostock import BaoStockDataSource
 from quantflow.data.adapters.tushare import TushareDataSource
 from quantflow.data.adapters.yfinance import YFinanceDataSource
+from quantflow.data.adapters.yahooquery import YahooQueryDataSource
 from quantflow.data.factory import DataSourceFactory
 
 
@@ -512,6 +513,227 @@ class TestYFinanceFetch:
         assert yfinance_source.supports_market("us")
         assert yfinance_source.supports_market("kr")
         assert not yfinance_source.supports_market("cn")
+
+
+# =============================================================================
+# YahooQuery Integration Tests (US/HK/JP/KR markets)
+# =============================================================================
+
+@pytest.mark.integration
+class TestYahooQueryFetch:
+    """Integration tests for YahooQuery data fetching."""
+
+    @pytest.fixture
+    def yq_source(self):
+        return YahooQueryDataSource()
+
+    def test_fetch_intc_data(self, yq_source):
+        """Test fetching INTC (Intel) US stock daily data."""
+        code = StockCode(code="INTC", exchange="US")
+        start_date = "2025-09-01"
+        end_date = "2025-09-30"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty, "Should return data for INTC"
+
+        required_cols = ["date", "open", "high", "low", "close", "volume"]
+        for col in required_cols:
+            assert col in df.columns
+
+        target_date = TEST_DATA["intc"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0, f"Should find data for {target_date}"
+
+        row = match.iloc[0]
+        expected_close = TEST_DATA["intc"]["expected_close"]
+
+        assert abs(row["close"] - expected_close) < 1.0, (
+            f"Close mismatch: {row['close']} vs {expected_close}"
+        )
+
+    def test_fetch_msft_data(self, yq_source):
+        """Test fetching MSFT (Microsoft) US stock daily data."""
+        code = StockCode(code="MSFT", exchange="US")
+        start_date = "2026-04-01"
+        end_date = "2026-04-30"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty
+
+        target_date = TEST_DATA["msft"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0
+
+        row = match.iloc[0]
+        expected_open = TEST_DATA["msft"]["expected_open"]
+        expected_close = TEST_DATA["msft"]["expected_close"]
+
+        assert abs(row["open"] - expected_open) < 1.0
+        assert abs(row["close"] - expected_close) < 1.0
+
+    def test_fetch_sk_hynix_data(self, yq_source):
+        """Test fetching SK Hynix (000660.KS) Korea stock daily data."""
+        code = StockCode(code="000660", exchange="KR")
+        start_date = "2026-04-01"
+        end_date = "2026-04-30"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty, "Should return data for SK Hynix"
+
+        target_date = TEST_DATA["sk_hynix"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0
+
+        row = match.iloc[0]
+        expected_close = TEST_DATA["sk_hynix"]["expected_close"]
+
+        close_diff_pct = abs(row["close"] - expected_close) / expected_close
+        assert close_diff_pct < 0.05, (
+            f"Close mismatch: {row['close']} vs {expected_close} ({close_diff_pct:.2%})"
+        )
+
+    def test_fetch_nongfu_spring_data(self, yq_source):
+        """Test fetching Nongfu Spring (09660.HK) Hong Kong stock daily data."""
+        code = StockCode(code="09660", exchange="HK")
+        start_date = "2025-10-01"
+        end_date = "2025-10-31"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty, "Should return data for Nongfu Spring"
+
+        target_date = TEST_DATA["nongfu_spring"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0, f"Should find data for {target_date}"
+
+        row = match.iloc[0]
+        expected_open = TEST_DATA["nongfu_spring"]["expected_open"]
+        expected_close = TEST_DATA["nongfu_spring"]["expected_close"]
+
+        open_diff_pct = abs(row["open"] - expected_open) / expected_open
+        close_diff_pct = abs(row["close"] - expected_close) / expected_close
+
+        assert open_diff_pct < 0.05, (
+            f"Open mismatch: {row['open']} vs {expected_open} ({open_diff_pct:.2%})"
+        )
+        assert close_diff_pct < 0.05, (
+            f"Close mismatch: {row['close']} vs {expected_close} ({close_diff_pct:.2%})"
+        )
+
+    def test_fetch_tencent_data(self, yq_source):
+        """Test fetching Tencent (00700.HK) Hong Kong stock daily data."""
+        code = StockCode(code="00700", exchange="HK")
+        start_date = "2024-05-01"
+        end_date = "2024-05-31"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty, "Should return data for Tencent"
+
+        target_date = TEST_DATA["tencent"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0, f"Should find data for {target_date}"
+
+        row = match.iloc[0]
+        expected_open = TEST_DATA["tencent"]["expected_open"]
+        expected_close = TEST_DATA["tencent"]["expected_close"]
+
+        open_diff_pct = abs(row["open"] - expected_open) / expected_open
+        close_diff_pct = abs(row["close"] - expected_close) / expected_close
+
+        assert open_diff_pct < 0.05, (
+            f"Open mismatch: {row['open']} vs {expected_open} ({open_diff_pct:.2%})"
+        )
+        assert close_diff_pct < 0.05, (
+            f"Close mismatch: {row['close']} vs {expected_close} ({close_diff_pct:.2%})"
+        )
+
+    def test_fetch_tokyo_electron_data(self, yq_source):
+        """Test fetching Tokyo Electron (8035.T) Japan stock daily data."""
+        code = StockCode(code="8035", exchange="JP")
+        start_date = "2025-08-01"
+        end_date = "2025-08-31"
+
+        df = yq_source.fetch_ohlcv(code, start_date, end_date, period="d")
+
+        assert not df.empty, "Should return data for Tokyo Electron"
+
+        target_date = TEST_DATA["tokyo_electron"]["date"]
+        match = df[df["date"].dt.strftime("%Y-%m-%d") == target_date]
+
+        assert len(match) > 0, f"Should find data for {target_date}"
+
+        row = match.iloc[0]
+        expected_close = TEST_DATA["tokyo_electron"]["expected_close"]
+
+        close_diff_pct = abs(row["close"] - expected_close) / expected_close
+        assert close_diff_pct < 0.05, (
+            f"Close mismatch: {row['close']} vs {expected_close} ({close_diff_pct:.2%})"
+        )
+
+    def test_yahooquery_symbol_conversion(self, yq_source):
+        """Test YahooQuery symbol conversion for different markets."""
+        us_code = StockCode(code="INTC", exchange="US")
+        assert yq_source._get_yahooquery_symbol(us_code) == "INTC"
+
+        kr_code = StockCode(code="000660", exchange="KR")
+        assert yq_source._get_yahooquery_symbol(kr_code) == "000660.KS"
+
+        hk_code = StockCode(code="00700", exchange="HK")
+        assert yq_source._get_yahooquery_symbol(hk_code) == "0700.HK"
+
+    def test_yahooquery_supports_markets(self, yq_source):
+        """Test YahooQuery supports correct markets."""
+        assert yq_source.supports_market("us")
+        assert yq_source.supports_market("kr")
+        assert yq_source.supports_market("hk")
+        assert yq_source.supports_market("jp")
+        assert not yq_source.supports_market("cn")
+
+    def test_yahooquery_batch_fetch_us(self, yq_source):
+        """Test YahooQuery batch fetch for US stocks with asynchronous=True."""
+        codes = [
+            StockCode(code="AAPL", exchange="US"),
+            StockCode(code="MSFT", exchange="US"),
+            StockCode(code="GOOGL", exchange="US"),
+        ]
+        results = yq_source.fetch_batch_ohlcv(codes, "2026-05-01", "2026-05-12")
+
+        assert len(results) == 3
+        for code_str in ["AAPL.US", "MSFT.US", "GOOGL.US"]:
+            assert code_str in results
+            df = results[code_str]
+            assert not df.empty
+            assert list(df.columns) == ["date", "open", "high", "low", "close", "volume"]
+
+    def test_yahooquery_batch_fetch_multi_market(self, yq_source):
+        """Test YahooQuery batch fetch across US + HK markets."""
+        codes = [
+            StockCode(code="AAPL", exchange="US"),
+            StockCode(code="0700", exchange="HK"),
+        ]
+        results = yq_source.fetch_batch_ohlcv(codes, "2026-05-01", "2026-05-12")
+
+        assert len(results) == 2
+        assert "AAPL.US" in results
+        assert "0700.HK" in results
+
+    def test_yahooquery_fundamental(self, yq_source):
+        """Test YahooQuery fundamental data fetch for US stock."""
+        code = StockCode(code="AAPL", exchange="US")
+        result = yq_source.fetch_fundamental(code)
+
+        assert result is not None
+        assert result.pe_ttm is not None or result.pb is not None
+        assert result.total_mv is not None
 
 
 # =============================================================================

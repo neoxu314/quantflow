@@ -71,7 +71,7 @@ describe("SETTINGS_FIELD_MAP", () => {
     });
 
     it("has expected number of field mappings", () => {
-        expect(Object.keys(SETTINGS_FIELD_MAP).length).toBe(16);
+        expect(Object.keys(SETTINGS_FIELD_MAP).length).toBe(25);
     });
 });
 

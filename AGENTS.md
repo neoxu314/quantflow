@@ -46,7 +46,7 @@ quantflow/
 | Update A-share indices | `data/fetch_cn_indices.py` | `python -m quantflow.data.fetch_cn_indices` - fetches CSI 300, CSI 500, ChiNext constituents |
 | Output logic | See below | CLI vs Web UI default paths differ; see OUTPUT LOGIC section |
 | Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
-| Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()` |
+| Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()`, `get_yahooquery_config()` |
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |

@@ -1,11 +1,12 @@
 """Web API routes for config and strategies."""
 from __future__ import annotations
 
-import yaml
 import inspect
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
 from typing import Any, Dict
+
+import yaml
+from fastapi import APIRouter, HTTPException
 
 # Router for API endpoints under /api
 router = APIRouter(prefix="/api", tags=["Config"])
@@ -40,6 +41,7 @@ def get_system_config() -> Dict[str, Any]:
         "defaults": data.get("data", {}).get("defaults", {}),
         "lookback": data.get("lookback", {}),
         "yfinance": data.get("yfinance", {}),
+        "yahooquery": data.get("yahooquery", {}),
         "web": data.get("web", {}),
         "tushare": data.get("tushare", {"token": ""}),
         "logging": data.get("logging", {"level": "INFO", "format": ""}),
@@ -58,9 +60,13 @@ def update_system_config(payload: Dict[str, Any]):
         "version": raw.get("version", "0.1.0"),
         "data": raw.get("data", {}),
         "tushare": raw.get("tushare", {"token": ""}),
-        "logging": raw.get("logging", {"level": "INFO", "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"}),
+        "logging": raw.get("logging", {
+            "level": "INFO",
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        }),
         "lookback": raw.get("lookback", {}),
         "yfinance": raw.get("yfinance", {}),
+        "yahooquery": raw.get("yahooquery", {}),
         "web": raw.get("web", {}),
     }
 

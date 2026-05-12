@@ -5,14 +5,17 @@ data:
       primary: baostock
       fallback: tushare
     hk:
-      primary: yfinance
-      fallback: akshare
+      primary: yahooquery
+      fallback: yfinance
     us:
-      primary: yfinance
+      primary: yahooquery
+      fallback: yfinance
     jp:
-      primary: yfinance
+      primary: yahooquery
+      fallback: yfinance
     kr:
-      primary: yfinance
+      primary: yahooquery
+      fallback: yfinance
     sector:
       primary: akshare
   defaults:
@@ -35,6 +38,12 @@ yfinance:
     cooldown_base: 60
     recovery_max_passes: 3
     recovery_chunk_size: 10
+yahooquery:
+  batch:
+    chunk_size: 100
+    sleep_min: 0.5
+    sleep_max: 2
+    max_workers: 20
 web:
   port: 8082
   host: 127.0.0.1
