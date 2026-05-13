@@ -57,6 +57,8 @@ class YahooQueryDataSource(DataSourceBase):
         "volume": "volume",
     }
 
+    _SUB_CHUNK_SIZE = 10
+
     def __init__(
         self,
         chunk_size: Optional[int] = None,
@@ -184,6 +186,8 @@ class YahooQueryDataSource(DataSourceBase):
         logger.info(f"Batch complete: {len(all_results)}/{total} tickers with data")
         return all_results
 
+    _SUB_CHUNK_SIZE = 10
+
     def _fetch_chunk(
         self,
         yq_symbols: List[str],
@@ -192,7 +196,11 @@ class YahooQueryDataSource(DataSourceBase):
         interval: str,
         adj_ohlc: bool,
         symbol_to_code: Dict[str, str],
+        _depth: int = 0,
     ) -> Dict[str, pd.DataFrame]:
+        if not yq_symbols:
+            return {}
+
         from yahooquery import Ticker
 
         symbols_str = " ".join(yq_symbols)
@@ -203,8 +211,26 @@ class YahooQueryDataSource(DataSourceBase):
                 start=start_date, end=end_date, interval=interval, adj_ohlc=adj_ohlc,
             )
         except Exception as e:
-            logger.warning(f"  YahooQuery exception: {type(e).__name__}: {e}")
-            return {}
+            if _depth >= 2 or len(yq_symbols) <= 1:
+                logger.warning(
+                    f"  Can't fetch {yq_symbols[0] if len(yq_symbols)==1 else len(yq_symbols)} "
+                    f"tickers: {type(e).__name__}: {e}"
+                )
+                return {}
+            logger.info(
+                f"  Splitting chunk ({len(yq_symbols)} tickers) after "
+                f"{type(e).__name__}: {e}"
+            )
+            mid = len(yq_symbols) // 2
+            left = self._fetch_chunk(
+                yq_symbols[:mid], start_date, end_date, interval,
+                adj_ohlc, symbol_to_code, _depth + 1,
+            )
+            right = self._fetch_chunk(
+                yq_symbols[mid:], start_date, end_date, interval,
+                adj_ohlc, symbol_to_code, _depth + 1,
+            )
+            return {**left, **right}
 
         if raw is None or raw.empty:
             logger.warning(f"  Empty response for chunk ({len(yq_symbols)} tickers)")
