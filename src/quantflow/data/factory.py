@@ -186,17 +186,23 @@ class DataSourceFactory:
                 batch_result = adapter.fetch_batch_ohlcv(
                     group_codes, start_date, end_date, period, adjust
                 )
+                success_count = len(batch_result)
                 for code_str, df in batch_result.items():
                     all_results[code_str] = (df, source_name)
 
-                for code_obj in group_codes:
-                    if code_obj.standard not in batch_result:
-                        failed_codes.append(code_obj)
-
                 logger.info(
                     f"Batch from {source_name}: "
-                    f"{len(batch_result)}/{len(group_codes)} ok"
+                    f"{success_count}/{len(group_codes)} ok"
                 )
+
+                if not batch_result:
+                    failed_codes.extend(group_codes)
+                elif success_count < len(group_codes):
+                    missed = len(group_codes) - success_count
+                    logger.info(
+                        f"  {missed} tickers not in response "
+                        f"(likely bad symbols, no fallback triggered)"
+                    )
             except Exception as e:
                 logger.warning(f"Batch from {source_name} failed: {e}")
                 failed_codes.extend(group_codes)
