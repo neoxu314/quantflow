@@ -11,10 +11,13 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import re
+
 import pytest
 import yaml
 
 from quantflow.config.loader import ConfigLoader
+from quantflow.config.logging import setup_logging
 from quantflow.config.lookback import load_lookback_config, compute_days_back
 from quantflow.data.config import MarketDataSourceConfig
 
@@ -404,3 +407,70 @@ class TestComputeDaysBack:
             mock_cfg.return_value = {"calendar_multiplier": 2.5, "buffer_days": 10}
             result = compute_days_back(strategies=[strategy], override=None)
             assert result == math.ceil(25 * 2.5) + 10  # = 62.5 → ceil=63 + 10 = 73
+
+
+# ─── setup_logging() ──────────────────────────────────────────────────
+
+class TestSetupLogging:
+    @pytest.fixture(autouse=True)
+    def _cleanup_root_handlers(self):
+        import logging
+        original_handlers = logging.root.handlers[:]
+        original_level = logging.root.level
+        yield
+        logging.root.handlers = original_handlers
+        logging.root.setLevel(original_level)
+
+    def test_creates_log_file(self, tmp_path: Path):
+        log_path = setup_logging(tmp_path, "stock_scan_600000.SH")
+        assert log_path is not None
+        assert log_path.parent.name == "logs"
+        assert log_path.parent.parent == tmp_path
+        assert "stock_scan_600000.SH" in log_path.name
+        assert log_path.name.endswith(".log")
+
+    def test_log_file_receives_output(self, tmp_path: Path):
+        import logging
+        log_path = setup_logging(tmp_path, "test_run")
+        logger = logging.getLogger("quantflow.test_setup")
+        logger.info("test message from setup_logging")
+        for handler in logging.root.handlers:
+            handler.flush()
+        content = log_path.read_text()
+        assert "test message from setup_logging" in content
+
+    def test_creates_logs_subdirectory(self, tmp_path: Path):
+        setup_logging(tmp_path, "test")
+        assert (tmp_path / "logs").is_dir()
+
+    def test_returns_none_when_file_disabled(self, tmp_path: Path):
+        with patch("quantflow.config.logging.ConfigLoader") as MockLoader:
+            MockLoader.return_value.get_logging_config.return_value = {
+                "console_level": "INFO", "file_enabled": False,
+                "file_level": "DEBUG", "format": "%(message)s",
+            }
+            log_path = setup_logging(tmp_path, "test")
+        assert log_path is None
+
+    def test_log_filename_contains_timestamp(self, tmp_path: Path):
+        log_path = setup_logging(tmp_path, "stock_scan_NVDA.US")
+        name = log_path.name
+        assert name.startswith("stock_scan_NVDA.US_")
+        assert name.endswith(".log")
+        middle = name[len("stock_scan_NVDA.US_"):-len(".log")]
+        assert re.match(r"\d{8}_\d{6}", middle), f"Timestamp format wrong: {middle}"
+
+    def test_file_handler_uses_file_level(self, tmp_path: Path):
+        import logging
+        log_path = setup_logging(tmp_path, "test_debug")
+        logger = logging.getLogger("quantflow.test_debug_check")
+        logger.debug("debug should appear in file")
+        for handler in logging.root.handlers:
+            handler.flush()
+        content = log_path.read_text()
+        assert "debug should appear in file" in content
+
+    def test_graceful_fallback_on_permission_error(self, tmp_path: Path):
+        with patch("quantflow.config.logging.Path.mkdir", side_effect=OSError("no perms")):
+            log_path = setup_logging(tmp_path, "test_perm")
+        assert log_path is None
