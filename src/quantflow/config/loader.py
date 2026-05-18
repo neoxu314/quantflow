@@ -71,6 +71,10 @@ class ConfigLoader:
         config = self.load()
         return config.get("yahooquery", {}).get("batch", {})
 
+    def get_logging_config(self) -> dict:
+        config = self.load()
+        return config.get("logging", {})
+
     def _get_defaults(self) -> dict:
         return {
             "data": {
@@ -92,5 +96,10 @@ class ConfigLoader:
                     "max_workers": 20,
                 }
             },
-            "logging": {"level": "INFO"},
+            "logging": {
+                "console_level": "INFO",
+                "file_enabled": True,
+                "file_level": "DEBUG",
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            },
         }

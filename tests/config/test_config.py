@@ -73,7 +73,7 @@ class TestConfigLoaderLoad:
         assert "data" in result
         assert result["data"]["markets"]["cn"]["primary"] == "baostock"
         assert result["data"]["defaults"]["adjust"] == "qfq"
-        assert result["logging"]["level"] == "INFO"
+        assert result["logging"]["console_level"] == "INFO"
 
     def test_existing_file_loads_yaml(self, config_file: Path):
         _write_yaml(config_file, {
@@ -227,7 +227,7 @@ class TestConfigLoaderGetDefaults:
         assert "us" in defaults["data"]["markets"]
         assert "hk" in defaults["data"]["markets"]
         assert defaults["data"]["defaults"]["adjust"] == "qfq"
-        assert defaults["logging"]["level"] == "INFO"
+        assert defaults["logging"]["console_level"] == "INFO"
 
     def test_defaults_primary_sources(self):
         loader = ConfigLoader()
@@ -250,10 +250,43 @@ class TestConfigLoaderGetDefaults:
         assert markets["hk"]["fallback"] == "yfinance"
         assert markets["jp"]["fallback"] == "yfinance"
         assert markets["kr"]["fallback"] == "yfinance"
-        assert "fallback" not in markets["sector"]  # sector has no fallback
+        assert "fallback" not in markets["sector"]
         loader = ConfigLoader()
         defaults = loader._get_defaults()
         assert defaults["data"]["markets"]["cn"]["fallback"] == "tushare"
+
+
+# ─── ConfigLoader.get_logging_config() ─────────────────────────────────
+
+class TestConfigLoaderGetLoggingConfig:
+    def test_returns_logging_config(self, config_file: Path):
+        _write_yaml(config_file, {
+            "logging": {
+                "console_level": "WARNING",
+                "file_enabled": False,
+                "file_level": "INFO",
+                "format": "%(message)s",
+            },
+        })
+        loader = ConfigLoader(config_path=str(config_file))
+        result = loader.get_logging_config()
+        assert result["console_level"] == "WARNING"
+        assert result["file_enabled"] is False
+        assert result["file_level"] == "INFO"
+        assert result["format"] == "%(message)s"
+
+    def test_defaults_when_no_logging_section(self, config_file: Path):
+        _write_yaml(config_file, {"data": {"markets": {}}})
+        loader = ConfigLoader(config_path=str(config_file))
+        result = loader.get_logging_config()
+        assert result == {}
+
+    def test_defaults_when_missing_file(self, config_file: Path):
+        loader = ConfigLoader(config_path=str(config_file))
+        result = loader.get_logging_config()
+        assert result["console_level"] == "INFO"
+        assert result["file_enabled"] is True
+        assert result["file_level"] == "DEBUG"
 
 
 # ─── load_lookback_config() ───────────────────────────────────────────

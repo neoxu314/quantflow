@@ -23,7 +23,9 @@ data:
 tushare:
   token: ''
 logging:
-  level: INFO
+  console_level: INFO
+  file_enabled: true
+  file_level: DEBUG
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 lookback:
   calendar_multiplier: 2
