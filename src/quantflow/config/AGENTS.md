@@ -4,15 +4,16 @@
 
 ## OVERVIEW
 
-Configuration loading and lookback computation. YAML-based config parsing with environment variable fallback, shared across all layers.
+Configuration loading, logging setup, and lookback computation. YAML-based config parsing with environment variable fallback, shared across all layers.
 
 ## STRUCTURE
 
 ```
 config/
-├── __init__.py       # Re-exports ConfigLoader
+├── __init__.py       # Re-exports ConfigLoader, setup_logging
 ├── loader.py         # ConfigLoader - loads quantflow.yaml
-└── lookback.py       # compute_days_back(), load_lookback_config()
+├── lookback.py       # compute_days_back(), load_lookback_config()
+└── logging.py        # setup_logging() - dual handler (console + file)
 ```
 
 ## WHERE TO LOOK
@@ -23,8 +24,10 @@ config/
 | Get data config | `loader.py` | `ConfigLoader.get_data_config()` → `MarketDataSourceConfig` |
 | Get Tushare token | `loader.py` | `ConfigLoader.get_tushare_token()` - env `TUSHARE_TOKEN` > config file |
 | Get YFinance config | `loader.py` | `ConfigLoader.get_yfinance_config()` - batch chunking/sleep settings |
+| Get logging config | `loader.py` | `ConfigLoader.get_logging_config()` - returns logging section from YAML |
 | Load lookback | `lookback.py` | `load_lookback_config()` - reads `lookback:` section from quantflow.yaml |
 | Compute days | `lookback.py` | `compute_days_back(strategies, override)` - formula: `ceil(max_bars × multiplier) + buffer` |
+| Setup logging | `logging.py` | `setup_logging(output_dir, run_label)` - configures root logger with StreamHandler + FileHandler |
 
 ## CONVENTIONS
 
@@ -48,6 +51,8 @@ config/
 | Tushare token | `tests/config/test_config.py` | 4 | Unit (env priority, yaml fallback, missing all) |
 | YFinance config | `tests/config/test_config.py` | 3 | Unit (batch config, missing section, missing file) |
 | Defaults | `tests/config/test_config.py` | 3 | Unit (structure, primary sources, cn fallback) |
+| Logging config | `tests/config/test_config.py` | 3 | Unit (config from YAML, defaults, missing file) |
+| Setup logging | `tests/config/test_config.py` | 7 | Unit (creates log file, receives output, subdirectory, disabled, timestamp, file_level, error fallback) |
 | Lookback config | `tests/config/test_config.py` | 4 | Unit (missing file, with/without lookback, partial override) |
 | compute_days_back | `tests/config/test_config.py` | 7 | Unit (override, empty, None, formula, max, custom, fractional) |
 | Production sanity | `tests/config/test_config.py` | 1 | Sanity (quantflow.yaml exists and parses) |
@@ -61,8 +66,8 @@ Run: `pytest tests/config/ -v` for config unit tests, `pytest tests/orchestratio
 |----------|------|
 | `execution/executor.py` | `ConfigLoader()`, `.get_yfinance_config()`, `.get_tushare_token()` |
 | `orchestration/app.py` | `compute_days_back()` |
-| `cli.py` | `load_lookback_config()`, `compute_days_back()` |
-| `web/engine/run_engine.py` | `load_lookback_config()`, `compute_days_back()` |
+| `cli.py` | `setup_logging()`, `load_lookback_config()`, `compute_days_back()` |
+| `web/engine/run_engine.py` | `setup_logging()`, `load_lookback_config()`, `compute_days_back()` |
 
 ## NOTES
 

@@ -1,5 +1,5 @@
 ## OVERVIEW
-Core execution engine for the Web UI. Manages run lifecycle: creation  queuing  execution  history. Runs stock_scan, watchlist_run, and task_run in background threads with real-time SSE progress reporting.
+Core execution engine for the Web UI. Manages run lifecycle: creation  queuing  execution  history. Runs stock_scan, watchlist_run, and task_run in background threads with real-time SSE progress reporting. Calls `setup_logging()` at run start for persistent log files.
 
 ## STRUCTURE
 ```

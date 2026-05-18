@@ -1,6 +1,6 @@
 # QUANTFLOW PROJECT KNOWLEDGE
 
-**Generated:** 2026-04-25 / Updated: 2026-05-10
+**Generated:** 2026-04-25 / Updated: 2026-05-18
 **Scope:** `quantflow/` - Main quant analysis system
 
 ## OVERVIEW
@@ -18,9 +18,10 @@ quantflow/
 │   ├── strategies/      # Buy/sell strategies
 │   ├── execution/       # Execution layer (formerly monitoring)
 │   ├── orchestration/   # Task orchestration layer
-│   ├── config/          # YAML loader + lookback config
-│   │   ├── loader.py       # ConfigLoader - token, yfinance settings
-│   │   └── lookback.py     # compute_days_back() - shared lookback logic
+│   ├── config/          # YAML loader + lookback config + logging setup
+│   │   ├── loader.py       # ConfigLoader - token, yfinance, logging settings
+│   │   ├── lookback.py     # compute_days_back() - shared lookback logic
+│   │   └── logging.py      # setup_logging() - dual handler (console + file)
 │   ├── backtest/        # Reserved - stub (__init__.py only)
 │   ├── risk/            # Reserved - stub (__init__.py only)
 │   ├── web/             # Web UI server (FastAPI + frontend)
@@ -47,6 +48,8 @@ quantflow/
 | Output logic | See below | CLI vs Web UI default paths differ; see OUTPUT LOGIC section |
 | Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
 | Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()`, `get_yahooquery_config()` |
+| Logging setup | `config/logging.py` | `setup_logging(output_dir, run_label)` - dual handler (console + file), reads `logging:` config from YAML |
+| Get logging config | `config/loader.py` | `ConfigLoader.get_logging_config()` - returns logging section from YAML |
 | Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
 | Indicator composition | `indicators/composer.py` | Chain multiple indicators |
 | Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
@@ -97,6 +100,7 @@ quantflow/
 - **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
+- **Run logging**: `config/logging.py` provides `setup_logging(output_dir, run_label)` — configures root logger with StreamHandler (console_level) + FileHandler (file_level). All run types (CLI + Web) call this at start. Log files go to `output_dir/logs/{run_label}_{timestamp}.log`. Config: `logging:` section in `quantflow.yaml` (console_level, file_enabled, file_level, format)
 - **YFinance batch**: Auto-chunked (35 tickers/chunk, jitter sleep 10–20s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 - **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
 
@@ -117,16 +121,16 @@ CLI and Web UI use **different default output paths** and **delete strategies**.
 
 | Run Type | Default Path | Path Type | Output Files |
 |----------|--------------|-----------|--------------|
-| **stock_scan** | `PROJECT_ROOT/output/cli_scans` | Absolute (PROJECT_ROOT) | `{code}_indicators.json` |
-| **watchlist_run** | `./output` | Relative | `{watchlist_name}_results.json`<br>`{watchlist_name}_report.md` |
-| **task_run** | `./output` | Relative | `{task_name}.json`<br>`{task_name}.md`<br>`Daily_Report.md`<br>`Combined_Results.json` |
+| **stock_scan** | `PROJECT_ROOT/output/cli_scans` | Absolute (PROJECT_ROOT) | `{code}_indicators.json`<br>`logs/stock_scan_{code}_{ts}.log` |
+| **watchlist_run** | `./output` | Relative | `{watchlist_name}_results.json`<br>`{watchlist_name}_report.md`<br>`logs/watchlist_run_{name}_{ts}.log` |
+| **task_run** | `./output` | Relative | `{task_name}.json`<br>`{task_name}.md`<br>`Daily_Report.md`<br>`Combined_Results.json`<br>`logs/task_run_{config}_{ts}.log` |
 
 ### Web UI Default Paths
 
 | Run Type | Default Path | Path Type | Output Files |
 |----------|--------------|-----------|--------------|
-| **stock_scan** | `./output/manual_scans` | Relative | `{code}_indicators.json` |
-| **watchlist_run** | `./output/manual_watchlist` | Relative | `web-{wl_name}.json`<br>`web-{wl_name}.md` |
+| **stock_scan** | `./output/manual_scans` | Relative | `{code}_indicators.json`<br>`logs/stock_scan_{code}_{ts}.log` |
+| **watchlist_run** | `./output/manual_watchlist` | Relative | `web-{wl_name}.json`<br>`web-{wl_name}.md`<br>`logs/watchlist_run_{name}_{ts}.log` |
 | **task_run** | `./output` | Relative | Same as CLI |
 
 **Key Differences:**

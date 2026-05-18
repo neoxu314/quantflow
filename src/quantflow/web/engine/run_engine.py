@@ -60,7 +60,7 @@ class RunEngine:
         self._sse.publish_status(run_id, "running")
         self._sse.publish_log(run_id, f"Starting: {run.name} ({run.run_type})")
 
-        output_path = run.config.get("output_path", "./output")
+        output_path = run.config.get("output_path") or "./output"
         if run.run_type == "stock_scan":
             safe_code = run.config.get("code", "unknown").replace("/", "_").replace("\\", "_")
             label = f"stock_scan_{safe_code}"
