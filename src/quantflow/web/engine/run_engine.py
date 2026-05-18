@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from quantflow.config.logging import setup_logging
 from quantflow.web.engine.run_history import RunHistory
 from quantflow.web.engine.run_queue import RunQueue
 from quantflow.web.engine.sse import SSEManager
@@ -58,6 +59,19 @@ class RunEngine:
         self._history.update_status(run_id, "running", started_at=now)
         self._sse.publish_status(run_id, "running")
         self._sse.publish_log(run_id, f"Starting: {run.name} ({run.run_type})")
+
+        output_path = run.config.get("output_path", "./output")
+        if run.run_type == "stock_scan":
+            safe_code = run.config.get("code", "unknown").replace("/", "_").replace("\\", "_")
+            label = f"stock_scan_{safe_code}"
+        elif run.run_type == "watchlist_run":
+            wl_name = Path(run.config.get("watchlist", "unknown")).stem
+            label = f"watchlist_run_{wl_name}"
+        elif run.run_type == "task_run":
+            label = f"task_run_{Path(run.config.get('task_config', 'unknown')).stem}"
+        else:
+            label = run.run_type
+        setup_logging(Path(output_path), label)
 
         try:
             if flag.is_set:

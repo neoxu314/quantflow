@@ -1,7 +1,12 @@
 import pytest
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
+
 from quantflow.web.engine import run_history
 
 # Preserve original DB path for teardown
@@ -369,4 +374,58 @@ class TestPreflightTaskFileValidation:
             assert any("no valid" in e.lower() for e in r.errors)
         finally:
             preflight.PROJECT_ROOT = orig
+
+
+class TestRunEngineLogging:
+    def test_stock_scan_creates_log_file(self, tmp_path):
+        from quantflow.web.engine.run_engine import RunEngine, CancellationFlag
+        from quantflow.web.engine import run_history
+        from quantflow.web.engine.run_queue import RunQueue
+        from quantflow.web.engine.sse import SSEManager
+        from quantflow.config.logging import setup_logging
+
+        orig = run_history.DB_PATH
+        run_history.DB_PATH = Path(":memory:")
+        run_history._ConnectionManager._conn = None
+        run_history._ConnectionManager.get()
+
+        try:
+            h = run_history.RunHistory()
+            rid = h.create_run("Test Log", "stock_scan", {
+                "code": "NVDA.US",
+                "output_path": str(tmp_path),
+            })
+            h.update_status(rid, "running",
+                started_at=datetime.now(timezone.utc).isoformat())
+
+            setup_logging(tmp_path, "stock_scan_NVDA.US")
+
+            engine = RunEngine(RunQueue(), h, SSEManager())
+            flag = CancellationFlag()
+
+            with patch("quantflow.data.factory.DataSourceFactory") as mock_factory:
+                mock_df = pd.DataFrame({
+                    "date": ["2026-04-30"], "open": [100.0], "high": [105.0],
+                    "low": [95.0], "close": [100.0], "volume": [1000000],
+                })
+                mock_factory.return_value.fetch_ohlcv.return_value = (mock_df, "yfinance")
+                mock_factory.return_value._latest_date.return_value = "2026-04-30"
+                with patch("quantflow.config.loader.ConfigLoader"):
+                    with patch("quantflow.indicators.factory.IndicatorFactory") as mock_if:
+                        mock_ind = type("MockInd", (), {
+                            "name": "KDJ", "lookback_bars": 9
+                        })()
+                        mock_if.create.return_value = mock_ind
+                        with patch("quantflow.indicators.composer.IndicatorComposer") as mock_comp:
+                            mock_comp.return_value.compose.return_value = mock_df
+                            run = h.get_run(rid)
+                            engine._exec_stock_scan(rid, run, flag)
+
+            log_dir = tmp_path / "logs"
+            assert log_dir.exists()
+            log_files = list(log_dir.glob("stock_scan_NVDA.US_*.log"))
+            assert len(log_files) >= 1
+        finally:
+            run_history.DB_PATH = orig
+            run_history._ConnectionManager.reset()
 
