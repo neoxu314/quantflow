@@ -13,7 +13,7 @@ Individual data source implementations, each extending `DataSourceBase`. 5 adapt
 | BaoStock | `baostock.py` | A-share CN | None | `login()`, `query()`, `logout()` |
 | Tushare | `tushare.py` | A-share CN | Token required | `pro_api()`, `daily()` |
 | YFinance | `yfinance.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(chunked)**, `check_version()` |
-| YahooQuery | `yahooquery.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(async)**, `fetch_fundamental()` |
+| YahooQuery | `yahooquery.py` | Global (HK/US/JP/KR) | None | `fetch_ohlcv()`, `fetch_batch_ohlcv()` **(sequential)**, `fetch_fundamental()`, `_fetch_single_with_retry()` |
 | AKShare | `akshare.py` | Sectors (EM/THS/SW) | None | `get_industry_list()`, `get_industry_constituents()` |
 
 ## CONVENTIONS
@@ -45,13 +45,17 @@ Individual data source implementations, each extending `DataSourceBase`. 5 adapt
 
 ## YAHOOQUERY SPECIAL
 
-- **No rate limits**: Uses `asynchronous=True` with `requests-futures` for concurrent individual requests (not Yahoo batch API), avoiding the 429 rate-limit issues that plague yfinance for 700+ ticker batches.
-- `YahooQueryDataSource.__init__(chunk_size, sleep_min, sleep_max, max_workers)` — values passed from `DataSourceFactory` via `yahooquery_config`.
-- `fetch_batch_ohlcv(codes, ...)` uses `Ticker("...", asynchronous=True, max_workers=N)` with per-ticker concurrent fetch. MultiIndex (symbol, date) is normalized via `reset_index()` + `groupby('symbol')`.
+- **Sequential batch mode**: Uses `asynchronous=False` (changed from `asynchronous=True`) — YahooQuery's async concurrent mode triggers Yahoo API anti-scraping (HTTP 404) for >4 concurrent tickers, causing 100% batch failure. Sequential per-ticker fetch avoids this.
+- **Less reliable than yfinance for batch data**: YahooQuery serves as primary source with yfinance as fallback, but batch reliability is now lower due to per-ticker sequential fetch + Yahoo API instability.
+- `YahooQueryDataSource.__init__(chunk_size, sleep_min, sleep_max, max_workers)` — values passed from `DataSourceFactory` via `yahooquery_config`. `max_workers` retained for API compat but unused in batch mode.
+- `fetch_batch_ohlcv(codes, ...)` iterates tickers sequentially using `_fetch_single_with_retry()`. Each ticker fetched individually via `Ticker(code, asynchronous=False).history(period, interval)`.
+- **Monkey-patch**: Applies `_historical_data_to_dataframe` monkey-patch to handle error dicts gracefully (prevents `KeyError` crash when YahooQuery returns `{'finance': {'error': ...}}` instead of expected data structure).
+- **Retry mechanism**: `_fetch_single_with_retry()` retries failed single-ticker fetches up to `_MAX_RETRIES=5` with `_RETRY_DELAY=3.0` seconds between attempts.
 - **Adjust handling**: `adj_ohlc=True` for qfq (uses `adjclose` instead of `close`).
 - **Chunk strategy**: Default 100/chunk (configurable via `chunk_size`), with short jitter sleep 0.5-2s between chunks (no rate-limit concern).
 - **Fundamental data**: Combines `key_stats` (PB, forwardPE) + `summary_detail` (marketCap, trailingPE) for PE/PB/MCap.
 - **Market suffix mapping**: Same as yfinance — KR→.KS, JP→.T, HK→.HK, US→no suffix.
+- **Removed methods**: `_fetch_chunk` (recursive chunk splitting) and `_normalize_multiindex` (MultiIndex normalization) removed — no longer needed with sequential single-ticker fetch.
 
 ## ANTI-PATTERNS
 

@@ -212,3 +212,4 @@ python -m quantflow.cli web
 - Sector data: SW (申万) works fully, THS has list-only API, EM blocked by network
 - Tushare requires token: env `TUSHARE_TOKEN`, `.env` file, or `config/quantflow.yaml`
 - YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint; batch auto-chunks via `yfinance.batch` config (jitter sleep)
+- YahooQuery async concurrent mode triggers Yahoo anti-scraping (HTTP 404) for >4 concurrent tickers; now uses `asynchronous=False` sequential per-ticker fetch with retry (`_MAX_RETRIES=5`); monkey-patches `_historical_data_to_dataframe` for error dict handling; less reliable than yfinance for batch data, serves as primary with yfinance fallback

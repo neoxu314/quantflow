@@ -20,7 +20,7 @@ data/
 │   ├── baostock.py   # BaoStock adapter (adjustflag="2" for qfq)
 │   ├── tushare.py    # Tushare adapter (requires token)
 │   ├── yfinance.py   # YFinance adapter (rate-limited, curl_cffi)
-│   ├── yahooquery.py # YahooQuery adapter (async concurrent, no rate limits)
+│   ├── yahooquery.py # YahooQuery adapter (sequential per-ticker, with retry)
 │   └── akshare.py    # AKShare adapter (sector classification)
 └── __init__.py
 ```
@@ -35,7 +35,7 @@ data/
 | Generate CN Watchlists | `fetch_cn_indices.py` | `fetch_cn_index()` - Downloads CSI 500 & ChiNext constituents |
 | BaoStock adapter | `adapters/baostock.py` | `BaoStockDataSource` - `adjust_map = {"qfq": "2", "hfq": "1", "none": "3"}` |
 | YFinance adapter | `adapters/yfinance.py` | `YFinanceDataSource` - handles `hk` prefix, **batch fetch with chunking** (chunk_size=35, jitter sleep 10–20s) |
-| YahooQuery adapter | `adapters/yahooquery.py` | `YahooQueryDataSource` - `asynchronous=True` concurrent fetch, **no rate limits**, MultiIndex normalization |
+| YahooQuery adapter | `adapters/yahooquery.py` | `YahooQueryDataSource` - `asynchronous=False` sequential per-ticker fetch with retry, `_fetch_single_with_retry()` (_MAX_RETRIES=5) |
 | Tushare adapter | `adapters/tushare.py` | `TushareDataSource` - token required, `daily()` API |
 | AKShare adapter | `adapters/akshare.py` | `AKShareDataSource` - `get_industry_list()`, `get_industry_constituents()` |
 | Sector classification | `adapters/akshare.py` | `SectorClassification` enum: em, ths, sw_l1, sw_l2, sw_l3 |
@@ -84,7 +84,7 @@ data/
 | Config | `test_factory.py` | — | Indirect (via factory tests) |
 | BaoStock adapter | `test_baostock.py` | 3 | Unit |
 | YFinance batch | `test_yfinance_batch.py` | 16 | Unit (chunking, version check, jitter, adaptive cooling, recovery) |
-| YahooQuery | `test_yahooquery.py` | 30 | Unit (basic, symbol mapping, MultiIndex normalization, batch, single fetch, fundamental, jitter, recovery) |
+| YahooQuery | `test_yahooquery.py` | 30 | Unit (basic, symbol mapping, normalize single, batch, single fetch, fundamental, jitter, retry) |
 | AKShare adapter | `test_akshare.py` | 27 | Unit (sector classification, industry/concept, constituents, HK OHLCV) |
 | fetch_indices | `test_fetch_indices.py` | 26 | Unit (clean_ticker, INDICES structure, YAML output) + 3 Integration (mocked HTTP) |
 | fetch_cn_indices | `test_fetch_cn_indices.py` | 14 | Unit (convert_cn_code, CN_INDICES structure, fetch_cn_index with mock) |
@@ -99,7 +99,7 @@ Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for ne
 
 - Sector constituents: SW works fully, THS list-only, EM blocked by network
 - YFinance: 60 req/min rate limit, **batch fetch uses chunking** (35 tickers/batch, jitter sleep 10–20s) configured in `quantflow.yaml`
-- YahooQuery: No rate limits, uses `asynchronous=True` concurrent requests via `requests-futures`, chunking default 100/batch
+- YahooQuery: Sequential per-ticker fetch (`asynchronous=False`) with retry (`_MAX_RETRIES=5`, `_RETRY_DELAY=3.0s`); async concurrent mode triggers Yahoo anti-scraping (HTTP 404) for >4 tickers; monkey-patches `_historical_data_to_dataframe` for error dict handling; less reliable than yfinance for batch data, serves as primary with yfinance fallback
 - Tushare: Token required - `TUSHARE_TOKEN` env var or config file
 - `DataSourceFactory` accepts `yfinance_config` and `yahooquery_config` dicts to pass adapter parameters
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.
