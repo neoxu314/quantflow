@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from quantflow.config.logging import setup_logging
 from quantflow.config.lookback import load_lookback_config
 from quantflow.data import DataSourceFactory, StockCode
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.standard import KDJIndicator, MACDIndicator
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +30,11 @@ def stock_scan():
 
     args = parser.parse_args()
     code = StockCode.from_standard(args.code)
+
+    output_dir = Path(args.output) if args.output else PROJECT_ROOT / "output" / "cli_scans"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_code = args.code.replace("/", "_").replace("\\", "_")
+    setup_logging(output_dir, f"stock_scan_{safe_code}")
 
     end_date = args.end or datetime.now().strftime("%Y-%m-%d")
     start_date = args.start or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
@@ -65,14 +70,7 @@ def stock_scan():
 
     actual_end = factory._latest_date(df)
     if actual_end < end_date:
-        print(f"⚠️ No data on {end_date}. Using latest available: {actual_end}")
-    if df.empty:
-        logger.error(f"No data for {args.code}")
-        return
-
-    actual_end = factory._latest_date(df)
-    if actual_end < end_date:
-        print(f"⚠️ No data on {end_date}. Using latest available: {actual_end}")
+        logger.info(f"No data on {end_date}. Using latest available: {actual_end}")
 
     if ind_objs:
         df = IndicatorComposer(ind_objs).compose(df)
@@ -83,14 +81,10 @@ def stock_scan():
         if start_date == end_date:
             df = df.tail(1)
 
-    print(f"\n=== Scan Result for {args.code} ===")
-    print(f"Date range: {start_date} to {end_date}")
-    print(f"Data source: {source}")
+    logger.info(f"Scan Result for {args.code}")
+    logger.info(f"Date range: {start_date} to {end_date}")
+    logger.info(f"Data source: {source}")
 
-    output_dir = Path(args.output) if args.output else PROJECT_ROOT / "output" / "cli_scans"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    safe_code = args.code.replace("/", "_").replace("\\", "_")
     indicator_file = output_dir / f"{safe_code}_indicators.json"
 
     def _serialize_df(df_to_save):
@@ -119,7 +113,7 @@ def stock_scan():
     indicator_data = _serialize_df(df)
     indicator_file.write_text(json.dumps(indicator_data, indent=2))
 
-    print(f"Indicator data saved: {indicator_file}")
+    logger.info(f"Indicator data saved: {indicator_file}")
 
 
 def watchlist_run():
@@ -148,6 +142,8 @@ def watchlist_run():
 
     watchlist = Watchlist.load(args.watchlist)
 
+    setup_logging(Path(args.output), f"watchlist_run_{watchlist.name}")
+
     strategy_ids = [s.strip() for s in args.strategies.split(",")]
     strategies = [STRATEGY_REGISTRY[s]() for s in strategy_ids]
 
@@ -171,8 +167,8 @@ def watchlist_run():
         args.output, date_str)
 
     Storage().save_results(f"{args.output}/{watchlist.name}_results.json", results)
-    print(f"Execution complete. {len(results)} signals saved.")
-    print(f"Report: {rpath}")
+    logger.info(f"Execution complete. {len(results)} signals saved.")
+    logger.info(f"Report: {rpath}")
 
 
 def task_run():
@@ -185,6 +181,8 @@ def task_run():
     parser.add_argument("--daily", action="store_true",
         help="Auto-append date to output path")
     args = parser.parse_args()
+
+    setup_logging(Path(args.output or "./output"), f"task_run_{Path(args.config).stem}")
 
     from quantflow.orchestration.app import Orchestrator
     from quantflow.orchestration.loader import TaskConfig

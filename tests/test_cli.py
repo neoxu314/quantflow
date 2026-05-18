@@ -151,7 +151,8 @@ class TestCLICommandRouting:
             timeout=30,
         )
         assert result.returncode == 0
-        assert "Scan Result for NVDA.US" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Scan Result for NVDA.US" in combined
 
     @pytest.mark.integration
     def test_stock_scan_alias_executes_stock_scan(self):
@@ -163,7 +164,8 @@ class TestCLICommandRouting:
             timeout=30,
         )
         assert result.returncode == 0
-        assert "Scan Result for NVDA.US" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Scan Result for NVDA.US" in combined
 
     @pytest.mark.integration
     def test_unknown_command_prints_error(self):
@@ -297,8 +299,9 @@ class TestCLIExecutionIntegration:
         )
 
         assert result.returncode == 0
-        assert "Scan Result for NVDA.US" in result.stdout
-        assert "Data source:" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Scan Result for NVDA.US" in combined
+        assert "Data source:" in combined
 
     def test_stock_scan_output_contains_indicator_columns(self, tmp_path):
         """Indicator output should be calculated successfully."""
@@ -324,7 +327,8 @@ class TestCLIExecutionIntegration:
         )
 
         assert result.returncode == 0
-        assert "Scan Result for NVDA.US" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Scan Result for NVDA.US" in combined
 
     def test_watchlist_run_generates_report(self, tmp_path):
         """watchlist_run should generate Markdown report."""
@@ -356,7 +360,8 @@ class TestCLIExecutionIntegration:
         )
 
         assert result.returncode == 0
-        assert "Execution complete" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Execution complete" in combined
 
         json_files = list(output_dir.glob("*_results.json"))
         assert len(json_files) > 0, "Should generate JSON results file"
@@ -406,6 +411,69 @@ class TestCLIExecutionIntegration:
         assert isinstance(data, list)
 
 
+class TestCLILogFile:
+    """Test that CLI run commands create log files."""
+
+    def test_stock_scan_creates_log_file(self, tmp_path):
+        import pandas as pd
+        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
+            mock_df = pd.DataFrame({
+                "date": ["2026-04-30"], "open": [100.0], "high": [105.0],
+                "low": [95.0], "close": [100.0], "volume": [1000000],
+            })
+            mock_factory.return_value.fetch_ohlcv.return_value = (mock_df, "yfinance")
+            mock_factory.return_value._latest_date.return_value = "2026-04-30"
+            sys.argv = ["quantflow.cli", "--code", "NVDA.US",
+                        "--start", "2026-04-01", "--end", "2026-04-30",
+                        "--output", str(tmp_path)]
+            from quantflow.cli import stock_scan
+            stock_scan()
+        log_dir = tmp_path / "logs"
+        assert log_dir.exists()
+        log_files = list(log_dir.glob("stock_scan_NVDA.US_*.log"))
+        assert len(log_files) == 1
+        content = log_files[0].read_text()
+        assert "Scan Result for NVDA.US" in content
+        assert "Data source:" in content
+
+    def test_watchlist_run_creates_log_file(self, tmp_path):
+        watchlist_file = tmp_path / "test.yaml"
+        watchlist_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
+        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
+            mock_exec.return_value = []
+            with patch("quantflow.reports.markdown.MarkdownReporter.generate") as mock_report:
+                mock_report.return_value = str(tmp_path / "report.md")
+            sys.argv = ["quantflow.cli", "--watchlist", str(watchlist_file),
+                        "--output", str(tmp_path)]
+            from quantflow.cli import watchlist_run
+            watchlist_run()
+        log_dir = tmp_path / "logs"
+        assert log_dir.exists()
+        log_files = list(log_dir.glob("watchlist_run_WL_*.log"))
+        assert len(log_files) == 1
+        content = log_files[0].read_text()
+        assert "Execution complete" in content
+
+    def test_task_run_creates_log_file(self, tmp_path):
+        task_file = tmp_path / "test_tasks.yaml"
+        wl_file = tmp_path / "test.yaml"
+        wl_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
+        task_file.write_text(
+            "tasks:\n  - name: 'TestTask'\n    watchlist: 'test.yaml'\n"
+            "    strategies: ['daily_bull_oversold']\n    output: './output'\n"
+        )
+        with patch("quantflow.orchestration.app.Orchestrator.run") as mock_run:
+            mock_run.return_value = 0
+            sys.argv = ["quantflow.cli", "--config", str(task_file),
+                        "--output", str(tmp_path)]
+            from quantflow.cli import task_run
+            task_run()
+        log_dir = tmp_path / "logs"
+        assert log_dir.exists()
+        log_files = list(log_dir.glob("task_run_test_tasks_*.log"))
+        assert len(log_files) == 1
+
+
 class TestCLIErrorHandling:
     """Test CLI error handling and messages."""
 
@@ -451,7 +519,7 @@ class TestCLIOutputFormat:
     def test_stock_scan_output_format(self, tmp_path):
         """stock_scan output should have expected format."""
         import pandas as pd
-        
+
         mock_df = pd.DataFrame({
             "date": ["2026-04-30"],
             "open": [100.0],
@@ -460,7 +528,7 @@ class TestCLIOutputFormat:
             "close": [100.0],
             "volume": [1000000],
         })
-        
+
         with patch("quantflow.cli.DataSourceFactory") as mock_factory:
             mock_factory.return_value.fetch_ohlcv.return_value = (
                 mock_df, "yfinance"
@@ -475,18 +543,21 @@ class TestCLIOutputFormat:
                 "2026-04-01",
                 "--end",
                 "2026-04-30",
+                "--output",
+                str(tmp_path),
             ]
 
-            from io import StringIO
-            captured = StringIO()
-            with patch("sys.stdout", captured):
-                from quantflow.cli import stock_scan
-                stock_scan()
+            from quantflow.cli import stock_scan
+            stock_scan()
 
-            output = captured.getvalue()
-            assert "=== Scan Result for NVDA.US ===" in output
-            assert "Date range:" in output
-            assert "Data source:" in output
+        log_dir = tmp_path / "logs"
+        assert log_dir.exists()
+        log_files = list(log_dir.glob("stock_scan_NVDA.US_*.log"))
+        assert len(log_files) == 1
+        content = log_files[0].read_text()
+        assert "Scan Result for NVDA.US" in content
+        assert "Date range:" in content
+        assert "Data source:" in content
 
     def test_watchlist_run_output_format(self, tmp_path):
         """watchlist_run output should have expected format."""
@@ -507,16 +578,17 @@ class TestCLIOutputFormat:
                 str(tmp_path),
             ]
 
-            from io import StringIO
-            captured = StringIO()
-            with patch("sys.stdout", captured):
-                from quantflow.cli import watchlist_run
-                watchlist_run()
+            from quantflow.cli import watchlist_run
+            watchlist_run()
 
-            output = captured.getvalue()
-            assert "Execution complete" in output
-            assert "signals saved" in output
-            assert "Report:" in output
+        log_dir = tmp_path / "logs"
+        assert log_dir.exists()
+        log_files = list(log_dir.glob("watchlist_run_WL_*.log"))
+        assert len(log_files) == 1
+        content = log_files[0].read_text()
+        assert "Execution complete" in content
+        assert "signals saved" in content
+        assert "Report:" in content
 
 
 @pytest.mark.integration
@@ -557,7 +629,8 @@ class TestCLIStockScanWithExpectedValues:
         )
 
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
-        assert "Indicator data saved" in result.stdout
+        combined = result.stdout + result.stderr
+        assert "Indicator data saved" in combined
 
         json_file = tmp_path / "002594.SZ_indicators.json"
         assert json_file.exists(), "JSON file should be generated"
