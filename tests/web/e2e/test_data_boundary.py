@@ -122,38 +122,48 @@ class TestWatchlistEditCancelBoundary:
     """Verify Watchlist edits that are cancelled don't affect YAML."""
 
     def test_watchlist_edit_cancel_yaml_unchanged(self, page: Page):
-        """Edit watchlist item but cancel - YAML unchanged."""
+        """Edit watchlist item via inline editing but cancel - YAML unchanged."""
         from tests.web.e2e.conftest import TEST_WATCHLIST_NAME
         import httpx
-        
+
         wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
-        
+
         httpx.put(
             f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
             json={"name": TEST_WATCHLIST_NAME, "items": [
-                {"code": "AAPL.US", "name": "Apple", "tags": []}
+                {"code": "AAPL.US", "name": "Apple", "tags": ["tech"]}
             ]},
         )
 
         with open(wl_path, "r", encoding="utf-8") as f:
             original = yaml.safe_load(f)
-        original_items = len(original.get("items", []))
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
         page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
         page.wait_for_selector("#stock-table", timeout=5000)
 
-        if page.locator("#btn-edit-watchlist").is_visible():
-            page.locator("#btn-edit-watchlist").click()
-            page.wait_for_timeout(500)
-            page.get_by_role("button", name="Watchlists").click()
+        name_span = page.locator(".editable-name").first
+        name_span.click()
+        page.wait_for_timeout(300)
+
+        name_input = page.locator("#stock-table input[type='text']").first
+        if name_input.is_visible():
+            name_input.clear()
+            name_input.fill("Changed Name")
+            name_input.press("Escape")
+            page.wait_for_timeout(300)
+
+        assert not page.locator("#btn-save-watchlist").is_visible()
 
         with open(wl_path, "r", encoding="utf-8") as f:
             current = yaml.safe_load(f)
-        current_items = len(current.get("items", []))
 
-        assert current_items == original_items
+        original_item = next((i for i in original.get("items", []) if i["code"] == "AAPL.US"), None)
+        current_item = next((i for i in current.get("items", []) if i["code"] == "AAPL.US"), None)
+        assert current_item is not None
+        assert current_item.get("name") == original_item.get("name")
+        assert current_item.get("tags") == original_item.get("tags")
 
 
 class TestTaskEditCancelBoundary:

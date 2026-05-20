@@ -108,6 +108,209 @@ class TestWatchlistYamlSync:
         assert any("茅台" in item.get("name", "") for item in data.get("items", []))
 
 
+class TestWatchlistInlineNameEditing:
+    """Inline name editing should update YAML after save."""
+
+    def test_edit_name_inline_and_save(self, page: Page):
+        """Click name cell, edit it, save, verify YAML updated."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "AAPL.US", "name": "Apple Inc", "tags": ["tech"]},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        name_span = page.locator(".editable-name").first
+        name_span.click()
+        page.wait_for_timeout(300)
+
+        name_input = page.locator("#stock-table input[type='text']").first
+        expect(name_input).to_be_visible()
+        name_input.clear()
+        name_input.fill("Apple Inc Updated")
+        name_input.press("Enter")
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        if save_btn.is_visible():
+            save_btn.click()
+            page.wait_for_timeout(1000)
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        item = next((i for i in data.get("items", []) if i["code"] == "AAPL.US"), None)
+        assert item is not None
+        assert item.get("name") == "Apple Inc Updated"
+
+    def test_edit_name_escape_cancels(self, page: Page):
+        """Press Escape after editing name should revert change."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "MSFT.US", "name": "Microsoft", "tags": []},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        name_span = page.locator(".editable-name").first
+        name_span.click()
+        page.wait_for_timeout(300)
+
+        name_input = page.locator("#stock-table input[type='text']").first
+        expect(name_input).to_be_visible()
+        name_input.clear()
+        name_input.fill("Changed Name")
+        name_input.press("Escape")
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        assert not save_btn.is_visible()
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        item = next((i for i in data.get("items", []) if i["code"] == "MSFT.US"), None)
+        assert item is not None
+        assert item.get("name") == "Microsoft"
+
+
+class TestWatchlistInlineTagsEditing:
+    """Inline tags editing should update YAML after save."""
+
+    def test_add_tag_inline_and_save(self, page: Page):
+        """Click tags cell, add a tag, save, verify YAML updated."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "NVDA.US", "name": "Nvidia", "tags": ["tech"]},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        tags_div = page.locator(".editable-tags").first
+        tags_div.click()
+        page.wait_for_timeout(300)
+
+        tag_input = page.locator(".editable-tags input[type='text']").first
+        expect(tag_input).to_be_visible()
+        tag_input.fill("AI")
+        tag_input.press("Enter")
+        page.wait_for_timeout(300)
+
+        page.locator("body").click()
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        if save_btn.is_visible():
+            save_btn.click()
+            page.wait_for_timeout(1000)
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        item = next((i for i in data.get("items", []) if i["code"] == "NVDA.US"), None)
+        assert item is not None
+        assert "AI" in item.get("tags", [])
+        assert "tech" in item.get("tags", [])
+
+    def test_remove_tag_inline_and_save(self, page: Page):
+        """Click tags cell, remove a tag via x button, save, verify YAML updated."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "TSLA.US", "name": "Tesla", "tags": ["tech", "EV"]},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        tags_div = page.locator(".editable-tags").first
+        tags_div.click()
+        page.wait_for_timeout(300)
+
+        remove_btn = page.locator(".tag-remove-btn").first
+        if remove_btn.is_visible():
+            remove_btn.click()
+            page.wait_for_timeout(300)
+
+        page.locator("body").click()
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        if save_btn.is_visible():
+            save_btn.click()
+            page.wait_for_timeout(1000)
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        item = next((i for i in data.get("items", []) if i["code"] == "TSLA.US"), None)
+        assert item is not None
+        tags = item.get("tags", [])
+        assert len(tags) < 2
+
+    def test_edit_tags_escape_cancels(self, page: Page):
+        """Press Escape in tags edit mode should cancel without saving."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "GOOG.US", "name": "Google", "tags": ["tech"]},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        tags_div = page.locator(".editable-tags").first
+        tags_div.click()
+        page.wait_for_timeout(300)
+
+        tag_input = page.locator(".editable-tags input[type='text']").first
+        expect(tag_input).to_be_visible()
+        tag_input.fill("NewTag")
+        tag_input.press("Escape")
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        assert not save_btn.is_visible()
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        item = next((i for i in data.get("items", []) if i["code"] == "GOOG.US"), None)
+        assert item is not None
+        assert "NewTag" not in item.get("tags", [])
+
+
 class TestTaskYamlSync:
     """Task edits should correctly sync to YAML file."""
 
