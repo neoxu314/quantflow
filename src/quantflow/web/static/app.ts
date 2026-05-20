@@ -1006,13 +1006,13 @@ function renderStockTable() {
     });
     tbody.querySelectorAll(".editable-name").forEach(span => {
         span.addEventListener("click", (e) => {
-            const idx = parseInt((e.target as HTMLElement).dataset.idx || "0");
+            const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || "0");
             startEditName(idx);
         });
     });
     tbody.querySelectorAll(".editable-tags").forEach(div => {
         div.addEventListener("click", (e) => {
-            const idx = parseInt((e.target as HTMLElement).dataset.idx || "0");
+            const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || "0");
             startEditTags(idx);
         });
     });

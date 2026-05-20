@@ -941,13 +941,13 @@ function renderStockTable() {
     });
     tbody.querySelectorAll(".editable-name").forEach(span => {
         span.addEventListener("click", (e) => {
-            const idx = parseInt(e.target.dataset.idx || "0");
+            const idx = parseInt(e.currentTarget.dataset.idx || "0");
             startEditName(idx);
         });
     });
     tbody.querySelectorAll(".editable-tags").forEach(div => {
         div.addEventListener("click", (e) => {
-            const idx = parseInt(e.target.dataset.idx || "0");
+            const idx = parseInt(e.currentTarget.dataset.idx || "0");
             startEditTags(idx);
         });
     });
