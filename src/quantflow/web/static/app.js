@@ -926,8 +926,8 @@ function renderStockTable() {
         const tags = (item.tags || []).map(t => `<span class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">${t}</span>`).join(" ");
         tr.innerHTML = `
             <td class="px-4 py-2 text-sm text-gray-900">${item.code}</td>
-            <td class="px-4 py-2 text-sm text-gray-600">${item.name || "-"}</td>
-            <td class="px-4 py-2 text-sm text-gray-600">${tags || "-"}</td>
+            <td class="px-4 py-2 text-sm text-gray-600"><span class="editable-name cursor-pointer hover:bg-gray-100 px-1 rounded" data-idx="${i}" title="Click to edit">${item.name || "-"}</span></td>
+            <td class="px-4 py-2 text-sm text-gray-600"><div class="editable-tags cursor-pointer hover:bg-gray-100 px-1 rounded min-h-[20px]" data-idx="${i}" title="Click to edit tags">${tags || "-"}</div></td>
             <td class="px-4 py-2 text-sm"><button data-idx="${i}" class="text-red-600 hover:text-red-800 delete-stock-btn">Delete</button></td>`;
         tbody.appendChild(tr);
     }
@@ -939,6 +939,118 @@ function renderStockTable() {
             renderStockTable();
         });
     });
+    tbody.querySelectorAll(".editable-name").forEach(span => {
+        span.addEventListener("click", (e) => {
+            const idx = parseInt(e.target.dataset.idx || "0");
+            startEditName(idx);
+        });
+    });
+    tbody.querySelectorAll(".editable-tags").forEach(div => {
+        div.addEventListener("click", (e) => {
+            const idx = parseInt(e.target.dataset.idx || "0");
+            startEditTags(idx);
+        });
+    });
+}
+function startEditName(idx) {
+    if (!state.currentWatchlistData)
+        return;
+    const item = state.currentWatchlistData.items[idx];
+    const span = document.querySelector(`.editable-name[data-idx="${idx}"]`);
+    if (!span)
+        return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = item.name || "";
+    input.className = "border border-blue-400 rounded px-1 py-0.5 text-sm w-full";
+    input.dataset.idx = String(idx);
+    const finish = () => {
+        const newName = input.value.trim();
+        if (newName !== (item.name || "")) {
+            item.name = newName || undefined;
+            markWatchlistDirty();
+        }
+        renderStockTable();
+    };
+    input.addEventListener("blur", finish);
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            input.blur();
+        }
+        if (e.key === "Escape") {
+            renderStockTable();
+        }
+    });
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+}
+function startEditTags(idx) {
+    if (!state.currentWatchlistData)
+        return;
+    const item = state.currentWatchlistData.items[idx];
+    const container = document.querySelector(`.editable-tags[data-idx="${idx}"]`);
+    if (!container)
+        return;
+    container.classList.remove("cursor-pointer", "hover:bg-gray-100");
+    container.innerHTML = "";
+    const pillsDiv = document.createElement("div");
+    pillsDiv.className = "flex flex-wrap gap-1 mb-1";
+    const renderPills = () => {
+        pillsDiv.innerHTML = "";
+        for (let t = 0; t < (item.tags || []).length; t++) {
+            const pill = document.createElement("span");
+            pill.className = "bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-0.5";
+            pill.innerHTML = `${item.tags[t]}<span class="tag-remove-btn cursor-pointer font-bold ml-0.5" data-tag-idx="${t}">&times;</span>`;
+            pillsDiv.appendChild(pill);
+        }
+    };
+    renderPills();
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Add tag, Enter to confirm";
+    input.className = "border border-blue-400 rounded px-1 py-0.5 text-xs w-full";
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            const val = input.value.trim();
+            if (val) {
+                const newTags = val.split(",").map(s => s.trim()).filter(Boolean);
+                for (const nt of newTags) {
+                    if (!(item.tags || []).includes(nt)) {
+                        if (!item.tags)
+                            item.tags = [];
+                        item.tags.push(nt);
+                    }
+                }
+                input.value = "";
+                markWatchlistDirty();
+                renderPills();
+            }
+        }
+        if (e.key === "Escape") {
+            renderStockTable();
+        }
+    });
+    pillsDiv.addEventListener("click", (e) => {
+        const target = e.target;
+        if (target.classList.contains("tag-remove-btn")) {
+            const tagIdx = parseInt(target.dataset.tagIdx || "0");
+            item.tags.splice(tagIdx, 1);
+            markWatchlistDirty();
+            renderPills();
+            input.focus();
+        }
+    });
+    container.appendChild(pillsDiv);
+    container.appendChild(input);
+    input.focus();
+    const finishEdit = (e) => {
+        if (container.contains(e.target))
+            return;
+        document.removeEventListener("click", finishEdit);
+        renderStockTable();
+    };
+    setTimeout(() => document.addEventListener("click", finishEdit), 0);
 }
 function markWatchlistDirty() {
     state.watchlistDirty = true;
