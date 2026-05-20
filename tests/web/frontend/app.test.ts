@@ -994,4 +994,43 @@ describe("inline editing DOM structure", () => {
         expect(div.querySelector("input")).not.toBeNull();
         expect(div.querySelector("input")!.placeholder).toBe("Add tag, Enter to confirm");
     });
+
+    it("renders multiple stock rows with correct data-idx for each", () => {
+        const items = [
+            { code: "AAPL.US", name: "Apple", tags: ["tech"] },
+            { code: "NVDA.US", name: "Nvidia", tags: ["AI"] },
+            { code: "TSLA.US", name: "Tesla", tags: ["EV"] },
+        ];
+        renderStockTableForTest(items);
+        const nameSpans = document.querySelectorAll(".editable-name");
+        expect(nameSpans.length).toBe(3);
+        expect((nameSpans[0] as HTMLElement).dataset.idx).toBe("0");
+        expect((nameSpans[1] as HTMLElement).dataset.idx).toBe("1");
+        expect((nameSpans[2] as HTMLElement).dataset.idx).toBe("2");
+        const tagsDivs = document.querySelectorAll(".editable-tags");
+        expect(tagsDivs.length).toBe(3);
+        expect((tagsDivs[0] as HTMLElement).dataset.idx).toBe("0");
+        expect((tagsDivs[1] as HTMLElement).dataset.idx).toBe("1");
+        expect((tagsDivs[2] as HTMLElement).dataset.idx).toBe("2");
+    });
+
+    it("click on tags child element resolves idx from parent container via currentTarget", () => {
+        const items = [
+            { code: "AAPL.US", name: "Apple", tags: ["tech"] },
+            { code: "NVDA.US", name: "Nvidia", tags: ["AI", "芯片"] },
+        ];
+        renderStockTableForTest(items);
+        const secondTagsDiv = document.querySelectorAll(".editable-tags")[1] as HTMLElement;
+        expect(secondTagsDiv.dataset.idx).toBe("1");
+
+        const childSpan = secondTagsDiv.querySelector("span") as HTMLElement;
+        expect(childSpan).not.toBeNull();
+
+        const clickEvent = new MouseEvent("click", { bubbles: true });
+        Object.defineProperty(clickEvent, "currentTarget", { value: secondTagsDiv, enumerable: true });
+        Object.defineProperty(clickEvent, "target", { value: childSpan, enumerable: true });
+
+        const idx = parseInt((clickEvent.currentTarget as HTMLElement).dataset.idx || "0");
+        expect(idx).toBe(1);
+    });
 });

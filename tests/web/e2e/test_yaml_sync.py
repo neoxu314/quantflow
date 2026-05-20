@@ -310,6 +310,97 @@ class TestWatchlistInlineTagsEditing:
         assert item is not None
         assert "NewTag" not in item.get("tags", [])
 
+    def test_edit_second_stock_tags_in_multi_stock_watchlist(self, page: Page):
+        """Edit tags on the second stock in a multi-stock watchlist - regression test for e.currentTarget bug."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "AAPL.US", "name": "Apple", "tags": ["tech"]},
+                {"code": "NVDA.US", "name": "Nvidia", "tags": ["tech"]},
+                {"code": "TSLA.US", "name": "Tesla", "tags": ["EV"]},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        second_tags = page.locator(".editable-tags").nth(1)
+        second_tags.click()
+        page.wait_for_timeout(300)
+
+        tag_input = page.locator(".editable-tags input[type='text']").first
+        expect(tag_input).to_be_visible()
+        tag_input.fill("AI")
+        tag_input.press("Enter")
+        page.wait_for_timeout(300)
+
+        page.locator("body").click()
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        if save_btn.is_visible():
+            save_btn.click()
+            page.wait_for_timeout(1000)
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        nvda_item = next((i for i in data.get("items", []) if i["code"] == "NVDA.US"), None)
+        assert nvda_item is not None
+        assert "AI" in nvda_item.get("tags", [])
+        assert "tech" in nvda_item.get("tags", [])
+
+        aapl_item = next((i for i in data.get("items", []) if i["code"] == "AAPL.US"), None)
+        assert aapl_item is not None
+        assert "AI" not in aapl_item.get("tags", [])
+
+    def test_edit_second_stock_name_in_multi_stock_watchlist(self, page: Page):
+        """Edit name on the second stock in a multi-stock watchlist."""
+        import httpx
+
+        httpx.put(
+            f"{SERVER_URL}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+            json={"name": TEST_WATCHLIST_NAME, "items": [
+                {"code": "AAPL.US", "name": "Apple", "tags": []},
+                {"code": "NVDA.US", "name": "Nvidia", "tags": []},
+            ]},
+        )
+
+        page.goto(SERVER_URL)
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.wait_for_selector("#stock-table", timeout=5000)
+
+        second_name = page.locator(".editable-name").nth(1)
+        second_name.click()
+        page.wait_for_timeout(300)
+
+        name_input = page.locator("#stock-table input[type='text']").first
+        expect(name_input).to_be_visible()
+        name_input.clear()
+        name_input.fill("NVIDIA Corp")
+        name_input.press("Enter")
+        page.wait_for_timeout(300)
+
+        save_btn = page.locator("#btn-save-watchlist")
+        if save_btn.is_visible():
+            save_btn.click()
+            page.wait_for_timeout(1000)
+
+        wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+        with open(wl_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        nvda_item = next((i for i in data.get("items", []) if i["code"] == "NVDA.US"), None)
+        assert nvda_item is not None
+        assert nvda_item.get("name") == "NVIDIA Corp"
+        aapl_item = next((i for i in data.get("items", []) if i["code"] == "AAPL.US"), None)
+        assert aapl_item is not None
+        assert aapl_item.get("name") == "Apple"
+
 
 class TestTaskYamlSync:
     """Task edits should correctly sync to YAML file."""

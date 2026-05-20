@@ -155,3 +155,40 @@ def test_path_traversal_blocked(client):
         "items": [],
     })
     assert resp.status_code == 400
+
+
+def test_save_watchlist_preserves_all_items_after_edit(client):
+    """PUT with modified items preserves all items correctly (inline edit round-trip)."""
+    client.put("/api/watchlists/edit_test.yaml", json={
+        "name": "Edit_Test",
+        "items": [
+            {"code": "AAPL.US", "name": "Apple", "tags": ["tech"]},
+            {"code": "NVDA.US", "name": "Nvidia", "tags": ["tech"]},
+            {"code": "TSLA.US", "name": "Tesla", "tags": ["EV"]},
+        ],
+    })
+
+    resp = client.get("/api/watchlists/edit_test.yaml")
+    data = resp.json()
+    items = data["items"]
+    assert len(items) == 3
+
+    items[1]["name"] = "NVIDIA Corp"
+    items[1]["tags"] = ["tech", "AI"]
+
+    resp = client.put("/api/watchlists/edit_test.yaml", json={
+        "name": data["name"],
+        "description": data.get("description", ""),
+        "items": items,
+    })
+    assert resp.status_code == 201
+
+    resp = client.get("/api/watchlists/edit_test.yaml")
+    data = resp.json()
+    nvda = next(i for i in data["items"] if i["code"] == "NVDA.US")
+    assert nvda["name"] == "NVIDIA Corp"
+    assert "AI" in nvda["tags"]
+    assert "tech" in nvda["tags"]
+    aapl = next(i for i in data["items"] if i["code"] == "AAPL.US")
+    assert aapl["name"] == "Apple"
+    assert "AI" not in aapl["tags"]
