@@ -7,7 +7,7 @@ web/
 ├── server.py            # FastAPI app creation and startup logic
 ├── config.py            # WebConfig - port/host loading from quantflow.yaml
 ├── api/                 # REST API routes
-│   ├── watchlists.py    # GET/POST/PUT/DELETE watchlists, search
+│   ├── watchlists.py    # GET/POST/PUT/DELETE watchlists, search, inline editing
 │   ├── tasks.py         # GET/POST/PUT/DELETE tasks (NO output field)
 │   ├── config.py        # GET/PUT system config
 │   ├── library.py       # Strategy/indicator catalog, parameter updates
@@ -23,7 +23,7 @@ web/
 │   └── presets.py       # PresetManager - save/load run configurations
 └── static/              # Frontend (TypeScript → JavaScript)
     ├── index.html       # Single-page app
-    ├── app.ts           # Main frontend logic, UI rendering
+    ├── app.ts           # Main frontend logic, UI rendering, inline stock editing
     ├── utils.ts         # Pure utility functions (getNestedValue, setNestedValue, formatStockCode)
     └── tsconfig.json    # TypeScript config
 ```
@@ -63,6 +63,11 @@ web/
 - `TaskModel`: `name`, `watchlist`, `strategies`, optional `days_back`
 - Duplicate task names rejected with 409 error
 
+### watchlists.py (Watchlist Management)
+- Inline editing: Name and tags cells are clickable in the stock table — click to edit, Enter/blur to save, Escape to cancel
+- Editing updates in-memory state, marks dirty, requires explicit Save (PUT full replacement)
+- **No backend API changes** — reuses existing `PUT /api/watchlists/{filename}` full-replacement endpoint
+
 ## CONVENTIONS
 - API routers use prefix (e.g., `/api/runs`), grouped by domain
 - SSE uses custom endpoint format: `/api/runs/{id}/logs:sse` (colon in path)
@@ -70,6 +75,7 @@ web/
 - Static files served with SPA fallback
 - RunEngine singleton pattern: `_set_engine()` / `_get_engine()` in API modules
 - **Event delegation**: Use for dynamically generated elements (e.g., `#run-strategy-checkboxes`) to avoid rebinding listeners
+- **Inline editing**: Name/tags cells use `e.currentTarget` (not `e.target`) in click handlers to correctly resolve `data-idx` when clicking child elements (tag pills)
 - **Safety first**: Never write to production paths in tests (use tmp_path fixture)
 
 ## ANTI-PATTERNS

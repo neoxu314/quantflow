@@ -8,7 +8,7 @@ Tests verify that after editing and saving via UI:
 """
 import yaml
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 from pathlib import Path
 
 from tests.web.e2e.conftest import PROJECT_ROOT, SERVER_URL, TEST_WATCHLIST_NAME, TEST_TASK_FILE

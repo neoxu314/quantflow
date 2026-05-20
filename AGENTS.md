@@ -59,7 +59,7 @@ quantflow/
 | Web UI - library | `web/api/library.py` | Strategy + indicator catalog API |
 | Web UI - library tab | `web/static/app.ts` | Library panel rendering + param editor |
 | Task orchestration | `orchestration/app.py` | Parses `tasks_*.yaml` |
-| Web UI - watchlists | `web/api/watchlists.py` | CRUD + search + inline delete |
+| Web UI - watchlists | `web/api/watchlists.py` | CRUD + search + inline edit (name/tags) + inline delete |
 | Web UI - tasks | `web/api/tasks.py` | Multi-file task CRUD |
 | Web UI - task-files | `web/api/tasks.py` | List/create/delete task config files |
 | Web UI - config | `web/api/config.py` | GET (read) + PUT (write) system config |
@@ -91,9 +91,9 @@ quantflow/
   - Reports layer: 18 unit = 18 tests
   - Strategies layer: 51 unit = 51 tests
   - CLI layer: 24 unit + 6 skipped (pending expected values) = 30 tests
-  - Web layer: 301 tests (210 API/integration + 91 E2E) + 92 frontend TypeScript tests
+  - Web layer: 313 tests (212 API/integration + 101 E2E) + 113 frontend TypeScript tests
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
-  - Total: ~799 Python tests (301 web + 其他层) + ~92 frontend tests
+  - Total: ~811 Python tests (313 web + 其他层) + ~113 frontend tests
   - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
   - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
   - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)
@@ -197,7 +197,7 @@ python -m quantflow.cli web
 ## WEB UI
 - **Path**: `src/quantflow/web/`
 - **Endpoints**: 
-  - `/api/watchlists/...` (CRUD)
+  - `/api/watchlists/...` (CRUD + inline edit name/tags)
   - `/api/tasks/...` (CRUD, multi-file)
   - `/api/task-files/...` (list/create/delete)
   - `/api/config` (GET + PUT system config)

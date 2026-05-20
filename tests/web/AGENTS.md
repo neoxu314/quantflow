@@ -48,7 +48,7 @@ tests/web/
 ├── conftest.py              # Shared fixtures: config_client, task_client, watchlist_dir
 ├── test_config_api.py       # Config API unit tests (GET/PUT round-trip)
 ├── test_task_api.py         # Task API unit tests (CRUD + security)
-├── test_watchlist_api.py    # Watchlist API unit tests (CRUD + search)
+├── test_watchlist_api.py    # Watchlist API unit tests (CRUD + search + inline editing)
 ├── test_integration.py      # API→filesystem→API round-trip integration tests
 ├── test_static_serving.py   # Static file serving + 404 + security tests
 ├── test_library_api.py      # Library API unit tests (strategies + indicators + params)
@@ -89,14 +89,14 @@ src/quantflow/web/static/
 └── tsconfig.json            # TypeScript configuration for compilation
 ```
 
-**Total: 91 E2E tests (13 files) + 210 Python tests (14 files) + 92 frontend tests (2 files)**
+**Total: 101 E2E tests (13 files) + 212 Python tests (14 files) + 113 frontend tests (2 files)**
 
 ## Test Categories
 
 | Category | File | Tests | Purpose |
 |----------|------|-------|---------|
 | Config API | `test_config_api.py` | 12 | GET/PUT round-trip, YAML format preservation |
-| Watchlist API | `test_watchlist_api.py` | 9 | CRUD, search, fuzzy match, path traversal |
+| Watchlist API | `test_watchlist_api.py` | 10 | CRUD, search, fuzzy match, path traversal, inline editing round-trip |
 | Task API | `test_task_api.py` | 10 | CRUD, duplicate rejection, path traversal |
 | Library API | `test_library_api.py` | 9 | Strategies, indicators, param updates + round-trip |
 | Browse API | `test_browse_api.py` | 19 | Directory listing, mkdir, permissions, sorting |
@@ -111,7 +111,7 @@ src/quantflow/web/static/
 | Web Config | `test_web_config.py` | 3 | WebConfig loading from YAML |
 | Basic UI | `test_web_ui.py` | 22 | Page loads, tab navigation, create/delete |
 | Data Boundary | `test_data_boundary.py` | 8 | Cancel without save, switch tab, sequential saves |
-| YAML Sync | `test_yaml_sync.py` | 11 | Edit→YAML round-trip, unicode, field order |
+| YAML Sync | `test_yaml_sync.py` | 18 | Edit→YAML round-trip, unicode, inline name/tags editing, multi-stock regression |
 | Error Handling | `test_error_handling.py` | 7 | Server 500, network disconnect, invalid input |
 | Stock Scan E2E | `test_runs_stock_scan.py` | 2 | Full lifecycle + modal reset |
 | Watchlist Run E2E | `test_runs_watchlist_run.py` | 2 | Full lifecycle + type lock |
@@ -136,6 +136,13 @@ src/quantflow/web/static/
 | `getNestedValue` | 12 | Single/multi-level paths, undefined cases, type handling |
 | `setNestedValue` | 11 | Path creation, value overwrite, field preservation |
 | `formatStockCode` | 10 | All markets, already-formatted codes, edge cases |
+
+### Frontend Unit Tests (app.test.ts - inline editing)
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| `tag editing helpers` | 11 | parseTagInput, mergeTags, removeTagAt |
+| `inline editing DOM structure` | 7 | editable-name/tags rendering, multi-row data-idx, currentTarget resolution |
 
 ## Fixtures
 
@@ -219,3 +226,4 @@ This guarantees production configs are byte-identical to pre-test state even if 
 11. **Browse API changed?** → Add to `test_browse_api.py` (unit) or `e2e/test_browse_api.py` (E2E)
 12. **Preset behavior changed?** → Add to `test_runs_api.py` (unit) or `e2e/test_presets.py` (E2E)
 13. **Indicator serialization changed?** → Add to `test_nan_serialization.py`
+14. **Watchlist inline editing changed?** → Add to `test_watchlist_api.py` (unit), `e2e/test_yaml_sync.py` (E2E), `tests/web/frontend/app.test.ts` (frontend)
