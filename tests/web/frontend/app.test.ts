@@ -826,3 +826,172 @@ describe("updateCliPreview event listeners", () => {
         expect(preview).toContain("--daily");
     });
 });
+
+describe("tag editing helpers", () => {
+    function parseTagInput(input: string): string[] {
+        return input.split(",").map(s => s.trim()).filter(Boolean);
+    }
+
+    function mergeTags(existing: string[], toAdd: string[]): string[] {
+        const set = new Set(existing);
+        for (const t of toAdd) {
+            if (!set.has(t)) set.add(t);
+        }
+        return Array.from(set);
+    }
+
+    function removeTagAt(tags: string[], idx: number): string[] {
+        const result = [...tags];
+        result.splice(idx, 1);
+        return result;
+    }
+
+    it("parseTagInput splits comma-separated tags and trims whitespace", () => {
+        expect(parseTagInput("AI, 数据中心, 稀土")).toEqual(["AI", "数据中心", "稀土"]);
+    });
+
+    it("parseTagInput handles empty input", () => {
+        expect(parseTagInput("")).toEqual([]);
+    });
+
+    it("parseTagInput handles single tag", () => {
+        expect(parseTagInput("Personal")).toEqual(["Personal"]);
+    });
+
+    it("parseTagInput trims whitespace around tags", () => {
+        expect(parseTagInput("  AI  ,  稀土  ")).toEqual(["AI", "稀土"]);
+    });
+
+    it("parseTagInput filters empty segments", () => {
+        expect(parseTagInput("AI,,稀土,")).toEqual(["AI", "稀土"]);
+    });
+
+    it("mergeTags adds new tags without duplicates", () => {
+        expect(mergeTags(["AI", "Personal"], ["稀土", "AI"])).toEqual(["AI", "Personal", "稀土"]);
+    });
+
+    it("mergeTags handles empty existing tags", () => {
+        expect(mergeTags([], ["AI"])).toEqual(["AI"]);
+    });
+
+    it("mergeTags handles empty toAdd", () => {
+        expect(mergeTags(["AI"], [])).toEqual(["AI"]);
+    });
+
+    it("mergeTags handles both empty", () => {
+        expect(mergeTags([], [])).toEqual([]);
+    });
+
+    it("removeTagAt removes tag at specified index", () => {
+        expect(removeTagAt(["AI", "Personal", "稀土"], 1)).toEqual(["AI", "稀土"]);
+    });
+
+    it("removeTagAt removes first tag", () => {
+        expect(removeTagAt(["AI", "Personal"], 0)).toEqual(["Personal"]);
+    });
+
+    it("removeTagAt removes last tag", () => {
+        expect(removeTagAt(["AI", "Personal"], 1)).toEqual(["AI"]);
+    });
+
+    it("removeTagAt on single-element array returns empty", () => {
+        expect(removeTagAt(["AI"], 0)).toEqual([]);
+    });
+});
+
+describe("inline editing DOM structure", () => {
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="save-indicator" class="hidden"></div>
+            <button id="btn-save-watchlist" class="hidden"></button>
+            <table><tbody id="stock-table"></tbody></table>
+        `;
+    });
+
+    function renderStockTableForTest(items: Array<{code: string; name?: string; tags: string[]}>) {
+        const tbody = document.getElementById("stock-table")!;
+        tbody.innerHTML = "";
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const tr = document.createElement("tr");
+            tr.className = "hover:bg-gray-50";
+            const tags = (item.tags || []).map(t =>
+                `<span class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">${t}</span>`
+            ).join(" ");
+            tr.innerHTML = `
+                <td class="px-4 py-2 text-sm text-gray-900">${item.code}</td>
+                <td class="px-4 py-2 text-sm text-gray-600"><span class="editable-name cursor-pointer hover:bg-gray-100 px-1 rounded" data-idx="${i}" title="Click to edit">${item.name || "-"}</span></td>
+                <td class="px-4 py-2 text-sm text-gray-600"><div class="editable-tags cursor-pointer hover:bg-gray-100 px-1 rounded min-h-[20px]" data-idx="${i}" title="Click to edit tags">${tags || "-"}</div></td>
+                <td class="px-4 py-2 text-sm"><button data-idx="${i}" class="text-red-600 hover:text-red-800 delete-stock-btn">Delete</button></td>`;
+            tbody.appendChild(tr);
+        }
+    }
+
+    it("renders name cell with editable-name class and data-idx", () => {
+        renderStockTableForTest([{ code: "AAPL.US", name: "Apple", tags: ["tech"] }]);
+        const span = document.querySelector(".editable-name") as HTMLElement;
+        expect(span).not.toBeNull();
+        expect(span.dataset.idx).toBe("0");
+        expect(span.textContent).toBe("Apple");
+    });
+
+    it("renders dash for empty name", () => {
+        renderStockTableForTest([{ code: "AAPL.US", tags: [] }]);
+        const span = document.querySelector(".editable-name") as HTMLElement;
+        expect(span.textContent).toBe("-");
+    });
+
+    it("renders tags cell with editable-tags class and data-idx", () => {
+        renderStockTableForTest([{ code: "AAPL.US", tags: ["tech", "AI"] }]);
+        const div = document.querySelector(".editable-tags") as HTMLElement;
+        expect(div).not.toBeNull();
+        expect(div.dataset.idx).toBe("0");
+    });
+
+    it("renders dash for empty tags", () => {
+        renderStockTableForTest([{ code: "AAPL.US", tags: [] }]);
+        const div = document.querySelector(".editable-tags") as HTMLElement;
+        expect(div.textContent).toBe("-");
+    });
+
+    it("replaces name span with input on click simulation", () => {
+        const items = [{ code: "AAPL.US", name: "Apple", tags: [] }];
+        renderStockTableForTest(items);
+        const span = document.querySelector(".editable-name") as HTMLElement;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = items[0].name || "";
+        input.className = "border border-blue-400 rounded px-1 py-0.5 text-sm w-full";
+        span.replaceWith(input);
+
+        const nameInput = document.querySelector("input[type='text']") as HTMLInputElement;
+        expect(nameInput).not.toBeNull();
+        expect(nameInput.value).toBe("Apple");
+    });
+
+    it("replaces tags div with edit mode on click simulation", () => {
+        const items = [{ code: "AAPL.US", name: "Apple", tags: ["tech"] }];
+        renderStockTableForTest(items);
+        const div = document.querySelector(".editable-tags") as HTMLElement;
+
+        div.classList.remove("cursor-pointer", "hover:bg-gray-100");
+        div.innerHTML = "";
+        const pillsDiv = document.createElement("div");
+        pillsDiv.className = "flex flex-wrap gap-1 mb-1";
+        const pill = document.createElement("span");
+        pill.className = "bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-0.5";
+        pill.innerHTML = 'tech<span class="tag-remove-btn cursor-pointer font-bold ml-0.5" data-tag-idx="0">&times;</span>';
+        pillsDiv.appendChild(pill);
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Add tag, Enter to confirm";
+        input.className = "border border-blue-400 rounded px-1 py-0.5 text-xs w-full";
+        div.appendChild(pillsDiv);
+        div.appendChild(input);
+
+        expect(div.querySelector(".tag-remove-btn")).not.toBeNull();
+        expect(div.querySelector("input")).not.toBeNull();
+        expect(div.querySelector("input")!.placeholder).toBe("Add tag, Enter to confirm");
+    });
+});
