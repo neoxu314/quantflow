@@ -1,0 +1,100 @@
+name: Personal_Focus_US
+description: Personal watchlist - US stocks only
+items:
+- code: BHP.US
+  name: 必和必拓
+  tags:
+  - 铜
+  - 矿业
+- code: TSM.US
+  name: 台积电
+  tags:
+  - AI
+  - 芯片制造
+- code: IONQ.US
+  name: IonQ
+  tags:
+  - 量子计算
+- code: CRWV.US
+  name: CoreWeave
+  tags:
+  - GPU租赁
+  - GPU云计算
+- code: SOXL.US
+  name: 三倍做多半导体ETF
+  tags:
+  - 半导体大盘
+- code: SMR.US
+  name: NuScale Power
+  tags:
+  - 小型核电
+- code: CRCL.US
+  name: Circle
+  tags:
+  - 稳定币
+- code: APLD.US
+  name: Applied Digital
+  tags:
+  - AI
+  - 数据中心建设
+- code: MP.US
+  name: MP Materials
+  tags:
+  - 稀土
+- code: RDDT.US
+  name: Reddit
+  tags:
+  - 社交
+- code: OKLO.US
+  name: Oklo
+  tags:
+  - 小型核电
+- code: NOK.US
+  name: 诺基亚
+  tags:
+  - AI概念
+  - 通信
+- code: RKLB.US
+  name: Rocket Lab
+  tags:
+  - 商业航天
+- code: USAR.US
+  name: USA Rare Earth
+  tags:
+  - 稀土
+- code: TSLA.US
+  name: 特斯拉
+  tags:
+  - 自动驾驶
+  - 具身智能
+  - 电动车
+- code: LUNR.US
+  name: Intuitive Machines
+  tags:
+  - 商业航天
+- code: 000660.KS
+  name: SK海力士
+  tags:
+  - AI
+  - 存储
+- code: 005930.KS
+  name: 三星电子
+  tags:
+  - AI
+  - 存储
+- code: NVDA.US
+  name: 英伟达
+  tags:
+  - AI
+  - 算力
+- code: 01860.HK
+  name: 汇量科技
+  tags:
+  - AI
+  - 营销
+  - 广告
+- code: 00700.HK
+  name: 腾讯
+  tags:
+  - 互联网
+  - 价值股
