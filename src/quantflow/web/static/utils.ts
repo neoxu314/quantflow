@@ -45,7 +45,10 @@ export const SETTINGS_FIELD_MAP: Record<string, string> = {
     "cfg-web-host": "web.host",
     "cfg-web-port": "web.port",
     "cfg-tushare-token": "tushare.token",
-    "cfg-log-level": "logging.level",
+    "cfg-log-console-level": "logging.console_level",
+    "cfg-log-file-enabled": "logging.file_enabled",
+    "cfg-log-file-level": "logging.file_level",
+    "cfg-log-format": "logging.format",
 };
 
 /**

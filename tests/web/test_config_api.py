@@ -109,7 +109,7 @@ def test_put_config_updates_file(config_client):
 
     resp = client.get("/api/config").json()
     current = resp["raw"]
-    current["logging"]["level"] = "DEBUG"
+    current["logging"]["console_level"] = "DEBUG"
 
     resp = client.put("/api/config", json={"raw": current})
     assert resp.status_code == 200
@@ -118,7 +118,7 @@ def test_put_config_updates_file(config_client):
     # Verify file content
     with open(config_path, "r", encoding="utf-8") as f:
         saved = yaml.safe_load(f)
-    assert saved["logging"]["level"] == "DEBUG"
+    assert saved["logging"]["console_level"] == "DEBUG"
 
 
 def test_put_config_roundtrip(config_client):
@@ -160,7 +160,7 @@ def test_put_config_preserves_unmodified_fields(config_client):
 
     # Only modify logging
     payload = dict(orig)
-    payload["logging"] = {"level": "WARNING", "format": "%(levelname)s"}
+    payload["logging"] = {"console_level": "WARNING", "file_enabled": True, "file_level": "DEBUG", "format": "%(levelname)s"}
 
     client.put("/api/config", json={"raw": payload})
 
@@ -178,7 +178,7 @@ def test_put_config_writing_produces_valid_yaml(config_client):
     new_config = {
         "data": {"markets": {"cn": {"primary": "baostock"}}, "defaults": {"adjust": "hfq"}},
         "tushare": {"token": "abc123"},
-        "logging": {"level": "INFO", "format": "%(asctime)s"},
+        "logging": {"console_level": "INFO", "file_enabled": True, "file_level": "DEBUG", "format": "%(asctime)s"},
         "lookback": {"calendar_multiplier": 2.5, "buffer_days": 45},
         "yfinance": {"batch": {"chunk_size": 100, "sleep_min": 3, "sleep_max": 8}},
         "web": {"port": 3000, "host": "0.0.0.0"},
@@ -234,4 +234,4 @@ def test_put_config_empty_payload_defaults(config_client):
     assert isinstance(saved, dict)
     assert "data" in saved
     assert "logging" in saved
-    assert saved["logging"]["level"] == "INFO"
+    assert saved["logging"]["console_level"] == "INFO"

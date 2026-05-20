@@ -180,7 +180,7 @@ class TestConfigLoaderGetTushareToken:
     def test_returns_none_when_no_env_no_config(self, config_file: Path, monkeypatch: pytest.MonkeyPatch):
         """No env var and no token in config → None."""
         monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-        _write_yaml(config_file, {"logging": {"level": "DEBUG"}})
+        _write_yaml(config_file, {"logging": {"console_level": "DEBUG"}})
         loader = ConfigLoader(config_path=str(config_file))
         result = loader.get_tushare_token()
         assert result is None
@@ -206,7 +206,7 @@ class TestConfigLoaderGetYfinanceConfig:
         assert result == {"chunk_size": 30, "sleep_min": 3, "sleep_max": 8}
 
     def test_returns_empty_dict_when_no_yfinance_section(self, config_file: Path):
-        _write_yaml(config_file, {"logging": {"level": "INFO"}})
+        _write_yaml(config_file, {"logging": {"console_level": "INFO"}})
         loader = ConfigLoader(config_path=str(config_file))
         result = loader.get_yfinance_config()
         assert result == {}

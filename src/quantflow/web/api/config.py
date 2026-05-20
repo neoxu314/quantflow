@@ -44,7 +44,7 @@ def get_system_config() -> Dict[str, Any]:
         "yahooquery": data.get("yahooquery", {}),
         "web": data.get("web", {}),
         "tushare": data.get("tushare", {"token": ""}),
-        "logging": data.get("logging", {"level": "INFO", "format": ""}),
+        "logging": data.get("logging", {"console_level": "INFO", "file_enabled": True, "file_level": "DEBUG", "format": ""}),
         "filePath": _display_config_path(CONFIG_PATH, PROJECT_ROOT),
     }
 
@@ -61,7 +61,9 @@ def update_system_config(payload: Dict[str, Any]):
         "data": raw.get("data", {}),
         "tushare": raw.get("tushare", {"token": ""}),
         "logging": raw.get("logging", {
-            "level": "INFO",
+            "console_level": "INFO",
+            "file_enabled": True,
+            "file_level": "DEBUG",
             "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         }),
         "lookback": raw.get("lookback", {}),

@@ -239,18 +239,18 @@ def test_settings_modify_and_save(page: Page, base_url):
 
     cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
 
-    logging_select = page.locator("#cfg-log-level")
+    logging_select = page.locator("#cfg-log-console-level")
     logging_select.select_option(label="WARNING")
 
     page.locator("#btn-save-settings").click()
     page.wait_for_timeout(2000)
 
     verify = httpx.get(f"{base_url}/api/config").json()
-    assert verify["logging"]["level"] == "WARNING"
+    assert verify["logging"]["console_level"] == "WARNING"
 
     with open(cfg_path, "r", encoding="utf-8") as f:
         saved = yaml.safe_load(f)
-    assert saved["logging"]["level"] == "WARNING"
+    assert saved["logging"]["console_level"] == "WARNING"
 
 
 def test_add_stock_with_market_selector(page: Page, base_url):

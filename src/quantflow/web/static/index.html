@@ -341,24 +341,61 @@
 
                 <!-- Logging -->
                 <fieldset class="border rounded-lg p-4">
-                    <legend class="text-sm font-semibold text-gray-700 px-2">📝 Logging Level</legend>
-                    <div class="mt-2">
-                        <label class="block text-xs text-gray-500 mb-1 flex items-center gap-1 group cursor-help w-fit">
-                            Log Level
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
-                            </svg>
-                            <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
-                                控制台和文件日志的详细程度。<code class="bg-gray-700 px-1 rounded">DEBUG</code>：最详细，记录所有内部操作，排查问题时用。<code class="bg-gray-700 px-1 rounded">INFO</code>：日常使用，记录关键操作和结果（推荐）。<code class="bg-gray-700 px-1 rounded">WARNING</code>：仅记录警告和异常。<code class="bg-gray-700 px-1 rounded">ERROR</code>：仅记录错误信息。日志级别不影响策略运行结果。
-                                <br><span class="text-gray-400">Verbosity of console and file logs. <code class="bg-gray-700 px-1 rounded">DEBUG</code>: most detailed, all internal operations, for troubleshooting. <code class="bg-gray-700 px-1 rounded">INFO</code>: daily use, key operations and results (recommended). <code class="bg-gray-700 px-1 rounded">WARNING</code>: warnings and anomalies only. <code class="bg-gray-700 px-1 rounded">ERROR</code>: errors only. Log level does not affect strategy results.</span>
-                            </span>
-                        </label>
-                        <select id="cfg-log-level" class="border rounded px-2 py-1" data-path="logging.level">
-                            <option value="DEBUG">DEBUG</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARNING">WARNING</option>
-                            <option value="ERROR">ERROR</option>
-                        </select>
+                    <legend class="text-sm font-semibold text-gray-700 px-2">Logging</legend>
+                    <div class="mt-2 space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 flex items-center gap-1 group cursor-help w-fit">
+                                Console Level
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    终端显示的日志级别。<code class="bg-gray-700 px-1 rounded">INFO</code>：日常使用（推荐）。<code class="bg-gray-700 px-1 rounded">DEBUG</code>：最详细。
+                                    <br><span class="text-gray-400">Console log verbosity. <code class="bg-gray-700 px-1 rounded">INFO</code>: daily use (recommended). <code class="bg-gray-700 px-1 rounded">DEBUG</code>: most detailed.</span>
+                                </span>
+                            </label>
+                            <select id="cfg-log-console-level" class="border rounded px-2 py-1" data-path="logging.console_level">
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="cfg-log-file-enabled" data-path="logging.file_enabled" class="rounded">
+                            <label for="cfg-log-file-enabled" class="text-xs text-gray-500 flex items-center gap-1 group cursor-help">
+                                Enable File Logging
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    运行后自动生成日志文件到输出目录的 <code class="bg-gray-700 px-1 rounded">logs/</code> 子目录。关闭后仅在终端显示日志。
+                                    <br><span class="text-gray-400">Auto-generate log files in <code class="bg-gray-700 px-1 rounded">logs/</code> subdirectory after each run. When off, logs only appear in terminal.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1 flex items-center gap-1 group cursor-help w-fit">
+                                File Log Level
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="tip absolute left-0 top-full mt-1 z-50 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-3 py-2 w-80 font-normal leading-relaxed border border-gray-700">
+                                    日志文件记录的详细程度。<code class="bg-gray-700 px-1 rounded">DEBUG</code>：记录所有信息（推荐），便于事后排查。<code class="bg-gray-700 px-1 rounded">INFO</code>：仅记录关键操作。
+                                    <br><span class="text-gray-400">File log verbosity. <code class="bg-gray-700 px-1 rounded">DEBUG</code>: all details (recommended), for post-mortem analysis. <code class="bg-gray-700 px-1 rounded">INFO</code>: key operations only.</span>
+                                </span>
+                            </label>
+                            <select id="cfg-log-file-level" class="border rounded px-2 py-1" data-path="logging.file_level">
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Log Format</label>
+                            <input type="text" id="cfg-log-format" class="border rounded px-2 py-1 w-full text-xs font-mono" data-path="logging.format" placeholder="%(asctime)s - %(name)s - %(levelname)s - %(message)s">
+                        </div>
                     </div>
                 </fieldset>
 

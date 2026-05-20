@@ -40,7 +40,7 @@ def config_client(tmp_path):
         (config_dir / "quantflow.yaml").write_text(
             yaml.dump({
                 "data": {"markets": {}, "defaults": {"adjust": "qfq"}},
-                "logging": {"level": "INFO"},
+                "logging": {"console_level": "INFO", "file_enabled": True, "file_level": "DEBUG"},
                 "lookback": {"calendar_multiplier": 2, "buffer_days": 30},
                 "yfinance": {"batch": {"chunk_size": 50}},
                 "web": {"port": 8080, "host": "127.0.0.1"},

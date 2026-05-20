@@ -50,14 +50,14 @@ class TestSettingsCancelBoundary:
         
         with open(cfg_path, "r", encoding="utf-8") as f:
             original = yaml.safe_load(f)
-        original_level = original.get("logging", {}).get("level", "INFO")
+        original_level = original.get("logging", {}).get("console_level", "INFO")
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
         page.get_by_role("button", name="Settings").click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
-        logging_select = page.locator("#cfg-log-level")
+        logging_select = page.locator("#cfg-log-console-level")
         logging_select.select_option(label="DEBUG")
 
         if page.locator("#btn-reset-settings").is_visible():
@@ -69,7 +69,7 @@ class TestSettingsCancelBoundary:
 
         with open(cfg_path, "r", encoding="utf-8") as f:
             current = yaml.safe_load(f)
-        current_level = current.get("logging", {}).get("level", "INFO")
+        current_level = current.get("logging", {}).get("console_level", "INFO")
 
         assert current_level == original_level
 

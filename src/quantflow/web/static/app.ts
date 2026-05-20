@@ -1243,7 +1243,11 @@ function populateSettingsForm(raw: Record<string, unknown>): void {
         if (!el) continue;
         const val = getNestedValue(raw, dataPath);
         if (val !== undefined) {
-            el.value = String(val);
+            if (el.type === "checkbox") {
+                (el as HTMLInputElement).checked = val === true || val === "true";
+            } else {
+                el.value = String(val);
+            }
         }
     }
 }
@@ -1258,6 +1262,9 @@ function collectFormValues(): Record<string, unknown> {
         if (dataPath.includes("_size") || dataPath.includes("_min") || dataPath.includes("_max") || dataPath.includes("port") || dataPath.includes("multiplier") || dataPath.includes("buffer") || dataPath.includes("workers")) {
             const num = Number(rawVal);
             if (!isNaN(num)) parsed = num;
+        }
+        if ((els[0] as HTMLInputElement).type === "checkbox") {
+            parsed = (els[0] as HTMLInputElement).checked;
         }
         setNestedValue(result, dataPath, parsed);
     }

@@ -1187,7 +1187,12 @@ function populateSettingsForm(raw) {
             continue;
         const val = getNestedValue(raw, dataPath);
         if (val !== undefined) {
-            el.value = String(val);
+            if (el.type === "checkbox") {
+                el.checked = val === true || val === "true";
+            }
+            else {
+                el.value = String(val);
+            }
         }
     }
 }
@@ -1203,6 +1208,9 @@ function collectFormValues() {
             const num = Number(rawVal);
             if (!isNaN(num))
                 parsed = num;
+        }
+        if (els[0].type === "checkbox") {
+            parsed = els[0].checked;
         }
         setNestedValue(result, dataPath, parsed);
     }
