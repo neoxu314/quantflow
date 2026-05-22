@@ -80,7 +80,7 @@ data/
 | Category | Test File(s) | Test Count | Type |
 |----------|--------------|------------|------|
 | Base classes | `test_base.py` | 15 | Unit (StockCode, FundamentalData, DataSourceBase/SectorDataSource contracts) |
-| Factory | `test_factory.py` | 19 | Unit (source routing, batch OHLCV, fundamental, fallback, market detection) |
+| Factory | `test_factory.py` | 21 | Unit (source routing, batch OHLCV, fundamental, fallback, market detection, unknown exchange warning) |
 | Config | `test_factory.py` | — | Indirect (via factory tests) |
 | BaoStock adapter | `test_baostock.py` | 3 | Unit |
 | YFinance batch | `test_yfinance_batch.py` | 16 | Unit (chunking, version check, jitter, adaptive cooling, recovery) |
@@ -91,7 +91,7 @@ data/
 | Sector cache | `test_sector_data.py` | 17 | Integration (EM/THS/SW sector lists, constituents, cache I/O) |
 | Data fetch (real data) | `test_data_fetch.py` | 24 | Integration (BaoStock/Tushare/YFinance/YahooQuery against known reference values) |
 
-**Total: 186 unit + 10 integration = 196 tests**
+**Total: 188 unit + 10 integration = 198 tests**
 
 Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for network tests.
 
@@ -102,4 +102,5 @@ Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for ne
 - YahooQuery: Sequential per-ticker fetch (`asynchronous=False`) with retry (`_MAX_RETRIES=5`, `_RETRY_DELAY=3.0s`); async concurrent mode triggers Yahoo anti-scraping (HTTP 404) for >4 tickers; monkey-patches `_historical_data_to_dataframe` for error dict handling; less reliable than yfinance for batch data, serves as primary with yfinance fallback
 - Tushare: Token required - `TUSHARE_TOKEN` env var or config file
 - `DataSourceFactory` accepts `yfinance_config` and `yahooquery_config` dicts to pass adapter parameters
+- `_detect_market()`: Maps exchange suffix to market identifier (SH/SZ→cn, HK→hk, US→us, T→jp, KS→kr). Unknown exchanges log a WARNING and default to `"us"` — supported exchanges: SH, SZ, HK, US, T, KS.
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.

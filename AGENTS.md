@@ -64,7 +64,7 @@ quantflow/
 | Web UI - task-files | `web/api/tasks.py` | List/create/delete task config files |
 | Web UI - config | `web/api/config.py` | GET (read) + PUT (write) system config |
 | Web UI - settings | `web/static/app.ts` | Settings form logic, token toggle/copy |
-| Execution engine | `execution/executor.py` | Batch yFinance fetch with chunking; sequential A-share; loads config via `ConfigLoader` |
+| Execution engine | `execution/executor.py` | Partitions stocks into batch (non-A-share: US/HK/JP/KR via YahooQuery/YFinance) and sequential (A-share via BaoStock/Tushare); loads config via `ConfigLoader` |
 | Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` (reserved, not actively used) |
 | Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
 | Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data, files, open-folder |
@@ -83,17 +83,17 @@ quantflow/
   ```
 - **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
 - **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
-  - Data layer: 151 unit + 10 integration (sector cache, fetch_indices, fetch_cn_indices) = 161 tests
+  - Data layer: 153 unit + 10 integration (sector cache, fetch_indices, fetch_cn_indices) = 163 tests
   - Indicator layer: 105 unit + 1 integration (TDX reference values) = 106 tests
   - Config layer: 31 unit = 31 tests
   - Orchestration layer: 42 unit = 42 tests
-  - Execution layer: 49 unit = 49 tests
+  - Execution layer: 52 unit = 52 tests
   - Reports layer: 18 unit = 18 tests
   - Strategies layer: 51 unit = 51 tests
   - CLI layer: 24 unit + 6 skipped (pending expected values) = 30 tests
   - Web layer: 313 tests (212 API/integration + 101 E2E) + 113 frontend TypeScript tests
   - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
-  - Total: ~811 Python tests (313 web + 其他层) + ~113 frontend tests
+  - Total: ~815 Python tests (313 web + 其他层) + ~113 frontend tests
   - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
   - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
   - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)

@@ -1,4 +1,9 @@
-"""Data source factory with automatic fallback."""
+"""Data source factory with automatic fallback.
+
+Routes stock codes to the appropriate data source based on market detection.
+Market routing: SH/SZ→cn (BaoStock/Tushare), HK→hk, US→us, T→jp, KS→kr
+(YahooQuery/YFinance). Unknown exchanges log a WARNING and default to 'us'.
+"""
 
 import logging
 from datetime import datetime, timedelta
@@ -275,4 +280,8 @@ class DataSourceFactory:
         elif code.exchange == "KS":
             return "kr"
         else:
+            logger.warning(
+                f"Unknown exchange '{code.exchange}' for {code.standard}, "
+                f"defaulting to 'us'. Supported: SH, SZ, HK, US, T, KS."
+            )
             return "us"

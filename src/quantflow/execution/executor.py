@@ -1,4 +1,9 @@
-"""Stock Executor for processing execution jobs."""
+"""Stock Executor for processing execution jobs.
+
+Partitions stocks into two groups based on data source capabilities:
+- batch_items: Non-A-share stocks (US/HK/JP/KR) fetched via YahooQuery/YFinance batch API
+- sequential_items: A-share stocks fetched individually via BaoStock/Tushare
+"""
 
 import logging
 from dataclasses import dataclass
@@ -103,8 +108,8 @@ class Executor:
         start_date = (datetime.now() - timedelta(days=job.days_back)).strftime("%Y-%m-%d")
         end_date = datetime.now().strftime("%Y-%m-%d")
 
-        yfinance_items: List[tuple] = []
-        other_items: List[tuple] = []
+        batch_items: List[tuple] = []
+        sequential_items: List[tuple] = []
 
         for item in job.items:
             code = item.code
@@ -113,27 +118,27 @@ class Executor:
             market = self.factory._detect_market(code)
             primary = self.factory.config.get_primary(market)
             if self.factory.has_batch_support(primary, market):
-                yfinance_items.append((item, code))
+                batch_items.append((item, code))
             else:
-                other_items.append((item, code))
+                sequential_items.append((item, code))
 
-        yf_data: Dict[str, pd.DataFrame] = {}
-        if yfinance_items:
-            yf_codes = [code for _, code in yfinance_items]
+        batch_data: Dict[str, pd.DataFrame] = {}
+        if batch_items:
+            batch_codes = [code for _, code in batch_items]
             batch_result = self.factory.fetch_batch_ohlcv(
-                yf_codes, start_date, end_date
+                batch_codes, start_date, end_date
             )
             for code_str, (df, _src) in batch_result.items():
-                yf_data[code_str] = df
+                batch_data[code_str] = df
             logger.info(
-                f"Batch complete: {len(yf_data)}/{len(yfinance_items)} stocks"
+                f"Batch complete: {len(batch_data)}/{len(batch_items)} stocks"
             )
 
         data_ok = 0
         no_data = 0
         errors = 0
-        for idx, (item, code) in enumerate(yfinance_items, 1):
-            df = yf_data.get(code.standard)
+        for idx, (item, code) in enumerate(batch_items, 1):
+            df = batch_data.get(code.standard)
             _emit(code.standard, f"[{idx}/{total}] {code.standard}",
                   "info", "stock_start", idx)
             if df is None or df.empty:
@@ -153,7 +158,7 @@ class Executor:
                 _emit(code.standard, f"Done: {code.standard} (0 signals)",
                       "info", "stock_done", idx)
 
-        for idx, (item, code) in enumerate(other_items, 1):
+        for idx, (item, code) in enumerate(sequential_items, 1):
             try:
                 _emit(code.standard, f"[{idx}/{total}] {code.standard}",
                       "info", "stock_start", idx)

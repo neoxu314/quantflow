@@ -20,11 +20,11 @@ execution/
 
 ## KEY CLASSES
 
-- `Executor`: Main class. Loads `ConfigLoader` at init, dispatches yFinance items to batch fetch, processes sequential items individually. `execute(job)` order:
-  1. Partition items by primary data source.
-  2. yFinance items → `fetch_batch_ohlcv()` (internal chunking: 35/batch, jitter sleep 10–20s to avoid 429).
-  3. yFinance signals processed in-memory.
-  4. Other items (A-share) → sequential `fetch_ohlcv()`.
+- `Executor`: Main class. Loads `ConfigLoader` at init, partitions items into batch (non-A-share) and sequential (A-share) groups. `execute(job)` order:
+  1. Partition items by primary data source batch support: `batch_items` (non-A-share, e.g. US/HK/JP/KR via YahooQuery/YFinance) vs `sequential_items` (A-share via BaoStock/Tushare).
+  2. Batch items → `fetch_batch_ohlcv()` (YahooQuery sequential per-ticker internally, or YFinance chunked download as fallback).
+  3. Batch signals processed in-memory.
+  4. Sequential items (A-share) → individual `fetch_ohlcv()` calls with primary/fallback (BaoStock → Tushare).
   - **Progress Logging**: Via optional `on_progress` callback emitting `ProgressEvent` objects (`type="stock_start"|"stock_done"`, with `current`, `total`, `code`, `message`, `level`). Used by Web UI RunEngine for SSE real-time updates.
   - **Summary Logging**: At end of `execute()`, logs task summary: `Task {name} complete: {total} stocks | {data_ok} analyzed, {no_data} no data, {errors} errors | {len(results)} with signals`.
   - **Helper**: `_process_single()` for indicator + signal generation per stock.

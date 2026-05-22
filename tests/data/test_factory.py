@@ -1,6 +1,7 @@
 """Tests for DataSourceFactory."""
 
 import datetime
+import logging
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
@@ -252,6 +253,18 @@ class TestMarketDetectionEdgeCases:
         code = StockCode(code="00001", exchange="KS")
         assert factory._detect_market(code) == "kr"
 
-    def test_unknown_exchange_defaults_to_us(self, factory):
+    def test_unknown_exchange_defaults_to_us_with_warning(self, factory, caplog):
         code = StockCode(code="X", exchange="ZZ")
-        assert factory._detect_market(code) == "us"
+        with caplog.at_level(logging.WARNING):
+            result = factory._detect_market(code)
+        assert result == "us"
+        assert "Unknown exchange" in caplog.text
+        assert "ZZ" in caplog.text
+
+    def test_known_exchanges_no_warning(self, factory, caplog):
+        for exchange, expected in [("SH", "cn"), ("SZ", "cn"), ("HK", "hk"), ("US", "us"), ("T", "jp"), ("KS", "kr")]:
+            code = StockCode(code="0000", exchange=exchange)
+            with caplog.at_level(logging.WARNING):
+                result = factory._detect_market(code)
+            assert result == expected
+        assert "Unknown exchange" not in caplog.text

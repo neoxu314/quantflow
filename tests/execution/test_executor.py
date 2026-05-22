@@ -233,3 +233,86 @@ class TestExecutorMultiStock:
         assert "MSFT.US" in call_args or any(
             "MSFT" in str(c) for c in call_args
         )
+
+    def test_mixed_market_cn_and_global(self):
+        """Verify Executor partitions CN (sequential) and global (batch) stocks correctly."""
+        items = [
+            WatchlistItem(code=StockCode.from_standard("600000.SH")),
+            WatchlistItem(code=StockCode.from_standard("MSFT.US")),
+        ]
+        job = ExecutionJob(
+            name="mixed_market",
+            items=items,
+            strategies=[DailyBullishOversoldBuy()],
+            output_dir="/tmp/executor_test",
+            days_back=30,
+        )
+
+        df = _make_signal_df()
+        executor = Executor()
+
+        with patch.object(executor.factory, "fetch_batch_ohlcv") as mock_batch, \
+             patch.object(executor.factory, "fetch_ohlcv") as mock_sequential, \
+             patch.object(executor.factory, "_detect_market") as mock_detect, \
+             patch.object(executor.factory, "config") as mock_config:
+
+            def detect_side_effect(code):
+                if code.exchange in ("SH", "SZ"):
+                    return "cn"
+                return "us"
+
+            mock_detect.side_effect = detect_side_effect
+            mock_config.get_primary.side_effect = lambda m: "baostock" if m == "cn" else "yahooquery"
+            mock_config.get_fallback.side_effect = lambda m: "tushare" if m == "cn" else "yfinance"
+
+            mock_batch.return_value = {"MSFT.US": (df, "yahooquery")}
+            mock_sequential.return_value = (df, "baostock")
+
+            results = executor.execute(job)
+
+        mock_batch.assert_called_once()
+        mock_sequential.assert_called_once()
+
+    def test_batch_items_no_data_skipped(self):
+        """Verify batch items with no data are skipped gracefully."""
+        items = [
+            WatchlistItem(code=StockCode.from_standard("BAD.US")),
+        ]
+        job = ExecutionJob(
+            name="batch_no_data",
+            items=items,
+            strategies=[DailyBullishOversoldBuy()],
+            output_dir="/tmp/executor_test",
+            days_back=30,
+        )
+
+        executor = Executor()
+
+        with patch.object(executor.factory, "fetch_batch_ohlcv", return_value={}), \
+             patch.object(executor.factory, "_detect_market", return_value="us"), \
+             patch.object(executor.factory, "config") as mock_config:
+            mock_config.get_primary.return_value = "yahooquery"
+            results = executor.execute(job)
+
+        assert results == []
+
+    def test_sequential_items_exception_handled(self):
+        """Verify sequential items with fetch exception are handled gracefully."""
+        items = [
+            WatchlistItem(code=StockCode.from_standard("600000.SH")),
+        ]
+        job = ExecutionJob(
+            name="seq_error",
+            items=items,
+            strategies=[DailyBullishOversoldBuy()],
+            output_dir="/tmp/executor_test",
+            days_back=30,
+        )
+
+        executor = Executor()
+
+        with patch.object(executor.factory, "fetch_ohlcv", side_effect=Exception("Network error")), \
+             patch.object(executor.factory, "_detect_market", return_value="cn"):
+            results = executor.execute(job)
+
+        assert results == []
