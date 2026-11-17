@@ -34,7 +34,16 @@ Before running tasks, ensure your environment is ready:
    ```bash
    pip install -e .
    ```
-3. **Stock Code Format**:
+3. **TypeScript Compiler (Web UI only)**: The Web UI frontend is written in TypeScript (`app.ts`, `utils.ts`) and served as compiled JavaScript. The generated `utils.js` is **gitignored**, so it is NOT present after cloning — you must compile the frontend before starting the Web UI, or the buttons will not respond (the browser fails to load `./utils.js`).
+   ```bash
+   # Install the TypeScript compiler (once):
+   npm install -g typescript     # or: brew install typescript
+
+   # From the project root, compile the frontend:
+   tsc --project src/quantflow/web/static/tsconfig.json
+   ```
+   This generates `app.js` and `utils.js` in `src/quantflow/web/static/`. Re-run the `tsc` command after editing any `.ts` file.
+4. **Stock Code Format**:
     The system strictly requires standard formats. Do **not** use standalone codes (e.g., just `MSFT`).
     *   **A-Share**: `{code}.{exchange}` (e.g., `600519.SH` or `002594.SZ`)
     *   **US/HK**: `{code}.{market}` (e.g., `NVDA.US` or `00700.HK`)
@@ -217,9 +226,16 @@ QuantFlow provides an optional web UI for managing watchlists, tasks, runs, and 
 # Install dependencies (includes fastapi, uvicorn)
 pip install -e .
 
+# Compile the TypeScript frontend (required on first run and after any .ts change).
+# The generated utils.js is gitignored — without this step the UI buttons won't work.
+npm install -g typescript          # one-time, if tsc is not installed
+tsc --project src/quantflow/web/static/tsconfig.json
+
 # Start the Web UI
 python -m quantflow.cli web
 ```
+
+> **Note**: `tsc --project ...` regenerates `app.js` and `utils.js` in `src/quantflow/web/static/`. `utils.js` is intentionally gitignored (build artifact), so every fresh clone must run this compile step. If you skip it, the page loads but every button is dead because the browser gets a 404 on `./utils.js`.
 
 - **Default URL**: http://127.0.0.1:{port} (auto-opens in browser). Port configured in `config/quantflow.yaml` (default: 8082).
 - **Configuration**: Set port/host in `config/quantflow.yaml` under `web:` section
