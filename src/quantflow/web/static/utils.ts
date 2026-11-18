@@ -16,6 +16,10 @@ export const MARKET_SUFFIX: Record<string, string> = {
     "KR": ".KS",
 };
 
+export function isActiveRunStatus(status: string): boolean {
+    return ["queued", "running", "cancelling"].includes(status);
+}
+
 /**
  * Settings form field ID to config data path mapping.
  * Used to populate and collect form values from/to nested config object.

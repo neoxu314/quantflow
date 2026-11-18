@@ -227,3 +227,7 @@ This guarantees production configs are byte-identical to pre-test state even if 
 12. **Preset behavior changed?** → Add to `test_runs_api.py` (unit) or `e2e/test_presets.py` (E2E)
 13. **Indicator serialization changed?** → Add to `test_nan_serialization.py`
 14. **Watchlist inline editing changed?** → Add to `test_watchlist_api.py` (unit), `e2e/test_yaml_sync.py` (E2E), `tests/web/frontend/app.test.ts` (frontend)
+
+## 2026-11-18 RELIABILITY CONTRACT
+
+Project `docs/reliability-and-data-contracts.md` supersedes legacy output, adjustment and state details above. Outputs are run-owned manifest artifacts; analyzed/no-data/stale/insufficient/error are distinct. Tushare uses explicit factors and shares, Yahoo adapters reject hfq, and facts preserve units, source and time. Task summaries expose failures. API tests isolate runtime state and do not start unmanaged workers.

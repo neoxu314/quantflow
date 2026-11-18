@@ -5,18 +5,31 @@ from __future__ import annotations
 
 import importlib
 import inspect
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict
 
 import yaml
 
+_run_config = ContextVar("quantflow_indicator_config", default=None)
+
 
 class IndicatorFactory:
     _config: Dict[str, Any] | None = None
     _class_map: Dict[str, Any] = {}
+    _config_stamp = None
 
     @staticmethod
     def _load_config() -> Dict[str, Any]:
+        scoped = _run_config.get()
+        if scoped is not None:
+            return scoped
+        config_path = Path(__file__).resolve().parents[3] / "config" / "indicators.yaml"
+        stamp = config_path.stat().st_mtime_ns if config_path.exists() else None
+        if IndicatorFactory._config_stamp is not None and stamp != IndicatorFactory._config_stamp:
+            IndicatorFactory._config = None
         if IndicatorFactory._config is None:
             root = Path(__file__).resolve().parents[3]
             config_path = root / "config" / "indicators.yaml"
@@ -30,7 +43,18 @@ class IndicatorFactory:
                     IndicatorFactory._config = data["indicators"] or {}
                 else:
                     IndicatorFactory._config = data
+            IndicatorFactory._config_stamp = stamp
         return IndicatorFactory._config or {}
+
+    @staticmethod
+    @contextmanager
+    def snapshot():
+        """UI configuration edits apply to the next run, never half of this one."""
+        token = _run_config.set(deepcopy(IndicatorFactory._load_config()))
+        try:
+            yield
+        finally:
+            _run_config.reset(token)
 
     @staticmethod
     def _get_class_by_name(name: str):

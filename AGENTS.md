@@ -101,7 +101,7 @@ quantflow/
 - **Type hints**: `py.typed` marker present, ruff linting enforces
 - **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
 - **Run logging**: `config/logging.py` provides `setup_logging(output_dir, run_label)` — configures root logger with StreamHandler (console_level) + FileHandler (file_level). All run types (CLI + Web) call this at start. Log files go to `output_dir/logs/{run_label}_{timestamp}.log`. Config: `logging:` section in `quantflow.yaml` (console_level, file_enabled, file_level, format). `setup_logging()` **removes prior quantflow handlers** before adding new ones (long-running Web server must not leak logs across runs). The resolved path is persisted to `run_history.log_path`; the Web Progress tab reads that file directly via `GET /api/runs/{id}/logs` (not the SSE summary events).
-- **Run states**: `queued | running | completed | failed | cancelled | interrupted`. `interrupted` marks runs left active by a dead process (e.g. laptop lid closed); `RunHistory.reconcile_stale_runs()` is called once in `create_app()` at server startup to flip stale `running`/`queued` rows to `interrupted`.
+- **Run states**: `queued | running | cancelling | completed | partial | failed | cancelled | interrupted`. `interrupted` marks runs left active by a dead process (e.g. laptop lid closed); `RunHistory.reconcile_stale_runs()` is called once in `create_app()` at server startup to flip stale `running`/`queued` rows to `interrupted`.
 - **Checkpoint / resume**: `execution/checkpoint.py::Checkpoint` stores per-stock completion + results at `~/.quantflow/checkpoints/<run-id>.json` (atomic writes). `Executor.execute(job, checkpoint=..., task_key=...)` skips done stocks; `Orchestrator` passes a per-task checkpoint. `POST /api/runs/{id}/resume` only allows `watchlist_run`/`task_run` in `failed|cancelled|interrupted`, creates a new run, and copies the checkpoint. Raw OHLCV is **not** cached — the fetch date window is frozen in the checkpoint instead.
 - **YFinance batch**: Auto-chunked (35 tickers/chunk, jitter sleep 10–20s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
 - **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
@@ -115,58 +115,17 @@ quantflow/
 
 ## OUTPUT LOGIC
 
-### Overview
-
-CLI and Web UI use **different default output paths** and **delete strategies**.
-
-### CLI Default Paths
-
-| Run Type | Default Path | Path Type | Output Files |
-|----------|--------------|-----------|--------------|
-| **stock_scan** | `PROJECT_ROOT/output/cli_scans` | Absolute (PROJECT_ROOT) | `{code}_indicators.json`<br>`logs/stock_scan_{code}_{ts}.log` |
-| **watchlist_run** | `./output` | Relative | `{watchlist_name}_results.json`<br>`{watchlist_name}_report.md`<br>`logs/watchlist_run_{name}_{ts}.log` |
-| **task_run** | `./output` | Relative | `{task_name}.json`<br>`{task_name}.md`<br>`Daily_Report.md`<br>`Combined_Results.json`<br>`logs/task_run_{config}_{ts}.log` |
-
-### Web UI Default Paths
-
-| Run Type | Default Path | Path Type | Output Files |
-|----------|--------------|-----------|--------------|
-| **stock_scan** | `./output/manual_scans` | Relative | `{code}_indicators.json`<br>`logs/stock_scan_{code}_{ts}.log` |
-| **watchlist_run** | `./output/manual_watchlist` | Relative | `web-{wl_name}.json`<br>`web-{wl_name}.md`<br>`logs/watchlist_run_{name}_{ts}.log` |
-| **task_run** | `./output` | Relative | Same as CLI |
-
-**Key Differences:**
-- CLI stock_scan uses `PROJECT_ROOT` (absolute), Web uses relative `./output/manual_scans`
-- Web UI adds `manual_` prefix to distinguish from CLI runs
-- Web watchlist_run uses `web-{wl_name}` prefix (Windows-safe, no colons)
-
-### Delete Behavior
-
-**Unified Strategy (All Run Types):**
-
-Web UI uses **precise file deletion** - only deletes generated files, preserves directory and user files.
-
-| Run Type | Deleted Files | Preserved |
-|----------|---------------|-----------|
-| **stock_scan** | `{code}_indicators.json` | Directory + user files |
-| **watchlist_run** | `web-{wl_name}.json`<br>`web-{wl_name}.md` | Directory + user files |
-| **task_run** | `Daily_Report.md`<br>`Combined_Results.json`<br>`{task_name}.md/.json` | Directory + user files |
-
-**Safety Guarantee:** Never deletes entire directory to prevent accidental loss of user files.
-
-### User Responsibility
-
-- **Output isolation**: Users control via different `output_path` values
-- **Preset system**: Save different output configurations for reuse
-- **RunHistory**: Database tracks all runs regardless of output_path
-
-### Implementation Details
-
-- **stock_scan**: File name from `run.config.code` (safe_code replacement)
-- **watchlist_run**: File name from `wl.name` (loaded from YAML, not file stem!)
-- **task_run**: File names from `task_config` task_names
-
-**Critical Note:** watchlist_run deletion must load YAML to get `wl.name` field, not use `Path(file).stem` (see runs.py:272-283).
+- See `docs/reliability-and-data-contracts.md` for the authoritative contract.
+- CLI and Web output paths are bases. Actual artifacts live in `<base>/runs/<run_id>/`; daily mode adds a date BEFORE `runs/`.
+- `manifest.json` records run ownership and artifact hashes. Never infer ownership by loading current task/watchlist YAML.
+- Delete only manifest-owned unchanged files; preserve user additions, modified outputs, symlinks and legacy shared outputs without manifests.
+- Active workers must stop before deletion. Cancellation stays `cancelling` until the worker acknowledges it and hands off the queue slot.
+- Statuses include `partial` and `cancelling`. No-data/stale/insufficient/error are distinct from analyzed no_signal.
+- `ScanResults` is list-compatible and carries outcomes/summary. Required artifact writes propagate errors.
+- Executor builds indicators from strategy dependencies under `IndicatorFactory.snapshot()`, evaluating strategies independently.
+- Raw daily inputs, source, adjustment, dates, parameters and execution fingerprints are persisted. Only analyzed stocks are checkpointed done.
+- Data date ranges are inclusive internally. Adapters translate provider boundaries. Volume is shares, market values are currency base units.
+- Calendar failures are explicit; never silently fall back to weekday assumptions. Non-daily strategies are currently unsupported by execution.
 
 ## COMMANDS
 

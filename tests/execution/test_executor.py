@@ -12,8 +12,9 @@ import pytest
 from quantflow.data.base import StockCode
 from quantflow.execution.watchlist import WatchlistItem
 from quantflow.execution.job import ExecutionJob
-from quantflow.execution.executor import Executor, ProgressEvent
+from quantflow.execution.executor import Executor, ProgressEvent, InsufficientHistoryError
 from quantflow.execution.storage import ExecutionResultItem
+from quantflow.data.config import MarketDataSourceConfig
 from quantflow.strategies.buy import DailyBullishOversoldBuy, DailyBullishMidRangeBuy
 
 
@@ -46,6 +47,8 @@ def _make_signal_df(buy=True):
         "short_trend_line": [50.0] * length,
         "long_short_line": [40.0] * length,
         "J": [10.0] * length,
+        "K": [10.0] * length, "D": [10.0] * length,
+        "is_bull_zone": [True] * length, "is_bear_zone": [False] * length,
     })
     return df
 
@@ -99,8 +102,8 @@ class TestExecutorProgressCallback:
             "MSFT.US": (df, "yfinance"),
         }):
             with patch.object(executor.factory, "_detect_market", return_value="us"):
-                with patch.object(executor.factory, "config") as mock_config:
-                    mock_config.get_primary.return_value = "yfinance"
+                with patch.object(executor.factory, "config", MarketDataSourceConfig()) as mock_config:
+                    mock_config.set_primary("us", "yfinance")
                     executor.execute(job, on_progress=capture)
 
         start_events = [e for e in events if e.type == "stock_start"]
@@ -108,7 +111,7 @@ class TestExecutorProgressCallback:
         e = start_events[0]
         assert e.code == "MSFT.US"
         assert e.total == 1
-        assert e.current == 1
+        assert e.current == 0  # stock_start reports completed items
 
 
 class TestExecutorEmptyWatchlist:
@@ -196,8 +199,8 @@ class TestExecutorProcessSingle:
         )
 
         with patch.object(executor.composer, "compose", return_value=df):
-            result = executor._process_single(item, item.code, df, job)
-        assert result is None
+            with pytest.raises(InsufficientHistoryError):
+                executor._process_single(item, item.code, df, job)
 
 
 class TestExecutorMultiStock:
@@ -224,8 +227,8 @@ class TestExecutorMultiStock:
                 "AAPL.US": (df, "yfinance"),
             }
             with patch.object(executor.factory, "_detect_market", return_value="us"):
-                with patch.object(executor.factory, "config") as mock_config:
-                    mock_config.get_primary.return_value = "yfinance"
+                with patch.object(executor.factory, "config", MarketDataSourceConfig()) as mock_config:
+                    mock_config.set_primary("us", "yfinance")
                     results = executor.execute(job)
 
         # fetch_batch_ohlcv should be called with both codes
@@ -254,7 +257,7 @@ class TestExecutorMultiStock:
         with patch.object(executor.factory, "fetch_batch_ohlcv") as mock_batch, \
              patch.object(executor.factory, "fetch_ohlcv") as mock_sequential, \
              patch.object(executor.factory, "_detect_market") as mock_detect, \
-             patch.object(executor.factory, "config") as mock_config:
+             patch.object(executor.factory, "config", MarketDataSourceConfig()) as mock_config:
 
             def detect_side_effect(code):
                 if code.exchange in ("SH", "SZ"):
@@ -262,8 +265,8 @@ class TestExecutorMultiStock:
                 return "us"
 
             mock_detect.side_effect = detect_side_effect
-            mock_config.get_primary.side_effect = lambda m: "baostock" if m == "cn" else "yahooquery"
-            mock_config.get_fallback.side_effect = lambda m: "tushare" if m == "cn" else "yfinance"
+            mock_config.set_primary("cn", "baostock")
+            mock_config.set_fallback("cn", "tushare")
 
             mock_batch.return_value = {"MSFT.US": (df, "yahooquery")}
             mock_sequential.return_value = (df, "baostock")
@@ -290,8 +293,8 @@ class TestExecutorMultiStock:
 
         with patch.object(executor.factory, "fetch_batch_ohlcv", return_value={}), \
              patch.object(executor.factory, "_detect_market", return_value="us"), \
-             patch.object(executor.factory, "config") as mock_config:
-            mock_config.get_primary.return_value = "yahooquery"
+             patch.object(executor.factory, "config", MarketDataSourceConfig()) as mock_config:
+            mock_config.set_primary("us", "yahooquery")
             results = executor.execute(job)
 
         assert results == []

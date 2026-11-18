@@ -36,6 +36,15 @@ class CompositeStrategy(StrategyBase):
         for strategy in self.strategies:
             conditions.extend(strategy.get_conditions())
         return conditions
+
+    def get_required_indicators(self):
+        indicators = {}
+        for strategy in self.strategies:
+            for indicator in strategy.get_required_indicators():
+                if indicator.name in indicators and indicators[indicator.name].params != indicator.params:
+                    raise ValueError(f"Conflicting indicator parameters: {indicator.name}")
+                indicators[indicator.name] = indicator
+        return list(indicators.values())
     
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()

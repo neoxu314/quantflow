@@ -1,225 +1,155 @@
-"""CLI entry points."""
+"""CLI entry points sharing the same scan and execution services as the Web UI."""
 
 import argparse
-import json
 import logging
-import math
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
-
+from quantflow.artifacts import (
+    atomic_json,
+    create_run_directory,
+    finish_manifest,
+    register_artifact,
+)
 from quantflow.config.logging import setup_logging
-from quantflow.config.lookback import load_lookback_config
-from quantflow.data import DataSourceFactory, StockCode
-from quantflow.indicators.composer import IndicatorComposer
-from quantflow.indicators.standard import KDJIndicator, MACDIndicator
+from quantflow.control import ExecutionCancelled
 
 logger = logging.getLogger(__name__)
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _log_run(output, label):
+    path = setup_logging(output, label)
+    if path:
+        register_artifact(path)
+
+
 def stock_scan():
-    parser = argparse.ArgumentParser(description="Scan single stock")
-    parser.add_argument("--code", required=True, help="Stock code (e.g., 600000.SH)")
-    parser.add_argument("--start", default=None, help="Start date (YYYY-MM-DD)")
-    parser.add_argument("--end", default=None, help="End date (YYYY-MM-DD)")
-    parser.add_argument("--indicator", default="kdj,dual_line", help="Indicators to use")
-    parser.add_argument("--output", default=None, help="Output directory for indicator results")
+    from quantflow.execution.scanner import scan_stock
 
+    parser = argparse.ArgumentParser(description="Scan a stock; each run has its own directory")
+    parser.add_argument("--code", required=True)
+    parser.add_argument("--start")
+    parser.add_argument("--end")
+    parser.add_argument("--indicator", default="kdj,dual_line")
+    parser.add_argument("--output")
     args = parser.parse_args()
-    code = StockCode.from_standard(args.code)
-
-    output_dir = Path(args.output) if args.output else PROJECT_ROOT / "output" / "cli_scans"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    safe_code = args.code.replace("/", "_").replace("\\", "_")
-    setup_logging(output_dir, f"stock_scan_{safe_code}")
-
-    end_date = args.end or datetime.now().strftime("%Y-%m-%d")
-    start_date = args.start or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-
-    ind_objs = []
-    for ind_name in args.indicator.split(","):
-        if ind_name == "kdj":
-            ind_objs.append(KDJIndicator())
-        elif ind_name == "macd":
-            ind_objs.append(MACDIndicator())
-        elif ind_name == "dual_line":
-            from quantflow.indicators.custom import DualLineIndicator
-            ind_objs.append(DualLineIndicator())
-
-    if ind_objs:
-        lookback_cfg = load_lookback_config()
-        multiplier = lookback_cfg.get("calendar_multiplier", 2)
-        buffer = lookback_cfg.get("buffer_days", 30)
-        max_lookback = max(ind.lookback_bars for ind in ind_objs)
-        extra_days = math.ceil(max_lookback * multiplier) + buffer
-
-        fetch_start_date = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=extra_days)
-        fetch_start = fetch_start_date.strftime("%Y-%m-%d")
-    else:
-        fetch_start = start_date
-
-    factory = DataSourceFactory()
-    df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
-
-    if df.empty:
-        logger.error(f"No data for {args.code}")
-        return
-
-    actual_end = factory._latest_date(df)
-    if actual_end < end_date:
-        logger.info(f"No data on {end_date}. Using latest available: {actual_end}")
-
-    if ind_objs:
-        df = IndicatorComposer(ind_objs).compose(df)
-
-        if "date" in df.columns:
-            df = df[pd.to_datetime(df["date"]) >= start_date]
-
-        if start_date == end_date:
-            df = df.tail(1)
-
-    logger.info(f"Scan Result for {args.code}")
-    logger.info(f"Date range: {start_date} to {end_date}")
-    logger.info(f"Data source: {source}")
-
-    indicator_file = output_dir / f"{safe_code}_indicators.json"
-
-    def _serialize_df(df_to_save):
-        out = []
-        for row in df_to_save.to_dict(orient="records"):
-            clean = {}
-            for k, v in row.items():
-                if hasattr(v, "isoformat"):
-                    clean[k] = v.isoformat()
-                elif hasattr(v, "item"):
-                    try:
-                        val = v.item()
-                        if isinstance(val, float) and math.isnan(val):
-                            clean[k] = None
-                        else:
-                            clean[k] = val
-                    except Exception:
-                        clean[k] = str(v)
-                elif isinstance(v, float):
-                    clean[k] = None if math.isnan(v) else v
-                else:
-                    clean[k] = v
-            out.append(clean)
-        return out
-
-    indicator_data = _serialize_df(df)
-    indicator_file.write_text(json.dumps(indicator_data, indent=2))
-
-    logger.info(f"Indicator data saved: {indicator_file}")
+    cfg = {
+        "code": args.code,
+        "start_date": args.start,
+        "end_date": args.end,
+        "indicators": [n.strip() for n in args.indicator.split(",")],
+    }
+    output = None
+    try:
+        output = create_run_directory(args.output or PROJECT_ROOT / "output/cli_scans", config=cfg)
+        _log_run(output, "stock_scan")
+        report, bars, metadata = scan_stock(cfg, output)
+        finish_manifest(output, "completed", summary=metadata)
+        logger.info("Saved %d bars: %s", bars, report)
+        return 0
+    except (KeyboardInterrupt, ExecutionCancelled):
+        if output:
+            finish_manifest(output, "cancelled")
+        return 130
+    except Exception as exc:
+        if output:
+            finish_manifest(output, "failed", error=str(exc))
+        logger.error("Stock scan failed: %s", exc)
+        return 1
 
 
 def watchlist_run():
-    """Run single watchlist via Execution Layer (same as Web watchlist_run)."""
-    parser = argparse.ArgumentParser(
-        description="Run stock watchlist with strategies")
-    parser.add_argument("--watchlist", required=True,
-        help="Watchlist YAML path")
-    parser.add_argument("--output", default="./output",
-        help="Output directory")
-    parser.add_argument("--strategies",
-        default="daily_bull_oversold,daily_bull_mid_range",
-        help="Comma-separated strategy IDs (default: daily_bull_oversold,daily_bull_mid_range)")
-    parser.add_argument("--days-back", type=int, default=None,
-        help="Override auto-calculated lookback days")
-
-    args = parser.parse_args()
-
     from quantflow.config.lookback import compute_days_back
     from quantflow.execution.executor import Executor
     from quantflow.execution.job import ExecutionJob
-    from quantflow.execution.storage import Storage
     from quantflow.execution.watchlist import Watchlist
-    from quantflow.orchestration.registry import STRATEGY_REGISTRY
+    from quantflow.orchestration.registry import get_strategy_class
     from quantflow.reports.markdown import MarkdownReporter
 
-    watchlist = Watchlist.load(args.watchlist)
-
-    setup_logging(Path(args.output), f"watchlist_run_{watchlist.name}")
-
-    strategy_ids = [s.strip() for s in args.strategies.split(",")]
-    strategies = [STRATEGY_REGISTRY[s]() for s in strategy_ids]
-
-    days_back = compute_days_back(
-        strategies=strategies, override=args.days_back)
-
-    job = ExecutionJob(
-        name=f"cli:{watchlist.name}",
-        items=watchlist.items,
-        strategies=strategies,
-        output_dir=args.output,
-        days_back=days_back
-    )
-
-    executor = Executor()
-    results = executor.execute(job)
-
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    rpath = MarkdownReporter().generate(
-        f"cli:{watchlist.name}", strategies, results, watchlist,
-        args.output, date_str)
-
-    Storage().save_results(f"{args.output}/{watchlist.name}_results.json", results)
-    logger.info(f"Execution complete. {len(results)} signals saved.")
-    logger.info(f"Report: {rpath}")
+    parser = argparse.ArgumentParser(description="Run watchlist with explicit coverage")
+    parser.add_argument("--watchlist", required=True)
+    parser.add_argument("--output", default="./output")
+    parser.add_argument("--strategies", default="daily_bull_oversold,daily_bull_mid_range")
+    parser.add_argument("--days-back", type=int)
+    args = parser.parse_args()
+    output = None
+    try:
+        output = create_run_directory(args.output, config=vars(args))
+        _log_run(output, "watchlist_run")
+        wl = Watchlist.load(args.watchlist)
+        strategies = [get_strategy_class(s.strip())() for s in args.strategies.split(",")]
+        days = compute_days_back(strategies, args.days_back)
+        if days <= 0:
+            raise ValueError("days-back must be positive")
+        job = ExecutionJob(f"cli-{wl.name}", wl.items, strategies, str(output), days)
+        results = Executor().execute(job)
+        report = MarkdownReporter().generate(
+            job.name, strategies, results, wl, str(output), datetime.now().strftime("%Y-%m-%d")
+        )
+        atomic_json(output / "Run_Summary.json", results.summary)
+        finish_manifest(output, results.summary["status"], summary=results.summary)
+        logger.info("%s; report: %s", results.summary, report)
+        return {"completed": 0, "partial": 2, "failed": 1}[results.summary["status"]]
+    except (KeyboardInterrupt, ExecutionCancelled):
+        if output:
+            finish_manifest(output, "cancelled")
+        return 130
+    except Exception as exc:
+        if output:
+            finish_manifest(output, "failed", error=str(exc))
+        logger.error("Watchlist run failed: %s", exc)
+        return 1
 
 
 def task_run():
-    parser = argparse.ArgumentParser(
-        description="Run scheduled tasks via Orchestration")
-    parser.add_argument("--config", required=True,
-        help="Path to tasks config (e.g., config/tasks_us_mac.yaml)")
-    parser.add_argument("--output", default=None,
-        help="Base output directory override")
-    parser.add_argument("--daily", action="store_true",
-        help="Auto-append date to output path")
-    args = parser.parse_args()
-
-    setup_logging(Path(args.output or "./output"), f"task_run_{Path(args.config).stem}")
-
     from quantflow.orchestration.app import Orchestrator
     from quantflow.orchestration.loader import TaskConfig
 
+    parser = argparse.ArgumentParser(description="Run task configuration")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--output")
+    parser.add_argument("--daily", action="store_true")
+    args = parser.parse_args()
     try:
-        configs = TaskConfig.load(args.config)
-        app = Orchestrator(configs, output_override=args.output, daily_mode=args.daily)
+        app = Orchestrator(TaskConfig.load(args.config), args.output, args.daily)
         app.run()
-    except Exception as e:
-        logger.error(f"Orchestration failed: {e}")
+        logger.info("%s; report: %s", app.last_summary, app.report_path)
+        return {"completed": 0, "partial": 2, "failed": 1}[app.last_summary["status"]]
+    except (KeyboardInterrupt, ExecutionCancelled):
+        return 130
+    except Exception as exc:
+        logger.error("Task run failed: %s", exc)
+        return 1
 
 
 def web():
-    """Launch QuantFlow Web UI."""
     from quantflow.web.config import WebConfig
     from quantflow.web.server import start_server
 
-    config = WebConfig.load()
-    print(f"Starting QuantFlow Web UI on {config.host}:{config.port}...")
-    start_server(config)
+    start_server(WebConfig.load())
+
+
+# Keep installed command entry points functional.
+scan = stock_scan
+monitor = watchlist_run
+
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        sys.argv = sys.argv[1:]
-        if command in ("scan", "stock_scan"):
-            stock_scan()
-        elif command in ("monitor", "watchlist_run"):
-            watchlist_run()
-        elif command in ("tasks", "task_run"):
-            task_run()
-        elif command == "web":
-            web()
-        else:
-            print(f"Unknown command: {command}")
-    else:
-        print("Usage: python -m quantflow.cli <command>")
-        print("Commands: stock_scan, watchlist_run, task_run, web")
-        print("Aliases: scan, monitor, tasks (deprecated)")
+
+    commands = {
+        "stock_scan": stock_scan,
+        "scan": stock_scan,
+        "watchlist_run": watchlist_run,
+        "monitor": watchlist_run,
+        "task_run": task_run,
+        "tasks": task_run,
+        "web": web,
+    }
+    if len(sys.argv) < 2 or sys.argv[1] not in commands:
+        print("Usage: python -m quantflow.cli <stock_scan|watchlist_run|task_run|web>")
+        raise SystemExit(2)
+    command = sys.argv[1]
+    sys.argv = sys.argv[1:]
+    raise SystemExit(commands[command]())

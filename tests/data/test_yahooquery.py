@@ -359,7 +359,8 @@ class TestYahooQueryFundamental:
         result = source.fetch_fundamental(code)
 
         assert result is not None
-        assert result.pe_ttm == 28.5
+        assert result.pe_ttm is None
+        assert result.forward_pe == 28.5
 
     def test_fetch_fundamental_exception(self, monkeypatch):
         mock_ticker_cls = MagicMock()

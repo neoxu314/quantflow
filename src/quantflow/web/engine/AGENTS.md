@@ -1,106 +1,13 @@
-## OVERVIEW
-Core execution engine for the Web UI. Manages run lifecycle: creation  queuing  execution  history. Runs stock_scan, watchlist_run, and task_run in background threads with real-time SSE progress reporting. Calls `setup_logging()` at run start for persistent log files (path persisted to `run_history.log_path`). Supports checkpoint resume and startup reconciliation of orphaned runs.
+# WEB RUN ENGINE
 
-## STRUCTURE
-```
-engine/
-├── run_engine.py           # RunEngine — main executor
-├── run_history.py          # RunHistory — SQLite persistence
-├── run_queue.py            # RunQueue — active/pending queue
-├── sse.py                  # SSEManager — Server-Sent Events
-├── preflight.py            # PreflightChecker — run config validation
-└── presets.py              # PresetManager — save/load run configurations
-```
+Authoritative contract: project `docs/reliability-and-data-contracts.md`.
 
-## KEY COMPONENTS
-
-### RunEngine (run_engine.py)
-- Entry: `start_processing(run_id)` spawns background thread
-- Execution methods: `_exec_stock_scan()`, `_exec_watchlist_run()`, `_exec_task_run()`
-- Date handling: stock_scan fetches data from `fetch_start` (user start_date minus lookback warmup) to `end_date`, then trims result to user-specified date range using `df["date"]` column filter
-- Cancellation: `CancellationFlag` per run, checked between stock processing
-- Progress: calls `on_progress` callback with `ProgressEvent` objects (type=current/total/code/message/level)
-- Checkpoint: `_exec_watchlist_run()` / `_exec_task_run()` load or create a `Checkpoint` for the run and pass it into `Executor` / `Orchestrator`; a resumed run reuses the copied checkpoint. Checkpoint is deleted on terminal state (completed/failed/cancelled) and on run delete.
-- Log path: `setup_logging()` result is written back via `history.update_status(..., log_path=...)` so the Progress tab can read the real file.
-
-## Output Logic (Unified)
-
-All run types follow "所见即所得" (what-you-see-is-what-you-get) model:
-- **stock_scan**: Output directly to `./output/manual_scans/{code}_indicators.json`
-- **watchlist_run**: Output directly to `./output/manual_watchlist/{name}.json` and `.md`
-- **task_run**: Output directly to `./output` (or `./output/YYYY-MM-DD` if daily mode)
-
-**Key changes from previous version:**
-- No run_id subdirectory injection (previously stock_scan/watchlist_run added `{run_id}/`)
-- Default paths: stock_scan uses `./output/manual_scans`, watchlist_run uses `./output/manual_watchlist`, task_run uses `./output`
-- User-specified paths: when `output_path` is provided, all types use it directly (consistent behavior)
-- Unified delete logic: precise file deletion (not entire directory)
-
-**User responsibility:**
-- Users control output isolation via different `output_path` values
-- Users can use preset system to save different output configurations
-- RunHistory database tracks all runs regardless of output_path
-
-**Delete behavior:**
-All run types use precise file deletion:
-- stock_scan: Delete `{code}_indicators.json`
-- watchlist_run: Delete `{run.name}.json` and `{run.name}.md`
-- task_run: Delete Daily_Report.md, Combined_Results.json, and per-task files
-
-This prevents accidental deletion of user files in output directory.
-
-**Watchlist run file naming:**
-- `{run.name}.json` - Executor output (e.g., `web-test_watchlist.json`)
-- `{run.name}.md` - Markdown report (e.g., `web-test_watchlist.md`)
-Note: job.name uses hyphen instead of colon for Windows compatibility
-
-### RunHistory (run_history.py)
-- SQLite-backed persistent storage at `~/.quantflow/runs.db`
-- `RunRecord` dataclass: id, name, run_type, config, status, timestamps, signal_count, output_path, report_path, error, log_path, preset_id
-- Statuses (`STATUSES`): `queued`, `running`, `completed`, `failed`, `cancelled`, `interrupted`
-- Schema is migrated in place (idempotent `ALTER TABLE` for `log_path`); old DBs without the column upgrade transparently
-- Methods: `create_run()`, `get_run()`, `list_runs()`, `update_status()`, `delete_run()`, `reconcile_stale_runs()`
-- `reconcile_stale_runs()` — called once at `create_app()` startup; flips leftover `running`/`queued` rows to `interrupted` with `finished_at` + an explanatory `error`.
-
-### RunQueue (run_queue.py)
-- In-memory queue with active/pending states
-- `enqueue(run_id)` → returns True if became active, False if queued
-- `dequeue()` → pops next pending run
-- `cancel(run_id)` → removes from queue
-- `on_run_available` callback for notification
-
-### SSEManager (sse.py)
-- Manages SSE connections per run_id
-- `subscribe(run_id)` → returns Queue for log/progress/status events
-- `publish_log()`, `publish_progress()`, `publish_status()` → broadcasts to subscribers
-- Custom disconnect mechanism via sentinel object
-
-### PreflightChecker (preflight.py)
-- Validates run configs BEFORE execution
-- stock_scan: validates code format (REGEX), date format + order, known indicators
-- watchlist_run: validates watchlist file exists + non-empty, strategy IDs
-- task_run: validates task config file exists + parseable
-- output_path: validates createable
-- Returns `ValidationResult` with `ok` property and list of `errors`
-
-### PresetManager (presets.py)
-- JSON-file persistence for saved run configurations
-- `create(name, run_type, config)` → returns preset_id
-- `list_presets()`, `get(id)`, `update(id, ...)`, `delete(id)`
-- Presets allow re-running with same parameters via `/api/presets/{id}/run`
-
-## CONVENTIONS
-- RunEngine singleton pattern: API modules call `_set_engine()` / `_get_engine()` from server.py
-- SSE event types: `log`, `progress`, `status` — each carries a JSON payload. `SSEManager` keeps a last-progress snapshot for late subscribers and enforces monotonic progress
-- The black log box reads the real log file via `GET /api/runs/{id}/logs`; SSE `log` events are summary-only and are NOT rendered there (avoids duplicate/inconsistent lines)
-- Validation is synchronous and fast; no network calls in preflight
-- Cancellation is cooperative: checked only between items, not mid-fetch
-- Resume is intentionally limited to `watchlist_run` / `task_run` (multi-stock); single-stock `stock_scan` finishes in seconds and is not resumable
-
-## ANTI-PATTERNS
-- Do NOT share RunEngine instances across requests — use singleton via `_get_engine()`
-- Do NOT mutate run config after creation — treat as immutable
-- Do NOT bypass SSE unsubscribe on client disconnect — causes memory leak
-- Do NOT write runs directly to SQLite — always use `RunHistory` methods
-
-This file should be treated as a lightweight, practical reference for how the web engine executes and coordinates runs, monitors progress, stores history, and validates configurations prior to execution.
+- Worker owns the active slot until its finally block calls `queue.finish(run_id)`.
+- Cancellation requests mark cancelling; active-run cancellation never dequeues. Checkpoints and required outputs stay available for inspection/retry.
+- Initialization, logging setup, checkpoint loading and dispatch are inside the lifecycle exception/finally boundary.
+- Run states: queued, running, cancelling, completed, partial, failed, cancelled, interrupted.
+- Original RunHistory.config is immutable. Runtime output_path is a unique `<base>/[date/]runs/<id>` directory, separate from config.output_path.
+- Manifest owns output files; no cleanup by mutable config names or broad directory deletion. Legacy shared files are preserved.
+- CLI/Web stock scans share execution.scanner. Watchlist/task executions use explicit ScanResults coverage.
+- API tests use temporary state; worker tests call _execute_run explicitly and join their threads.
+- SSE fetch messages are stage logs; only completed analysis units advance stock completion progress.

@@ -1,15 +1,24 @@
-"""Orchestrator Application."""
+"""Task orchestration with explicit task failures and a run-owned output directory."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
 
+from quantflow.artifacts import (
+    ArtifactWriteError,
+    atomic_json,
+    create_run_directory,
+    finish_manifest,
+    register_artifact,
+)
+from quantflow.config.logging import setup_logging
 from quantflow.config.lookback import compute_days_back
+from quantflow.control import ExecutionCancelled, check_cancelled
 from quantflow.execution.executor import Executor, ProgressEvent
 from quantflow.execution.job import ExecutionJob
-from quantflow.execution.storage import Storage
+from quantflow.execution.storage import ScanResults, StockOutcome, Storage
 from quantflow.execution.watchlist import Watchlist
+from quantflow.indicators.factory import IndicatorFactory
 from quantflow.orchestration.registry import get_strategy_class
 from quantflow.reports.markdown import MarkdownReporter
 
@@ -17,141 +26,143 @@ logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    def __init__(self, tasks_config: list,
-                 output_override: str = None,
-                 daily_mode: bool = False,
-                 on_progress: Optional[Callable[[ProgressEvent], None]] = None,
-                 checkpoint=None):
+    def __init__(
+        self,
+        tasks_config,
+        output_override=None,
+        daily_mode=False,
+        on_progress=None,
+        checkpoint=None,
+        isolated=True,
+        as_of=None,
+    ):
         self.tasks = tasks_config
         self.executor = Executor()
         self.reporter = MarkdownReporter()
         self.output_override = output_override
         self.daily_mode = daily_mode
         self.on_progress = on_progress
-        # Optional resumability: a Checkpoint keyed by task name so each task
-        # can skip stocks already completed in a previous (interrupted) run.
         self.checkpoint = checkpoint
+        self.isolated = isolated
+        self.as_of = as_of or datetime.now(timezone.utc).isoformat()
+        self.last_summary = None
+        self.output_dir = None
+        self.report_path = None
 
     def _resolve_task_dir(self, cfg):
-        base = self.output_override or "./output"
-        if self.daily_mode:
-            return str(Path(base) / self.date_str)
-        return base
+        if self.output_dir:
+            return str(self.output_dir)
+        base = Path(self.output_override or "./output")
+        return str(base / self.date_str) if self.daily_mode else str(base)
 
     def _resolve_combined_dir(self):
-        base = self.output_override or "reports"
-        if self.daily_mode:
-            return str(Path(base) / self.date_str)
-        return base
+        return self._resolve_task_dir(None)
 
+    @IndicatorFactory.snapshot()
     def run(self):
         self.date_str = datetime.now().strftime("%Y-%m-%d")
-        task_runs = []
-        storage = Storage()
-
-        # Pre-load watchlists once so progress can be reported as a single
-        # global counter across all tasks (avoids the bar resetting to 0%
-        # when a new task starts). Reuse these objects below.
-        watchlists: dict = {}
-        for cfg in self.tasks:
-            try:
-                watchlists[cfg.name] = Watchlist.load(cfg.watchlist_path)
-            except Exception as e:
-                logger.error(f"Watchlist load failed for {cfg.name}: {e}")
-        grand_total = sum(
-            len(wl.items) for wl in watchlists.values())
-        completed = 0
-
-        for cfg in self.tasks:
-            try:
-                logger.info(f"--> Task: {cfg.name}")
+        base = Path(self.output_override or "./output")
+        if self.daily_mode:
+            base /= self.date_str
+        self.output_dir = create_run_directory(base) if self.isolated else base.resolve()
+        tasks, errors, combined = [], [], ScanResults()
+        try:
+            if self.isolated:
+                logfile = setup_logging(self.output_dir, "task_run")
+                if logfile:
+                    register_artifact(logfile)
+            offset = 0
+            loaded = {}
+            for cfg in self.tasks:
+                check_cancelled()
                 try:
-                    strategies = [
-                        get_strategy_class(s)()
-                        for s in cfg.strategy_names
-                    ]
-                except Exception as e:
-                    logger.error(f"Strategy resolution failed: {e}")
-                    completed += len(watchlists[cfg.name].items) \
-                        if cfg.name in watchlists else 0
+                    path = Path(cfg.watchlist_path)
+                    if not path.is_absolute() and not path.exists():
+                        path = Path(__file__).resolve().parents[3] / path
+                    loaded[cfg.name] = Watchlist.load(str(path))
+                except Exception as exc:
+                    errors.append({"task": cfg.name, "error": str(exc)})
+            total = sum(len(w.items) for w in loaded.values())
+            for cfg in self.tasks:
+                check_cancelled()
+                if cfg.name not in loaded:
                     continue
+                wl = loaded[cfg.name]
+                results = None
+                try:
+                    strategies = [get_strategy_class(s)() for s in cfg.strategy_names]
+                    if not strategies:
+                        raise ValueError("Task has no strategies")
 
-                days_back = compute_days_back(
-                    strategies=strategies, override=cfg.days_back)
-                task_dir = self._resolve_task_dir(cfg)
-                logger.info(
-                    f"   Lookback: {days_back} calendar days "
-                    f"| Output: {task_dir}")
+                    def progress(event, base_offset=offset):
+                        check_cancelled()
+                        self.on_progress(
+                            ProgressEvent(
+                                event.type,
+                                base_offset + event.current,
+                                total,
+                                event.code,
+                                event.message,
+                                event.level,
+                            )
+                        )
 
-                watchlist = watchlists.get(cfg.name)
-                if watchlist is None:
-                    watchlist = Watchlist.load(cfg.watchlist_path)
-                task_total = len(watchlist.items)
-
-                # Wrap the per-stock callback into a global progress counter.
-                task_cb = None
-                if self.on_progress is not None:
-                    def _cb(event, _offset=completed, _total=grand_total):
-                        self.on_progress(ProgressEvent(
-                            type=event.type,
-                            current=_offset + event.current,
-                            total=_total,
-                            code=event.code,
-                            message=event.message,
-                            level=event.level,
-                        ))
-                    task_cb = _cb
-
-                job = ExecutionJob(
-                    name=cfg.name,
-                    items=watchlist.items,
-                    strategies=strategies,
-                    output_dir=task_dir,
-                    days_back=days_back
-                )
-                # Preserve the original call signature for compatibility with
-                # mocks that only accept ``job``.  Extra kwargs (progress,
-                # checkpoint) are passed only when actually needed.
-                exec_kwargs = {}
-                if task_cb is not None:
-                    exec_kwargs["on_progress"] = task_cb
-                if self.checkpoint is not None:
-                    exec_kwargs["checkpoint"] = self.checkpoint
-                    exec_kwargs["task_key"] = cfg.name
-                results = self.executor.execute(job, **exec_kwargs)
-                completed += task_total
-                self.reporter.generate(
-                    cfg.name, strategies, results, watchlist,
-                    task_dir, self.date_str)
-
-                task_runs.append(
-                    (cfg.name, results, watchlist, strategies))
-            except Exception as e:
-                logger.error(f"Task {cfg.name} failed: {e}")
-                completed += len(watchlists[cfg.name].items) \
-                    if cfg.name in watchlists else 0
-
-        if task_runs:
-            combined_dir = self._resolve_combined_dir()
-            all_results = [
-                r for _, results, _, _ in task_runs for r in results
-            ] if task_runs else []
-            combined_json_path = (
-                f"{combined_dir}/Combined_Results.json")
-            storage.save_results(combined_json_path, all_results)
-            self.reporter.generate_combined(
-                self.date_str, task_runs, combined_dir)
-            logger.info(f"Combined report saved to {combined_dir}")
-
-        total_signals = sum(
-            len(r) for _, r, _, _ in task_runs)
-
-        task_count = len(self.tasks)
-        completed = len(task_runs)
-        total_stocks = sum(len(wl.items) for _, _, wl, _ in task_runs)
-        logger.info(
-            f"All tasks complete: {completed}/{task_count} tasks, "
-            f"{total_stocks} stocks scanned, {total_signals} signals"
-        )
-
-        return total_signals
+                    job = ExecutionJob(
+                        cfg.name,
+                        wl.items,
+                        strategies,
+                        str(self.output_dir),
+                        compute_days_back(strategies, cfg.days_back),
+                        as_of=self.as_of,
+                    )
+                    kwargs = {}
+                    if self.on_progress:
+                        kwargs["on_progress"] = progress
+                    if self.checkpoint:
+                        kwargs.update(checkpoint=self.checkpoint, task_key=cfg.name)
+                    results = self.executor.execute(job, **kwargs)
+                    check_cancelled()
+                    self.reporter.generate(
+                        cfg.name, strategies, results, wl, str(self.output_dir), self.date_str
+                    )
+                    combined.extend(results)
+                    if isinstance(results, ScanResults):
+                        combined.outcomes.extend(results.outcomes)
+                    tasks.append((cfg.name, results, wl, strategies))
+                except ArtifactWriteError:
+                    raise
+                except Exception as exc:
+                    logger.exception("Task %s failed", cfg.name)
+                    errors.append({"task": cfg.name, "error": str(exc)})
+                    combined.outcomes.extend(
+                        StockOutcome(item.code.standard, "error", error=str(exc))
+                        for item in wl.items
+                    )
+                offset += len(wl.items)
+            check_cancelled()
+            summary = combined.summary
+            if errors or len(tasks) != len(self.tasks):
+                summary["status"] = "partial" if summary["analyzed"] else "failed"
+            summary.update(
+                tasks_requested=len(self.tasks), tasks_completed=len(tasks), task_errors=errors
+            )
+            if errors and not summary["total"]:
+                summary["coverage"] = 0.0
+            self.last_summary = summary
+            storage = Storage()
+            storage.save_results(self.output_dir / "Combined_Results.json", combined)
+            atomic_json(self.output_dir / "Run_Summary.json", summary)
+            self.report_path = self.reporter.generate_combined(
+                self.date_str, tasks, str(self.output_dir), summary=summary
+            )
+            if self.isolated:
+                finish_manifest(self.output_dir, summary["status"], summary=summary)
+            return len(combined)
+        except ExecutionCancelled:
+            if self.isolated:
+                finish_manifest(self.output_dir, "cancelled")
+            raise
+        except Exception:
+            if self.isolated:
+                finish_manifest(self.output_dir, "failed")
+            raise

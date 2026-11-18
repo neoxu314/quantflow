@@ -135,7 +135,7 @@ class TestConfigLoaderGetDataConfig:
         assert result.get_fundamental_source("cn") == "tushare"
         assert result.get_fundamental_source("us") == "yfinance"
         # hk has no fallback set
-        assert result.get_fallback("hk") is None
+        assert result.get_fallback("hk") == "yfinance"
 
     def test_defaults_fallback(self, config_file: Path):
         """Missing file uses ConfigLoader._get_defaults(), which includes market config."""
@@ -155,7 +155,7 @@ class TestConfigLoaderGetDataConfig:
         assert isinstance(result, MarketDataSourceConfig)
         # Empty data section → empty dicts passed to MarketDataSourceConfig
         # get_primary defaults to "yfinance" for unknown markets (not dataclass default_factory)
-        assert result.get_primary("cn") == "yfinance"
+        assert result.get_primary("cn") == "baostock"
 
 
 # ─── ConfigLoader.get_tushare_token() ──────────────────────────────────

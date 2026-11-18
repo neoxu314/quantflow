@@ -1,3 +1,4 @@
+from tests.web.artifact_fixtures import own_test_artifacts
 """Integration tests: verify Execution → API data flow consistency."""
 import json
 import sqlite3
@@ -69,6 +70,7 @@ class TestFilesEndpointExecutionConsistency:
         )
 
         # Test files endpoint
+        own_test_artifacts(rid, output_dir, [indicator_file])
         files_resp = client.get(f"/api/runs/{rid}/files")
         assert files_resp.status_code == 200
 
@@ -111,6 +113,7 @@ class TestFilesEndpointExecutionConsistency:
         )
 
         # Test files endpoint
+        own_test_artifacts(rid, output_dir, [md_file, json_file])
         files_resp = client.get(f"/api/runs/{rid}/files")
         assert files_resp.status_code == 200
 
@@ -154,6 +157,7 @@ class TestFilesEndpointExecutionConsistency:
         )
 
         # Test files endpoint
+        own_test_artifacts(rid, output_dir, [md_file, json_file, task_md])
         files_resp = client.get(f"/api/runs/{rid}/files")
         assert files_resp.status_code == 200
 
@@ -200,6 +204,7 @@ class TestFilesEndpointExecutionConsistency:
         )
 
         # Test files endpoint - should find files in subdirectory
+        own_test_artifacts(rid, output_dir, [md_file, json_file, task_json])
         files_resp = client.get(f"/api/runs/{rid}/files")
         assert files_resp.status_code == 200
 

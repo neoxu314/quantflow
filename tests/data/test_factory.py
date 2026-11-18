@@ -5,7 +5,7 @@ import logging
 import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
-from quantflow.data.base import StockCode
+from quantflow.data.base import StockCode, DataSourceBase
 from quantflow.data.factory import DataSourceFactory
 from quantflow.data.config import MarketDataSourceConfig
 
@@ -79,37 +79,18 @@ class TestDataSourceFallback:
         )
 
     def test_fallback_triggers_when_today_no_data(self, factory):
-        """When end_date = today and no data, fallback expands 180 days to get history."""
+        """Fallback never silently expands a user-requested empty day."""
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-
-        call_log = []
-
-        def mock_fetch(*args, **kw):
-            s, e = args[1], args[2]
-            call_log.append((s, e))
-            if s == today and e == today:
-                return pd.DataFrame()
-            # Simulate fallback returns full range of data
-            idx = pd.date_range("2025-12-01", "2026-05-04", freq="B")[:10]
-            return pd.DataFrame(
-                {"open": [1.0] * len(idx), "high": [1.1] * len(idx),
-                 "low": [0.95] * len(idx), "close": [1.05] * len(idx),
-                 "volume": [100] * len(idx)},
-                index=idx,
-            )
-
-        mock_adapter = MagicMock()
-        mock_adapter.supports_market.return_value = True
-        mock_adapter.fetch_ohlcv = mock_fetch
-
-        code = StockCode.from_standard("600519.SH")
-        with patch.object(factory, "_get_adapter", return_value=mock_adapter):
-            df, source = factory.fetch_ohlcv(code, today, today)
-
-        assert not df.empty
-        assert len(df) == 10  # Full fallback range, not truncated
-        assert len(call_log) >= 2
-        assert call_log[0] == (today, today)
+        adapter = MagicMock()
+        adapter.supports_market.return_value = True
+        adapter.get_supported_periods.return_value = ["d"]
+        adapter.get_supported_adjusts.return_value = ["qfq"]
+        adapter.fetch_ohlcv.return_value = pd.DataFrame()
+        with patch.object(factory, "_get_adapter", return_value=adapter):
+            result, source = factory.fetch_ohlcv(StockCode("600000", "SH"), today, today)
+        assert result.empty
+        assert adapter.fetch_ohlcv.call_count == 2
+        assert all(c.args[1:3] == (today, today) for c in adapter.fetch_ohlcv.call_args_list)
 
     def test_no_fallback_when_historical_date_no_data(self, factory):
         """Requesting a historical date with no data should NOT fallback."""
@@ -125,22 +106,12 @@ class TestDataSourceFallback:
         assert df.empty
 
     def test_fallback_preserves_requested_range_when_possible(self, factory):
-        """When user provides a range (not today), fallback keeps their start date."""
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
-
-        def mock_fetch(*args, **kw):
-            s, e = args[1], args[2]
-            return TestDataSourceFallback._mock_df(s, e)
-
-        mock_adapter = MagicMock()
-        mock_adapter.supports_market.return_value = True
-        mock_adapter.fetch_ohlcv = mock_fetch
-
-        code = StockCode.from_standard("600519.SH")
-        with patch.object(factory, "_get_adapter", return_value=mock_adapter):
-            df, source = factory.fetch_ohlcv(code, today, today)
-
-        assert not df.empty
+        """Out-of-window provider data cannot be substituted for a requested day."""
+        from tests.data.test_quality_contracts import FakeAdapter, sample
+        adapter = FakeAdapter({"600519.SH": sample()})
+        with patch.object(factory, "_get_adapter", return_value=adapter):
+            result, source = factory.fetch_ohlcv(StockCode("600519", "SH"), "2026-11-19", "2026-11-19")
+        assert result.empty
 
     def test_latest_date_helper(self, factory):
         """_latest_date returns the last index as a string."""
@@ -164,14 +135,18 @@ class TestFetchBatchOhlcv:
 
         captured = {}
 
-        class MockAdapter:
+        class MockAdapter(DataSourceBase):
+            def get_name(self):
+                return "mock"
+            def fetch_ohlcv(self, *args):
+                return pd.DataFrame()
             def supports_market(self, market: str) -> bool:
                 return market in ["us", "hk"]
 
             def fetch_batch_ohlcv(self, codes_list, start_date, end_date, period, adjust):
                 captured["codes"] = [str(c) for c in codes_list]
                 import pandas as pd
-                df = pd.DataFrame({"open": [1.0], "high": [1.1], "low": [0.9], "close": [1.0], "volume": [100]})
+                df = pd.DataFrame({"date": ["2026-01-02"], "open": [1.0], "high": [1.1], "low": [0.9], "close": [1.0], "volume": [100]})
                 return {str(code_us): df, str(code_hk): df}
 
         mock_adapter = MockAdapter()
@@ -254,12 +229,9 @@ class TestMarketDetectionEdgeCases:
         assert factory._detect_market(code) == "kr"
 
     def test_unknown_exchange_defaults_to_us_with_warning(self, factory, caplog):
-        code = StockCode(code="X", exchange="ZZ")
-        with caplog.at_level(logging.WARNING):
-            result = factory._detect_market(code)
-        assert result == "us"
-        assert "Unknown exchange" in caplog.text
-        assert "ZZ" in caplog.text
+        """Unknown exchanges are rejected instead of silently routed to US."""
+        with pytest.raises(ValueError, match="Unknown exchange"):
+            factory._detect_market(StockCode("X", "ZZ"))
 
     def test_known_exchanges_no_warning(self, factory, caplog):
         for exchange, expected in [("SH", "cn"), ("SZ", "cn"), ("HK", "hk"), ("US", "us"), ("T", "jp"), ("KS", "kr")]:

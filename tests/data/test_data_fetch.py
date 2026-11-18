@@ -1007,19 +1007,14 @@ class TestEdgeCases:
         return BaoStockDataSource()
     
     def test_empty_result_handling(self, baostock_source):
-        """Test handling of empty data result."""
-        # Use a date range that might return empty (future date or invalid)
-        code = StockCode.from_standard("600000.SH")
-        
-        # Request data for invalid/empty range
-        df = baostock_source.fetch_ohlcv(
-            code,
-            "2099-01-01",  # Future date
-            "2099-01-31"
-        )
-        
-        # Should return empty DataFrame, not raise exception
-        assert df.empty or len(df) == 0
+        """An empty provider result is handled offline without contacting BaoStock."""
+        from unittest.mock import Mock
+        baostock_source._logged_in = True
+        baostock_source._bs = Mock()
+        response = Mock(error_code="0", fields=["date", "code", "open", "high", "low", "close", "volume", "amount"])
+        response.next.return_value = False
+        baostock_source._bs.query_history_k_data_plus.return_value = response
+        assert baostock_source.fetch_ohlcv(StockCode("600000", "SH"), "2026-01-01", "2026-01-31").empty
     
     def test_invalid_adjust_type(self, baostock_source):
         """Test error handling for invalid adjust type."""
@@ -1034,20 +1029,9 @@ class TestEdgeCases:
             )
     
     def test_invalid_stock_code(self):
-        """Test StockCode behavior with unusual input.
-        
-        Note: from_standard doesn't validate - it just splits and defaults.
-        For "invalid", it returns StockCode(code="invalid", exchange="SH").
-        """
-        # Non-standard format - still parses, defaults to SH exchange
-        code = StockCode.from_standard("invalid")
-        assert code.code == "invalid"
-        assert code.exchange == "SH"  # Default exchange
-        
-        # Valid 6-digit code with proper format
-        code = StockCode.from_standard("600000.SH")
-        assert code.code == "600000"
-        assert code.exchange == "SH"
+        """Missing market suffix is rejected instead of defaulting silently."""
+        with pytest.raises(ValueError, match="stock code"):
+            StockCode.from_standard("invalid")
 
 
 # =============================================================================

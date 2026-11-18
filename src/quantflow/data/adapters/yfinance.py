@@ -29,6 +29,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from quantflow.data.base import DataSourceBase, FundamentalData, StockCode
+from quantflow.control import check_cancelled, cancellable_sleep
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +127,18 @@ class YFinanceDataSource(DataSourceBase):
         self._cooldown_base = cooldown_base if cooldown_base is not None else 60
         self._recovery_max_passes = recovery_max_passes if recovery_max_passes is not None else 3
         self._recovery_chunk_size = recovery_chunk_size if recovery_chunk_size is not None else 10
+        self._adjust = "qfq"
+
+    def get_supported_adjusts(self):
+        return ["qfq", "none"]
+
+    def get_supported_periods(self):
+        return ["d", "w", "m"]
+
+    def _validate_request(self, period, adjust):
+        if period not in self.get_supported_periods() or adjust not in self.get_supported_adjusts():
+            raise ValueError(f"Unsupported YFinance request: {period}/{adjust}")
+        check_cancelled()
 
     def get_name(self) -> str:
         return "YFinance"
@@ -156,13 +170,18 @@ class YFinanceDataSource(DataSourceBase):
     ) -> pd.DataFrame:
         import yfinance as yf
 
+        adjust = adjust or "qfq"
+        self._validate_request(period, adjust)
         symbol = self._get_yfinance_symbol(code)
         interval = self.PERIOD_INTERVAL.get(period, "1d")
 
         logger.info(f"Fetching {period} data for {symbol} via YFinance")
 
         ticker = yf.Ticker(symbol, session=self._session)
-        df = ticker.history(start=start_date, end=end_date, interval=interval)
+        df = ticker.history(start=start_date,
+                            end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+                            interval=interval, auto_adjust=adjust == "qfq", timeout=30)
+        check_cancelled()
 
         if df.empty:
             logger.warning(f"No data for {symbol}")
@@ -213,6 +232,7 @@ class YFinanceDataSource(DataSourceBase):
         df_multi = None
         was_rate_limited = False
         for attempt in range(1, max_attempts + 1):
+            check_cancelled()
             logger.info(f"  Download attempt {attempt}/{max_attempts}: {len(yf_symbols)} tickers")
 
             try:
@@ -221,7 +241,8 @@ class YFinanceDataSource(DataSourceBase):
                     df_multi = yf.download(
                         tickers=yf_symbols,
                         start=start_date,
-                        end=end_date,
+                        end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+                        auto_adjust=self._adjust == "qfq",
                         interval=interval,
                         group_by="ticker",
                         threads=True,
@@ -229,6 +250,7 @@ class YFinanceDataSource(DataSourceBase):
                         progress=False,
                         timeout=30,
                     )
+                    check_cancelled()
                 finally:
                     self._restore_yfinance_logs(saved_level)
             except Exception as e:
@@ -236,7 +258,7 @@ class YFinanceDataSource(DataSourceBase):
                 if attempt < max_attempts:
                     delay = base_delay * (2 ** (attempt - 1))
                     logger.warning(f"  Retry in {delay:.0f}s...")
-                    time.sleep(delay)
+                    cancellable_sleep(delay)
                 continue
 
             if df_multi is None or df_multi.empty:
@@ -245,7 +267,7 @@ class YFinanceDataSource(DataSourceBase):
                 if attempt < max_attempts:
                     delay = base_delay * (2 ** (attempt - 1))
                     logger.warning(f"  Retry in {delay:.0f}s...")
-                    time.sleep(delay)
+                    cancellable_sleep(delay)
                 continue
 
             success_count = 0
@@ -269,7 +291,7 @@ class YFinanceDataSource(DataSourceBase):
                 logger.warning(f"  Success rate {success_rate:.0%} < 50% - retrying...")
                 delay = base_delay * (2 ** (attempt - 1))
                 logger.warning(f"  Retry in {delay:.0f}s...")
-                time.sleep(delay)
+                cancellable_sleep(delay)
 
         if df_multi is None or df_multi.empty:
             logger.warning(
@@ -313,7 +335,7 @@ class YFinanceDataSource(DataSourceBase):
 
     def _jitter_sleep(self) -> float:
         duration = random.uniform(self._sleep_min, self._sleep_max)
-        time.sleep(duration)
+        cancellable_sleep(duration)
         return duration
 
     def _retry_with_backoff(
@@ -351,7 +373,7 @@ class YFinanceDataSource(DataSourceBase):
                     f"  Retry attempt {attempt}/{max_attempts} after {delay:.0f}s "
                     f"(error: {type(e).__name__}: {e})"
                 )
-                time.sleep(delay)
+                cancellable_sleep(delay)
 
         return (None, max_attempts, last_error)
 
@@ -377,7 +399,7 @@ class YFinanceDataSource(DataSourceBase):
             for yf_sym, df in sub_result.items():
                 all_results[symbol_to_code[yf_sym]] = df
             if sub_rate_limited:
-                time.sleep(self._cooldown_base)
+                cancellable_sleep(self._cooldown_base)
             elif j + sub_size < len(yf_symbols):
                 self._jitter_sleep()
 
@@ -390,6 +412,8 @@ class YFinanceDataSource(DataSourceBase):
         adjust: Optional[str] = None,
         progress_cb=None,
     ) -> Dict[str, pd.DataFrame]:
+        self._adjust = adjust or "qfq"
+        self._validate_request(period, self._adjust)
         if not self.check_version():
             raise RuntimeError(
                 "Batch OHLCV fetch requires yfinance >= 0.2.30."
@@ -466,7 +490,7 @@ class YFinanceDataSource(DataSourceBase):
                         f"  Rate-limit cooldown: {cooldown:.0f}s "
                         f"(consecutive={consecutive_rate_limits})"
                     )
-                    time.sleep(cooldown)
+                    cancellable_sleep(cooldown)
                 else:
                     sleep_duration = self._jitter_sleep()
                     logger.info(f"  Sleep {sleep_duration:.1f}s...")
@@ -479,7 +503,7 @@ class YFinanceDataSource(DataSourceBase):
                 f"Recovery pass {pass_num}/{self._recovery_max_passes}: "
                 f"{len(missed)} missed tickers"
             )
-            time.sleep(self._cooldown_base)
+            cancellable_sleep(self._cooldown_base)
 
             recovery_chunk = min(self._recovery_chunk_size, len(missed))
             for j in range(0, len(missed), recovery_chunk):
@@ -489,7 +513,7 @@ class YFinanceDataSource(DataSourceBase):
                 for yf_sym, df in chunk_result.items():
                     all_results[symbol_to_code[yf_sym]] = df
                 if j + recovery_chunk < len(missed):
-                    time.sleep(self._cooldown_base)
+                    cancellable_sleep(self._cooldown_base)
 
             remaining = [s for s in yf_symbols if symbol_to_code[s] not in all_results]
             if remaining:
@@ -504,8 +528,12 @@ class YFinanceDataSource(DataSourceBase):
         )
         return all_results
 
-    def fetch_fundamental(self, code: StockCode) -> Optional[FundamentalData]:
+    def fetch_fundamental(self, code: StockCode, as_of=None) -> Optional[FundamentalData]:
         import yfinance as yf
+
+        if as_of and pd.Timestamp(as_of).date() < datetime.now(timezone.utc).date():
+            raise ValueError("YFinance fundamentals are current snapshots, not point-in-time history")
+        check_cancelled()
 
         symbol = self._get_yfinance_symbol(code)
 
@@ -515,8 +543,16 @@ class YFinanceDataSource(DataSourceBase):
 
             return FundamentalData(
                 pe_ttm=info.get("trailingPE"),
+                forward_pe=info.get("forwardPE"),
                 pb=info.get("priceToBook"),
+                ps_ttm=info.get("priceToSalesTrailing12Months"),
                 total_mv=info.get("marketCap"),
+                enterprise_value=info.get("enterpriseValue"),
+                code=code.standard, source="yfinance", currency=info.get("currency"),
+                as_of=datetime.now(timezone.utc).isoformat(),
+                available_at=datetime.now(timezone.utc).isoformat(),
+                source_url=f"https://finance.yahoo.com/quote/{symbol}/",
+                quality_flags=["current_snapshot_only", "financial_statements_not_collected"],
             )
         except Exception as e:
             logger.warning(f"Failed to fetch fundamental for {symbol}: {e}")

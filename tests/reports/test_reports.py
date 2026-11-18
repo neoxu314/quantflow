@@ -287,7 +287,7 @@ class TestMarkdownReporterGenerateCombined:
         assert "- **Total Watched**: 3" in content
         assert "- **Buy Signals**: 1" in content
         assert "- **Sell Signals**: 1" in content
-        assert "- **No Signals**: 1" in content
+        assert "- **No Signals**: unknown" in content
 
 
 class TestMarkdownReporterEdgeCases:

@@ -37,10 +37,13 @@ execution/
 - `Storage`: Handles saving `ExecutionResultItem` to JSON.
   - `ExecutionResultItem`: Now includes `name`, `matched_buy_strategies`, and `matched_sell_strategies` to support Markdown report grouping and resonance analysis. Has `to_dict()` / `from_dict()` so cached results survive checkpoint serialization.
 
-- `Checkpoint` (checkpoint.py): Persists per-task done codes (`work.<task>.done`), cached result dicts (`results.<task>`), a config snapshot, and a `context` map at `~/.quantflow/checkpoints/<run_id>.json`. Atomic save (temp + fsync + `os.replace`). API: `load`/`load_or_create`, `mark_done(task, code, stats, result)`, `get_done`, `get_results`, `set_context`/`get_context`, `copy_to`, `delete`, `summary`. Failed stocks are not marked done (retried); empty-data stocks are marked done (no pointless retry).
+- `Checkpoint` (checkpoint.py): Persists per-task done codes (`work.<task>.done`), cached result dicts (`results.<task>`), a config snapshot, and a `context` map at `~/.quantflow/checkpoints/<run_id>.json`. Atomic save (temp + fsync + `os.replace`). API: `load`/`load_or_create`, `mark_done(task, code, stats, result)`, `get_done`, `get_results`, `set_context`/`get_context`, `copy_to`, `delete`, `summary`. Failed stocks are not marked done (retried); only analyzed stocks are marked done; no-data/stale/error/insufficient stocks remain retryable.
 
 ## CONVENTIONS
 
 - Executor is stateless regarding strategy logic; it only orchestrates the pipeline.
 - Strategies must be fully instantiated before passing to the Job.
 - Checkpoint/resume parameters are optional and default to `None`/`""` so CLI callers and test mocks accepting only `job` remain unaffected.
+## RELIABILITY UPDATE
+
+See project `docs/reliability-and-data-contracts.md`. Executor returns list-compatible ScanResults with per-stock outcomes; indicators and strategy signals are isolated. Snapshot/coverage writes are mandatory and atomic. Resume rejects changed configuration/code and missing input snapshots.

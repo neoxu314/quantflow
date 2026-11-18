@@ -1,3 +1,4 @@
+from tests.web.artifact_fixtures import own_test_artifacts
 """Runs integration: API → DB → API verification."""
 import tempfile
 from pathlib import Path
@@ -285,6 +286,8 @@ class TestRunsAPIDBRoundTrip:
         api_app.include_router(runs_api.router)
         client = TestClient(api_app)
 
+        own_test_artifacts(rid1, d1, [d1 / "a.json"])
+        own_test_artifacts(rid2, d2, [d2 / "b.json"])
         files1 = client.get(f"/api/runs/{rid1}/files").json()
         files2 = client.get(f"/api/runs/{rid2}/files").json()
         names1 = {f["name"] for f in files1["files"]}
@@ -327,6 +330,7 @@ class TestCrossRunTypeFileCleanup:
         (d / "other_file.txt").write_text("user data")
 
         client = TestClient(_make_app(runs_api))
+        own_test_artifacts(rid, d, [d / "600000.SH_indicators.json", d / "data.json"])
         client.delete(f"/api/runs/{rid}")
 
         # Stock scan: only deletes indicator file, not entire directory
@@ -355,6 +359,8 @@ class TestCrossRunTypeFileCleanup:
         user_file.write_text("important data")
 
         client = TestClient(_make_app(runs_api))
+        (d / "report.md").write_text("# Owned report")
+        own_test_artifacts(rid, d, [json_file, d / "report.md", d / "web-test_watchlist.md"])
         client.delete(f"/api/runs/{rid}")
 
         # Directory should still exist (no longer deleting entire directory)
@@ -390,6 +396,7 @@ class TestCrossRunTypeFileCleanup:
         (d / "TR Cleanup.json").write_text("{\"results\": []}")  # Executor output
 
         client = TestClient(_make_app(runs_api))
+        own_test_artifacts(rid, d, [d / "Daily_Report.md", d / "Combined_Results.json", d / "TR Cleanup.json"])
         client.delete(f"/api/runs/{rid}")
 
         # Task outputs deleted
@@ -463,6 +470,7 @@ class TestCrossRunTypeFileCleanup:
             finished_at="2026-05-05T10:00:00Z")
 
         client = TestClient(_make_app(runs_api))
+        own_test_artifacts(rid, d, list(date_dir.glob("*")))
         client.delete(f"/api/runs/{rid}")
 
         # Date subdirectory deleted (task-created)
@@ -504,6 +512,7 @@ class TestCrossRunTypeFileCleanup:
             report_path=str(report_file))
 
         client = TestClient(_make_app(runs_api))
+        own_test_artifacts(rid, d, [indicator_file, report_file])
         client.delete(f"/api/runs/{rid}")
 
         # Verify specific files are deleted

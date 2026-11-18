@@ -80,7 +80,7 @@ class SSEManager:
         self.publish(run_id, "progress", data)
 
     def publish_status(self, run_id: str, status: str, **extra):
-        if status in ("completed", "failed", "cancelled"):
+        if status in ("completed", "partial", "failed", "cancelled", "interrupted"):
             with self._lock:
                 self._last_progress.pop(run_id, None)
         self.publish(run_id, "status", {"status": status, **extra})

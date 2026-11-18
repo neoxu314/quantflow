@@ -24,7 +24,7 @@ class ValidationResult:
 
 def validate_code_fmt(value: str) -> ValidationResult:
     r = ValidationResult()
-    if not re.match(r'^[A-Za-z0-9]{1,10}\.[A-Za-z]{2}$', value):
+    if not re.fullmatch(r'[A-Za-z0-9-]{1,15}\.(SH|SZ|HK|US|T|KS|JP|KR)', value):
         r.fail(f"Invalid stock code format: '{value}'. Expected: NVDA.US, 600519.SH")
         return r
     try:
@@ -97,10 +97,13 @@ def validate_dates(start: Optional[str], end: Optional[str]) -> ValidationResult
     if end and not re.match(date_re, end):
         r.fail("Invalid end_date format")
         return r
-    if start and end:
-        s, e = datetime.strptime(start, "%Y-%m-%d"), datetime.strptime(end, "%Y-%m-%d")
-        if s > e:
+    try:
+        s = datetime.strptime(start, "%Y-%m-%d") if start else None
+        e = datetime.strptime(end, "%Y-%m-%d") if end else None
+        if s and e and s > e:
             r.fail("start_date after end_date")
+    except ValueError:
+        r.fail("Invalid calendar date")
     return r
 
 
@@ -124,6 +127,8 @@ class PreflightChecker:
                                "vol_ma", "brick_chart", "washout"):
                     r.fail(f"Unknown indicator: '{ind}'")
         elif run_type == "watchlist_run":
+            if config.get("days_back") is not None and (not isinstance(config["days_back"], int) or config["days_back"] <= 0):
+                r.fail("days_back must be a positive integer")
             wl = config.get("watchlist")
             if not wl:
                 r.fail("Watchlist path required")

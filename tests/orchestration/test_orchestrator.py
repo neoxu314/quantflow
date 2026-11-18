@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from quantflow.orchestration.app import MarkdownReporter, Orchestrator
+from quantflow.execution.storage import ExecutionResultItem
 
 
 class TestOrchestratorRun:
@@ -51,8 +52,8 @@ tasks:
             t.watchlist_path = str(tmp_path / t.watchlist_path)
             t.output_dir = output_dir
 
-        mock_results = [MagicMock(buy_signals=2, sell_signals=0),
-                        MagicMock(buy_signals=1, sell_signals=1)]
+        mock_results = [ExecutionResultItem("A.US", buy_signals=2, sell_signals=0),
+                        ExecutionResultItem("B.US", buy_signals=1, sell_signals=1)]
         app = Orchestrator(tasks, output_override=output_dir, daily_mode=False)
 
         with patch("quantflow.orchestration.app.Executor.execute") as mock_exec, \
@@ -146,7 +147,7 @@ tasks:
             mock_exec.return_value = []
             app.run()
 
-        json_path = Path(output_dir) / "Combined_Results.json"
+        json_path = app.output_dir / "Combined_Results.json"
         assert json_path.exists()
         data = json.loads(json_path.read_text())
         assert isinstance(data, list)
@@ -270,12 +271,12 @@ class TestOrchestratorPathResolution:
         """Without override, defaults to './output'."""
         app = Orchestrator([], daily_mode=False)
         cfg = MagicMock()
-        assert app._resolve_task_dir(cfg) == "./output"
+        assert app._resolve_task_dir(cfg) == "output"
 
     def test_resolve_combined_dir_fallback_to_reports(self):
         """Without override, defaults to 'reports'."""
         app = Orchestrator([], daily_mode=False)
-        assert app._resolve_combined_dir() == "reports"
+        assert app._resolve_combined_dir() == "output"
 
 
 class TestOrchestratorEmptyTasks:
@@ -356,7 +357,7 @@ tasks:
         def fake_execute(job):
             nonlocal call_count
             call_count += 1
-            return [MagicMock(buy_signals=1, sell_signals=0)]
+            return [ExecutionResultItem("A.US", buy_signals=1, sell_signals=0)]
 
         with patch("quantflow.orchestration.app.Executor.execute", side_effect=fake_execute), \
              patch("quantflow.orchestration.app.MarkdownReporter.generate"), \

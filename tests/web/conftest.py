@@ -4,6 +4,30 @@ import pathlib
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolated_run_state(tmp_path, monkeypatch, request):
+    """API tests never launch unmanaged downloads or reconcile the user's DB.
+
+    Worker lifecycle tests drive _execute_run explicitly and join their threads.
+    Browser E2E owns its server and has a separate fixture hierarchy.
+    """
+    if "e2e" in request.node.path.parts:
+        yield
+        return
+    from quantflow.web.engine import run_history, presets
+    from quantflow.execution import checkpoint
+    from quantflow.web.engine.run_engine import RunEngine
+    from unittest.mock import Mock
+    run_history._ConnectionManager.reset()
+    monkeypatch.setattr(run_history, "DB_PATH", tmp_path / "runs.db")
+    monkeypatch.setattr(run_history, "QUANTFLOW_DIR", tmp_path)
+    monkeypatch.setattr(presets, "PRESETS_DIR", tmp_path / "presets")
+    monkeypatch.setattr(checkpoint, "CHECKPOINT_DIR", tmp_path / "checkpoints")
+    monkeypatch.setattr(RunEngine, "start_processing", Mock())
+    yield
+    run_history._ConnectionManager.reset()
+
+
 @pytest.fixture
 def web_config_yaml_path(tmp_path: pathlib.Path) -> str:
     # Provide a fresh path for tests to write to

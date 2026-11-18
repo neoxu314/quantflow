@@ -27,9 +27,14 @@ class TaskConfig:
                     "Each task must have a unique name."
                 )
             names_seen.add(name)
+            watchlist_path = item['watchlist']
+            if not Path(watchlist_path).is_absolute():
+                candidate = path.resolve().parent / watchlist_path
+                if candidate.exists():
+                    watchlist_path = str(candidate)
             tasks.append(TaskConfig(
                 name=name,
-                watchlist_path=item['watchlist'],
+                watchlist_path=watchlist_path,
                 strategy_names=item.get('strategies', []),
                 days_back=item.get('days_back')
             ))

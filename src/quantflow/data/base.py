@@ -1,7 +1,10 @@
 # src/quantflow/data/base.py
 """Base types and abstract classes for data layer."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+import math
+import re
 from typing import Optional, List
 from abc import ABC, abstractmethod
 import pandas as pd
@@ -32,9 +35,10 @@ class StockCode:
     @classmethod
     def from_standard(cls, code_str: str, name: Optional[str] = None) -> "StockCode":
         """Parse from standard format 600000.SH"""
-        parts = code_str.split(".")
-        code = parts[0]
-        exchange = parts[1] if len(parts) > 1 else "SH"
+        if not isinstance(code_str, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,15}\.(SH|SZ|HK|US|T|KS|JP|KR)", code_str):
+            raise ValueError(f"Invalid standard stock code: {code_str!r}")
+        code, exchange = code_str.rsplit(".", 1)
+        exchange = {"JP": "T", "KR": "KS"}.get(exchange, exchange)
         return cls(code=code, exchange=exchange, name=name)
     
     @classmethod
@@ -61,8 +65,44 @@ class FundamentalData:
     ps_ttm: Optional[float] = None      # 市销率TTM
     roe: Optional[float] = None         # ROE
     debt_ratio: Optional[float] = None  # 资产负债率
-    total_mv: Optional[float] = None    # 总市值(万元)
-    circ_mv: Optional[float] = None     # 流通市值(万元)
+    total_mv: Optional[float] = None    # Base currency units, never 10,000-units
+    circ_mv: Optional[float] = None
+    forward_pe: Optional[float] = None
+    enterprise_value: Optional[float] = None
+    code: Optional[str] = None
+    currency: Optional[str] = None
+    source: Optional[str] = None
+    source_url: Optional[str] = None
+    as_of: Optional[str] = None
+    period_end: Optional[str] = None
+    published_at: Optional[str] = None
+    available_at: Optional[str] = None
+    fetched_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    status: str = "partial"
+    quality_flags: list = field(default_factory=list)
+    units: dict = field(default_factory=lambda: {"total_mv": "currency", "circ_mv": "currency",
+                                                "enterprise_value": "currency", "roe": "ratio",
+                                                "debt_ratio": "ratio"})
+
+    def __post_init__(self):
+        for name in ("pe_ttm", "pb", "ps_ttm", "roe", "debt_ratio", "total_mv", "circ_mv",
+                     "forward_pe", "enterprise_value"):
+            value = getattr(self, name)
+            try:
+                value = float(value) if value is not None else None
+                if value is not None and not math.isfinite(value):
+                    value = None
+            except (TypeError, ValueError):
+                value = None
+            setattr(self, name, value)
+
+    @property
+    def missing_fields(self):
+        return [n for n in ("pe_ttm", "pb", "ps_ttm", "roe", "debt_ratio", "currency",
+                             "period_end", "published_at") if getattr(self, n) is None]
+
+    def to_dict(self):
+        return dict(asdict(self), schema_version=1, missing_fields=self.missing_fields)
 
 
 class DataSourceBase(ABC):

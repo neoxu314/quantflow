@@ -42,9 +42,10 @@ class RSIIndicator(IndicatorBase):
             avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
             avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
 
-            rs = avg_gain / avg_loss.replace(0, np.inf)
+            rs = avg_gain / avg_loss.replace(0, np.nan)
             col = f"RSI{period}"
             df[col] = 100 - (100 / (1 + rs))
-            df[col] = df[col].fillna(50)
+            df[col] = df[col].mask((avg_loss == 0) & (avg_gain > 0), 100)
+            df[col] = df[col].mask((avg_loss == 0) & (avg_gain == 0), 50).fillna(50)
 
         return df

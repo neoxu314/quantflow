@@ -104,3 +104,7 @@ Run: `pytest tests/data/ -m "not integration"` for unit, `-m integration` for ne
 - `DataSourceFactory` accepts `yfinance_config` and `yahooquery_config` dicts to pass adapter parameters
 - `_detect_market()`: Maps exchange suffix to market identifier (SH/SZ→cn, HK→hk, US→us, T→jp, KS→kr). Unknown exchanges log a WARNING and default to `"us"` — supported exchanges: SH, SZ, HK, US, T, KS.
 - `fetch_indices.py` uses `pandas.read_html` and handles User-Agent rotation to bypass 403 errors from Wikipedia.
+
+## 2026-11-18 RELIABILITY CONTRACT
+
+Project `docs/reliability-and-data-contracts.md` supersedes legacy output, adjustment and state details above. Outputs are run-owned manifest artifacts; analyzed/no-data/stale/insufficient/error are distinct. Tushare uses explicit factors and shares, Yahoo adapters reject hfq, and facts preserve units, source and time. Task summaries expose failures. API tests isolate runtime state and do not start unmanaged workers.

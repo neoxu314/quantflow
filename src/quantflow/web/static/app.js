@@ -1,4 +1,4 @@
-import { SETTINGS_FIELD_MAP, getNestedValue, setNestedValue, formatStockCode } from "./utils.js";
+import { SETTINGS_FIELD_MAP, getNestedValue, setNestedValue, formatStockCode, isActiveRunStatus } from "./utils.js";
 const state = {
     watchlists: [],
     selectedWatchlist: null,
@@ -78,7 +78,7 @@ async function loadRuns() {
             if (updated && updated.status !== state.selectedRun?.status) {
                 state.selectedRun = updated;
                 renderRunsDetail(updated);
-                if (updated.status !== "running" && updated.status !== "queued") {
+                if (!isActiveRunStatus(updated.status)) {
                     if (sseSource) {
                         sseSource.close();
                         sseSource = null;
@@ -138,7 +138,7 @@ async function selectRun(runId) {
         const data = await api(`/api/runs/${runId}`);
         state.selectedRun = data.run;
         renderRunsDetail(state.selectedRun);
-        if (data.run.status === "running" || data.run.status === "queued") {
+        if (isActiveRunStatus(data.run.status)) {
             connectSSE(runId);
         }
     }
@@ -199,7 +199,7 @@ function renderConfigTab(run) {
             html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${indNames}</span>`;
         }
         if (run.config?.output_path)
-            html += `<span class="text-gray-500">Output:</span><span class="font-mono text-xs">${run.config.output_path}</span>`;
+            html += `<span class="text-gray-500">Output:</span><span class="font-mono text-xs">${run.output_path || run.config.output_path}</span>`;
     }
     if (run.signal_count) {
         const label = run.run_type === "stock_scan" ? "Bars:" : "Signals:";
@@ -210,7 +210,7 @@ function renderConfigTab(run) {
     html += `</div></div>`;
     html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
         <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(run.config, null, 2)}</pre></details>`;
-    const canResume = (run.status === "failed" || run.status === "cancelled" ||
+    const canResume = (run.status === "failed" || run.status === "partial" || run.status === "cancelled" ||
         run.status === "interrupted") &&
         (run.run_type === "task_run" || run.run_type === "watchlist_run");
     html += `<div class="flex gap-2 mt-4 pt-3 border-t">
@@ -229,6 +229,9 @@ function renderProgressTab(run) {
             <div class="text-lg font-medium">Complete</div>
             ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} ${label}</div>` : ""}</div>`;
     }
+    else if (run.status === "partial") {
+        statusHtml = '<div class="text-center py-2 text-amber-600">Partially complete — review data coverage in the report.</div>';
+    }
     else if (run.status === "failed") {
         statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">❌</div>
             <div class="text-lg font-medium text-red-600">Failed</div>
@@ -239,12 +242,12 @@ function renderProgressTab(run) {
             <div class="text-lg font-medium text-yellow-600">Interrupted</div>
             <div class="text-sm text-gray-500 mt-1">${run.error || "Server restarted while run was active"}</div></div>`;
     }
-    else if (run.status === "running") {
+    else if (["running", "cancelling"].includes(run.status)) {
         statusHtml = `<div class="space-y-1">
             <div class="h-3 bg-gray-200 rounded overflow-hidden">
                 <div id="run-progress-bar" class="h-full bg-blue-500 transition-all" style="width:0%"></div>
             </div>
-            <div id="run-progress-text" class="text-sm text-gray-600">Starting...</div>
+            <div id="run-progress-text" class="text-sm text-gray-600">${run.status === "cancelling" ? "Stopping — waiting for the current request..." : "Starting..."}</div>
         </div>`;
     }
     else {
@@ -262,7 +265,7 @@ function renderProgressTab(run) {
     </div>`;
     panel.innerHTML = statusHtml + logBox;
     loadRealLog(run.id, false);
-    if (run.status === "running") {
+    if (["running", "cancelling"].includes(run.status)) {
         connectSSE(run.id);
         startLogPolling(run.id);
     }
@@ -301,7 +304,7 @@ async function loadRealLog(runId, appendOnly) {
 }
 function renderReportTab(run) {
     const panel = document.getElementById("runtab-report");
-    if (run.status === "running" || run.status === "queued") {
+    if (isActiveRunStatus(run.status)) {
         panel.innerHTML = '<div class="text-gray-500 text-center py-8">Report available after completion</div>';
         return;
     }
@@ -318,7 +321,8 @@ function renderReportTab(run) {
             const ohlcvCols = ["date", "open", "high", "low", "close", "volume"];
             const otherCols = cols.filter(c => !ohlcvCols.includes(c));
             const orderedCols = [...ohlcvCols.filter(c => cols.includes(c)), ...otherCols];
-            let html = `<div class="mb-2 text-sm text-gray-600">Stock: <span class="font-mono font-semibold">${data.code || code}</span>`;
+            let html = data.legacy_warning ? '<div class="text-amber-700 mb-2">This older report may have been replaced by a later run.</div>' : '';
+            html += `<div class="mb-2 text-sm text-gray-600">Stock: <span class="font-mono font-semibold">${data.code || code}</span>`;
             if (run.config?.start_date) {
                 html += ` | Range: <span class="font-mono">${run.config.start_date} → ${run.config.end_date || run.config.start_date}</span>`;
             }
@@ -355,7 +359,8 @@ function renderReportTab(run) {
     api(`/api/runs/${run.id}/report`)
         .then(data => {
         if (data.report) {
-            panel.innerHTML = `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
+            const warning = data.legacy_warning ? '<div class="text-amber-700 mb-2">This older report may have been replaced by a later run.</div>' : '';
+            panel.innerHTML = warning + `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
         }
         else {
             panel.innerHTML = `<div class="text-gray-500 text-center py-8">${data.message || "No content"}</div>`;
@@ -639,7 +644,7 @@ function connectSSE(runId) {
         });
         sseSource.addEventListener("status", async (ev) => {
             const data = JSON.parse(ev.data);
-            if (data.status !== "running") {
+            if (!isActiveRunStatus(data.status)) {
                 if (sseSource)
                     sseSource.close();
                 sseSource = null;
@@ -719,6 +724,10 @@ async function deleteRun(runId) {
     const run = state.runsList.find(r => r.id === runId);
     if (!run)
         return;
+    if (run.status === "running" || run.status === "cancelling") {
+        toast("Cancel the run and wait for it to stop before deleting.");
+        return;
+    }
     const statusMsg = run.status === "running" ? "This will stop the running task." :
         run.status === "queued" ? "This will remove it from the queue." : "";
     if (!confirm(`Delete run "${run.name}"?\n${statusMsg}\nAssociated report file will also be deleted.\n\nThis action cannot be undone.`))

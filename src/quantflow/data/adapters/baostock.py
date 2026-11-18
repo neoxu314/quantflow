@@ -7,8 +7,54 @@ from functools import wraps
 import time
 
 from quantflow.data.base import DataSourceBase, StockCode
+from quantflow.control import check_cancelled, cancellable_sleep
 
 logger = logging.getLogger(__name__)
+
+
+def _bound_socket_io():
+    """Bound only BaoStock's socket factory, not the process-wide socket defaults."""
+    import baostock.util.socketutil as transport
+    if getattr(transport, "_quantflow_bounded", False):
+        return
+    original = transport.socket
+
+    class CheckedSocket:
+        def __init__(self, *args, **kwargs):
+            self.socket = original.socket(*args, **kwargs)
+            self.socket.settimeout(30)
+            self.connected = False
+
+        def __getattr__(self, name):
+            return getattr(self.socket, name)
+
+        def connect(self, *args):
+            check_cancelled()
+            result = self.socket.connect(*args)
+            self.connected = True
+            return result
+
+        def send(self, *args):
+            check_cancelled()
+            if not self.connected:
+                raise ConnectionError("BaoStock connection was not established")
+            return self.socket.send(*args)
+
+        def recv(self, *args):
+            check_cancelled()
+            data = self.socket.recv(*args)
+            if not data:
+                raise ConnectionError("BaoStock socket closed before a complete response")
+            return data
+
+    class SocketProxy:
+        socket = CheckedSocket
+
+        def __getattr__(self, name):
+            return getattr(original, name)
+
+    transport.socket = SocketProxy()
+    transport._quantflow_bounded = True
 
 
 def retry(max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
@@ -20,6 +66,7 @@ def retry(max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
             last_exception = None
             
             while retries < max_retries:
+                check_cancelled()
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
@@ -27,7 +74,7 @@ def retry(max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                     retries += 1
                     if retries < max_retries:
                         logger.warning(f"Retry {retries}/{max_retries}: {e}")
-                        time.sleep(current_delay)
+                        cancellable_sleep(current_delay)
                         current_delay *= backoff
             
             raise last_exception
@@ -51,12 +98,16 @@ class BaoStockDataSource(DataSourceBase):
     
     def supports_market(self, market: str) -> bool:
         return market in ["cn", "A股", "a"]
+
+    def get_supported_periods(self):
+        return ["d", "w", "m"]
     
     def _login(self):
         if self._logged_in:
             return
         
         import baostock as bs
+        _bound_socket_io()
         self._bs = bs
         
         lg = bs.login()
@@ -80,11 +131,14 @@ class BaoStockDataSource(DataSourceBase):
         period: str = "d",
         adjust: Optional[str] = None
     ) -> pd.DataFrame:
-        self._login()
+        if period not in self.get_supported_periods():
+            raise ValueError(f"Unsupported BaoStock period: {period}")
         
         actual_adjust = adjust or self.adjust
         if actual_adjust not in self.ADJUST_MAP:
             raise ValueError(f"Invalid adjust: {actual_adjust}")
+        check_cancelled()
+        self._login()
         
         adjustflag = self.ADJUST_MAP[actual_adjust]
         frequency = self.PERIOD_MAP.get(period, "d")
@@ -125,5 +179,22 @@ class BaoStockDataSource(DataSourceBase):
             df[col] = pd.to_numeric(df[col], errors="coerce")
         
         df = df.sort_values("date").reset_index(drop=True)
+
+        if actual_adjust == "qfq":
+            check_cancelled()
+            last_date = df["date"].iloc[-1].strftime("%Y-%m-%d")
+            raw = self._bs.query_history_k_data_plus(
+                bs_code, "date,close", start_date=last_date, end_date=last_date,
+                frequency=frequency, adjustflag=self.ADJUST_MAP["none"])
+            if raw.error_code != "0" or not raw.next():
+                raise ValueError("Cannot anchor BaoStock qfq to the requested last session")
+            raw_close = float(raw.get_row_data()[1])
+            ratio = raw_close / df["close"].iloc[-1]
+            if not pd.notna(ratio) or ratio <= 0:
+                raise ValueError("Invalid BaoStock adjustment anchor")
+            df[["open", "high", "low", "close"]] *= ratio
+
+        df.attrs.update(source="baostock", adjust=actual_adjust, volume_unit="shares",
+                        adjustment_anchor=df["date"].iloc[-1].strftime("%Y-%m-%d"))
         
         return df[["date", "open", "high", "low", "close", "volume"]]

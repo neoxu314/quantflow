@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 
+class QueueFullError(ValueError):
+    pass
+
+
 @dataclass
 class QueueState:
     active_run_id: Optional[str] = None
@@ -36,7 +40,7 @@ class RunQueue:
                     self._on_available(run_id)
                 return True
             if len(self._pending) >= self._max:
-                return False
+                raise QueueFullError("Run queue is full")
             self._pending.append(run_id)
             self._total_queued += 1
             return False
@@ -52,6 +56,14 @@ class RunQueue:
                     self._on_available(nxt)
                 return nxt
             return None
+
+    def finish(self, run_id: str) -> Optional[str]:
+        """Only the owner can finish the active slot, exactly once."""
+        with self._lock:
+            if self._active != run_id:
+                return None
+            self._active = self._pending.popleft() if self._pending else None
+            return self._active
 
     def get_state(self) -> QueueState:
         with self._lock:

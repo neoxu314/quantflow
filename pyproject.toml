@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Stock Quantitative Analysis System"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
@@ -20,12 +20,14 @@ dependencies = [
     "pyyaml>=6.0",
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
+    "exchange-calendars>=4.13.3,<5",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "ruff>=0.8",
 ]
 viz = [
     "matplotlib>=3.7.0",

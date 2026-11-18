@@ -1,3 +1,4 @@
+from tests.web.artifact_fixtures import own_test_artifacts
 """Tests for Runs API endpoints."""
 import sys
 from pathlib import Path
@@ -154,6 +155,8 @@ class TestDeleteRunApi:
             RunQueue(), h, SSEManager())
         runs_api._set_engine(engine)
 
+        h.update_status(rid, "completed", output_path=str(tmp_path))
+        own_test_artifacts(rid, tmp_path, [report_file])
         client.delete(f"/api/runs/{rid}")
         assert not report_file.exists()
 
@@ -231,6 +234,7 @@ class TestDeleteRunApi:
         runs_api._set_engine(engine)
         
         # Delete the run
+        own_test_artifacts(rid, output_dir, [task_report, combined_json, task_md, task_json])
         resp = client.delete(f"/api/runs/{rid}")
         assert resp.json()["ok"] is True
         
@@ -310,6 +314,7 @@ class TestDeleteRunApi:
         runs_api._set_engine(engine)
         
         # Delete the run
+        own_test_artifacts(rid, output_dir, [task_report, combined_json, task_json])
         resp = client.delete(f"/api/runs/{rid}")
         assert resp.json()["ok"] is True
         
@@ -428,6 +433,7 @@ class TestFilesEndpoint:
         h = run_history.RunHistory()
         h.update_status(rid, "completed", output_path=str(output_dir))
         
+        own_test_artifacts(rid, output_dir, [json_file, md_file])
         files_resp = client.get(f"/api/runs/{rid}/files")
         assert files_resp.status_code == 200
         files = files_resp.json()["files"]
@@ -705,18 +711,13 @@ class TestCancelRunEndpoint:
         r2 = client.post(f"/api/runs/{rid}/cancel")
         assert r2.json()["ok"] is True
         run = h.get_run(rid)
-        assert run.status == "cancelled"
+        assert run.status == "cancelling"
 
     def test_cancel_nonexistent_run(self, client):
-        """Cancel for a run not in queue returns 200 (queue.active != run_id).
-        
-        NOTE: The cancel endpoint creates a cancelled status record even for
-        nonexistent run IDs because queue.active (None) != the fake run_id.
-        This is a known API issue — cancel should first verify the run exists.
-        """
+        """Nonexistent runs return 404 and do not mutate any history record."""
         r = client.post("/api/runs/fake-id/cancel")
-        assert r.status_code == 200
-        assert r.json()["ok"] is True
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Run not found"
 
 
 class TestBuildConfigFunction:
@@ -753,12 +754,14 @@ class TestBuildConfigFunction:
             "watchlist": "watchlists/djia.yaml",
             "strategies": ["daily_bull_oversold"],
             "output_path": "/tmp/output",
+            "days_back": None,
         }
         result = _build_config("watchlist_run", body)
         assert result == {
             "watchlist": "watchlists/djia.yaml",
             "strategies": ["daily_bull_oversold"],
             "output_path": "/tmp/output",
+            "days_back": None,
         }
 
     def test_build_config_task_run(self):

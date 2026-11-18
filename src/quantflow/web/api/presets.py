@@ -86,9 +86,11 @@ def run_from_preset(pid: str):
     run_id = engine._history.create_run(
         preset.name, preset.run_type, preset.config,
         preset_id=pid)
-    became_active = engine._queue.enqueue(run_id)
-    if became_active:
-        engine.start_processing(run_id)
+    from quantflow.web.engine.run_queue import QueueFullError
+    try:
+        became_active = engine.enqueue(run_id)
+    except QueueFullError as exc:
+        raise HTTPException(status_code=429, detail=str(exc))
     return {
         "ok": True, "run_id": run_id,
         "status": "active" if became_active else "queued",

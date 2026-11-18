@@ -10,7 +10,7 @@ from quantflow.data.config import MarketDataSourceConfig
 
 class ConfigLoader:
 
-    DEFAULT_CONFIG_PATH = "config/quantflow.yaml"
+    DEFAULT_CONFIG_PATH = str(Path(__file__).resolve().parents[3] / "config/quantflow.yaml")
 
     def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or self.DEFAULT_CONFIG_PATH
@@ -35,16 +35,17 @@ class ConfigLoader:
         data_config = config.get("data", {})
         markets = data_config.get("markets", {})
 
-        primary = {}
-        fallback = {}
-        fundamental = {}
+        defaults = MarketDataSourceConfig()
+        primary = dict(defaults.primary)
+        fallback = dict(defaults.fallback)
+        fundamental = dict(defaults.fundamental)
 
         for market, mc in markets.items():
             if mc.get("primary"):
                 primary[market] = mc["primary"]
-            if mc.get("fallback"):
+            if "fallback" in mc:
                 fallback[market] = mc["fallback"]
-            if mc.get("fundamental"):
+            if "fundamental" in mc:
                 fundamental[market] = mc["fundamental"]
 
         return MarketDataSourceConfig(
@@ -52,6 +53,19 @@ class ConfigLoader:
             fallback=fallback,
             fundamental=fundamental
         )
+
+    def get_adjust(self) -> str:
+        adjust = self.load().get("data", {}).get("defaults", {}).get("adjust", "qfq")
+        if adjust not in ("qfq", "hfq", "none"):
+            raise ValueError(f"Invalid default adjustment: {adjust}")
+        return adjust
+
+    def create_data_factory(self):
+        from quantflow.data.factory import DataSourceFactory
+        return DataSourceFactory(config=self.get_data_config(),
+                                 tushare_token=self.get_tushare_token(),
+                                 yfinance_config=self.get_yfinance_config(),
+                                 yahooquery_config=self.get_yahooquery_config())
 
     def get_tushare_token(self) -> Optional[str]:
         import os

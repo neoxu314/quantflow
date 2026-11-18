@@ -53,89 +53,45 @@ class TestCLIArgumentParsing:
             task_run()
 
     def test_stock_scan_accepts_optional_params(self, tmp_path):
-        """Optional params (--start, --end, --indicator) should parse correctly."""
-        sys.argv = [
-            "quantflow.cli",
-            "--code", "NVDA.US",
-            "--start", "2026-01-01",
-            "--end", "2026-04-30",
-            "--indicator", "kdj,macd",
-        ]
-
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_factory.return_value.fetch_ohlcv.return_value = (
-                MagicMock(empty=False), "yfinance"
-            )
-            mock_factory.return_value._latest_date.return_value = "2026-04-30"
-
-            with patch("quantflow.cli.IndicatorComposer") as mock_composer:
-                mock_composer.return_value.compose.return_value = MagicMock()
-
-                from quantflow.cli import stock_scan
-                stock_scan()
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "NVDA.US", "--output", str(tmp_path), "--start", "2026-01-01", "--end", "2026-04-30", "--indicator", "kdj,macd"]
+        with patch("quantflow.execution.scanner.scan_stock", side_effect=_stub_scan) as scan:
+            assert stock_scan() == 0
+        assert scan.call_args.args[0]["indicators"] == ["kdj", "macd"]
 
     def test_watchlist_run_accepts_optional_strategies_param(self, tmp_path):
-        """--strategies param should parse comma-separated IDs."""
-        watchlist_file = tmp_path / "test_watchlist.yaml"
-        watchlist_file.write_text(
-            "name: 'TestWL'\nitems:\n  - code: 'NVDA.US'\n"
-        )
-
-        sys.argv = [
-            "quantflow.cli",
-            "--watchlist", str(watchlist_file),
-            "--strategies", "daily_bull_oversold,daily_bull_mid_range",
-            "--output", str(tmp_path),
-        ]
-
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-
-            from quantflow.cli import watchlist_run
-            watchlist_run()
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path), "--strategies", "daily_bull_oversold,daily_bull_mid_range"]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishOversold", "DailyBullishMidRange"]
+        assert job.days_back > 0
 
     def test_watchlist_run_accepts_days_back_override(self, tmp_path):
-        """--days-back should override auto-calculated lookback."""
-        watchlist_file = tmp_path / "test_watchlist.yaml"
-        watchlist_file.write_text(
-            "name: 'TestWL'\nitems:\n  - code: 'NVDA.US'\n"
-        )
-
-        sys.argv = [
-            "quantflow.cli",
-            "--watchlist", str(watchlist_file),
-            "--days-back", "500",
-            "--output", str(tmp_path),
-        ]
-
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-
-            from quantflow.cli import watchlist_run
-            watchlist_run()
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path), "--days-back", "500"]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishOversold", "DailyBullishMidRange"]
+        assert job.days_back == 500
 
     def test_task_run_accepts_daily_mode_flag(self, tmp_path):
-        """--daily flag should enable daily mode."""
-        task_file = tmp_path / "test_tasks.yaml"
-        task_file.write_text(
-            "tasks:\n  - name: 'TestTask'\n    watchlist: './test.yaml'\n    strategies: ['daily_bull_oversold']\n    output: './output'\n"
-        )
-        (tmp_path / "test.yaml").write_text(
-            "name: 'TestWL'\nitems:\n  - code: 'NVDA.US'\n"
-        )
-
-        sys.argv = [
-            "quantflow.cli",
-            "--config", str(task_file),
-            "--output", str(tmp_path),
-            "--daily",
-        ]
-
-        with patch("quantflow.orchestration.app.Orchestrator.run") as mock_run:
-            mock_run.return_value = 0
-
-            from quantflow.cli import task_run
-            task_run()
+        from quantflow.cli import task_run
+        wl = tmp_path / "wl.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        tasks = tmp_path / "tasks.yaml"
+        tasks.write_text("tasks:\n- name: scan\n  watchlist: wl.yaml\n  strategies: [daily_bull_oversold]\n")
+        sys.argv = ["cli", "--config", str(tasks), "--output", str(tmp_path), "--daily"]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute):
+            assert task_run() == 0
+        assert len(list(tmp_path.glob("*/runs/*/logs/task_run_*.log"))) == 1
+        assert len(list(tmp_path.glob("*/runs/*/Daily_Report.md"))) == 1
 
 
 class TestCLICommandRouting:
@@ -194,78 +150,45 @@ class TestCLICommandRouting:
 class TestCLIIndicatorParsing:
     """Test indicator string parsing logic."""
 
-    def test_indicator_string_split(self):
-        """'kdj,macd' should split into ['kdj', 'macd']."""
-        sys.argv = [
-            "quantflow.cli",
-            "--code", "NVDA.US",
-            "--indicator", "kdj,macd",
-        ]
+    def test_indicator_string_split(self, tmp_path):
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "NVDA.US", "--output", str(tmp_path), "--indicator", "kdj,macd"]
+        with patch("quantflow.execution.scanner.scan_stock", side_effect=_stub_scan) as scan:
+            assert stock_scan() == 0
+        assert scan.call_args.args[0]["indicators"] == ["kdj", "macd"]
 
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_factory.return_value.fetch_ohlcv.return_value = (
-                MagicMock(empty=False), "yfinance"
-            )
-            mock_factory.return_value._latest_date.return_value = "2026-04-30"
-
-            with patch("quantflow.cli.IndicatorComposer") as mock_composer:
-                mock_composer.return_value.compose.return_value = MagicMock()
-
-                from quantflow.cli import stock_scan
-                stock_scan()
-
-    def test_default_indicator_is_kdj_dual_line(self):
-        """Default --indicator should be 'kdj,dual_line'."""
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_factory.return_value.fetch_ohlcv.return_value = (
-                MagicMock(empty=False), "yfinance"
-            )
-            mock_factory.return_value._latest_date.return_value = "2026-04-30"
-
-            sys.argv = ["quantflow.cli", "--code", "NVDA.US"]
-
-            with patch("quantflow.cli.IndicatorComposer") as mock_composer:
-                mock_composer.return_value.compose.return_value = MagicMock()
-
-                from quantflow.cli import stock_scan
-                stock_scan()
+    def test_default_indicator_is_kdj_dual_line(self, tmp_path):
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "NVDA.US", "--output", str(tmp_path)]
+        with patch("quantflow.execution.scanner.scan_stock", side_effect=_stub_scan) as scan:
+            assert stock_scan() == 0
+        assert scan.call_args.args[0]["indicators"] == ["kdj", "dual_line"]
 
 
 class TestCLIStrategyParsing:
     """Test strategy ID string parsing."""
 
     def test_strategy_string_split(self, tmp_path):
-        """'daily_bull_oversold,daily_bull_mid_range' should parse correctly."""
-        watchlist_file = tmp_path / "test.yaml"
-        watchlist_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
-
-        sys.argv = [
-            "quantflow.cli",
-            "--watchlist", str(watchlist_file),
-            "--strategies", "daily_bull_oversold,daily_bull_mid_range",
-        ]
-
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-
-            from quantflow.cli import watchlist_run
-            watchlist_run()
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path), "--strategies", "daily_bull_mid_range"]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishMidRange"]
+        assert job.days_back > 0
 
     def test_default_strategies(self, tmp_path):
-        """Default strategies should be 'daily_bull_oversold,daily_bull_mid_range'."""
-        watchlist_file = tmp_path / "test.yaml"
-        watchlist_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
-
-        sys.argv = [
-            "quantflow.cli",
-            "--watchlist", str(watchlist_file),
-        ]
-
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-
-            from quantflow.cli import watchlist_run
-            watchlist_run()
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path)]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishOversold", "DailyBullishMidRange"]
+        assert job.days_back > 0
 
 
 @pytest.mark.integration
@@ -415,91 +338,50 @@ class TestCLILogFile:
     """Test that CLI run commands create log files."""
 
     def test_stock_scan_creates_log_file(self, tmp_path):
-        import pandas as pd
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_df = pd.DataFrame({
-                "date": ["2026-04-30"], "open": [100.0], "high": [105.0],
-                "low": [95.0], "close": [100.0], "volume": [1000000],
-            })
-            mock_factory.return_value.fetch_ohlcv.return_value = (mock_df, "yfinance")
-            mock_factory.return_value._latest_date.return_value = "2026-04-30"
-            sys.argv = ["quantflow.cli", "--code", "NVDA.US",
-                        "--start", "2026-04-01", "--end", "2026-04-30",
-                        "--output", str(tmp_path)]
-            from quantflow.cli import stock_scan
-            stock_scan()
-        log_dir = tmp_path / "logs"
-        assert log_dir.exists()
-        log_files = list(log_dir.glob("stock_scan_NVDA.US_*.log"))
-        assert len(log_files) == 1
-        content = log_files[0].read_text()
-        assert "Scan Result for NVDA.US" in content
-        assert "Data source:" in content
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "NVDA.US", "--output", str(tmp_path)]
+        with patch("quantflow.execution.scanner.scan_stock", side_effect=_stub_scan):
+            assert stock_scan() == 0
+        logs = list(tmp_path.glob("runs/*/logs/stock_scan_*.log"))
+        assert len(logs) == 1
+        assert "Saved 1 bars" in logs[0].read_text()
 
     def test_watchlist_run_creates_log_file(self, tmp_path):
-        watchlist_file = tmp_path / "test.yaml"
-        watchlist_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-            with patch("quantflow.reports.markdown.MarkdownReporter.generate") as mock_report:
-                mock_report.return_value = str(tmp_path / "report.md")
-            sys.argv = ["quantflow.cli", "--watchlist", str(watchlist_file),
-                        "--output", str(tmp_path)]
-            from quantflow.cli import watchlist_run
-            watchlist_run()
-        log_dir = tmp_path / "logs"
-        assert log_dir.exists()
-        log_files = list(log_dir.glob("watchlist_run_WL_*.log"))
-        assert len(log_files) == 1
-        content = log_files[0].read_text()
-        assert "Execution complete" in content
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path)]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishOversold", "DailyBullishMidRange"]
+        assert len(list(tmp_path.glob("runs/*/logs/watchlist_run_*.log"))) == 1
 
     def test_task_run_creates_log_file(self, tmp_path):
-        task_file = tmp_path / "test_tasks.yaml"
-        wl_file = tmp_path / "test.yaml"
-        wl_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
-        task_file.write_text(
-            "tasks:\n  - name: 'TestTask'\n    watchlist: 'test.yaml'\n"
-            "    strategies: ['daily_bull_oversold']\n    output: './output'\n"
-        )
-        with patch("quantflow.orchestration.app.Orchestrator.run") as mock_run:
-            mock_run.return_value = 0
-            sys.argv = ["quantflow.cli", "--config", str(task_file),
-                        "--output", str(tmp_path)]
-            from quantflow.cli import task_run
-            task_run()
-        log_dir = tmp_path / "logs"
-        assert log_dir.exists()
-        log_files = list(log_dir.glob("task_run_test_tasks_*.log"))
-        assert len(log_files) == 1
+        from quantflow.cli import task_run
+        wl = tmp_path / "wl.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        tasks = tmp_path / "tasks.yaml"
+        tasks.write_text("tasks:\n- name: scan\n  watchlist: wl.yaml\n  strategies: [daily_bull_oversold]\n")
+        sys.argv = ["cli", "--config", str(tasks), "--output", str(tmp_path), "--daily"]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute):
+            assert task_run() == 0
+        assert len(list(tmp_path.glob("*/runs/*/logs/task_run_*.log"))) == 1
+        assert len(list(tmp_path.glob("*/runs/*/Daily_Report.md"))) == 1
 
 
 class TestCLIErrorHandling:
     """Test CLI error handling and messages."""
 
-    def test_stock_scan_invalid_code_format(self):
-        """Invalid stock code should still attempt fetch (error from data layer)."""
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_factory.return_value.fetch_ohlcv.return_value = (
-                MagicMock(empty=True), "yfinance"
-            )
+    def test_stock_scan_invalid_code_format(self, tmp_path):
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "INVALID_CODE", "--output", str(tmp_path)]
+        assert stock_scan() == 1
 
-            sys.argv = ["quantflow.cli", "--code", "INVALID_CODE"]
-
-            from quantflow.cli import stock_scan
-            stock_scan()
-
-    def test_watchlist_run_invalid_watchlist_path(self):
-        """Invalid watchlist path should raise error."""
-        sys.argv = [
-            "quantflow.cli",
-            "--watchlist",
-            "/nonexistent/path.yaml",
-        ]
-
+    def test_watchlist_run_invalid_watchlist_path(self, tmp_path):
         from quantflow.cli import watchlist_run
-        with pytest.raises(FileNotFoundError):
-            watchlist_run()
+        sys.argv = ["cli", "--watchlist", "/nonexistent/path.yaml", "--output", str(tmp_path)]
+        assert watchlist_run() == 1
 
     def test_task_run_invalid_config_path(self):
         """Invalid task config path should log error and not raise."""
@@ -517,78 +399,26 @@ class TestCLIOutputFormat:
     """Test CLI output format and messages."""
 
     def test_stock_scan_output_format(self, tmp_path):
-        """stock_scan output should have expected format."""
-        import pandas as pd
-
-        mock_df = pd.DataFrame({
-            "date": ["2026-04-30"],
-            "open": [100.0],
-            "high": [105.0],
-            "low": [95.0],
-            "close": [100.0],
-            "volume": [1000000],
-        })
-
-        with patch("quantflow.cli.DataSourceFactory") as mock_factory:
-            mock_factory.return_value.fetch_ohlcv.return_value = (
-                mock_df, "yfinance"
-            )
-            mock_factory.return_value._latest_date.return_value = "2026-04-30"
-
-            sys.argv = [
-                "quantflow.cli",
-                "--code",
-                "NVDA.US",
-                "--start",
-                "2026-04-01",
-                "--end",
-                "2026-04-30",
-                "--output",
-                str(tmp_path),
-            ]
-
-            from quantflow.cli import stock_scan
-            stock_scan()
-
-        log_dir = tmp_path / "logs"
-        assert log_dir.exists()
-        log_files = list(log_dir.glob("stock_scan_NVDA.US_*.log"))
-        assert len(log_files) == 1
-        content = log_files[0].read_text()
-        assert "Scan Result for NVDA.US" in content
-        assert "Date range:" in content
-        assert "Data source:" in content
+        from quantflow.cli import stock_scan
+        sys.argv = ["cli", "--code", "NVDA.US", "--output", str(tmp_path)]
+        with patch("quantflow.execution.scanner.scan_stock", side_effect=_stub_scan):
+            assert stock_scan() == 0
+        path = next(tmp_path.glob("runs/*/NVDA.US_indicators.json"))
+        data = json.loads(path.read_text())
+        assert data[0]["date"] == "2026-04-30"
+        assert {"K", "D", "J", "close"} <= set(data[0])
+        assert not (tmp_path / "NVDA.US_indicators.json").exists()
 
     def test_watchlist_run_output_format(self, tmp_path):
-        """watchlist_run output should have expected format."""
-        watchlist_file = tmp_path / "test.yaml"
-        watchlist_file.write_text("name: 'WL'\nitems:\n  - code: 'NVDA.US'\n")
-
-        with patch("quantflow.execution.executor.Executor.execute") as mock_exec:
-            mock_exec.return_value = []
-
-            with patch("quantflow.reports.markdown.MarkdownReporter.generate") as mock_report:
-                mock_report.return_value = str(tmp_path / "report.md")
-
-            sys.argv = [
-                "quantflow.cli",
-                "--watchlist",
-                str(watchlist_file),
-                "--output",
-                str(tmp_path),
-            ]
-
-            from quantflow.cli import watchlist_run
-            watchlist_run()
-
-        log_dir = tmp_path / "logs"
-        assert log_dir.exists()
-        log_files = list(log_dir.glob("watchlist_run_WL_*.log"))
-        assert len(log_files) == 1
-        content = log_files[0].read_text()
-        assert "Execution complete" in content
-        assert "signals saved" in content
-        assert "Report:" in content
+        from quantflow.cli import watchlist_run
+        wl = tmp_path / "watch.yaml"
+        wl.write_text("name: WL\nitems:\n- code: NVDA.US\n")
+        sys.argv = ["cli", "--watchlist", str(wl), "--output", str(tmp_path)]
+        with patch("quantflow.execution.executor.Executor.execute", side_effect=_stub_execute) as execute:
+            assert watchlist_run() == 0
+        job = execute.call_args.args[0]
+        assert [s.name for s in job.strategies] == ["DailyBullishOversold", "DailyBullishMidRange"]
+        assert json.loads((Path(job.output_dir) / "cli-WL.json").read_text()) == []
 
 
 @pytest.mark.integration
@@ -760,3 +590,16 @@ class TestCLITaskRunWithExpectedValues:
         """
         # Placeholder - will be implemented with expected data
         pass
+
+def _stub_scan(cfg, output):
+    from quantflow.artifacts import atomic_json
+    path = Path(output) / f"{cfg['code']}_indicators.json"
+    atomic_json(path, [{"date": "2026-04-30", "close": 100.0, "K": 35., "D": 40., "J": 25.}])
+    return str(path), 1, {"source": "mock"}
+
+
+def _stub_execute(job, **kwargs):
+    from quantflow.execution.storage import ScanResults, StockOutcome, Storage
+    results = ScanResults([], [StockOutcome(item.code.standard, "no_signal") for item in job.items])
+    Storage().save_results(Path(job.output_dir) / f"{job.name}.json", results)
+    return results

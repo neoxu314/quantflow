@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_run_created ON run_history(created_at DESC);
 
 RUN_TYPES = ("stock_scan", "watchlist_run", "task_run")
 STATUSES = ("queued", "running", "completed", "failed", "cancelled",
-            "interrupted")
+            "interrupted", "cancelling", "partial")
 
 # Added after the initial release: keep old databases working without a
 # destructive migration. Applied on every connection open, idempotently.
@@ -148,6 +148,11 @@ class RunHistory:
         values.append(run_id)
         with _ConnectionManager._lock:
             conn = _ConnectionManager.get()
+            current = conn.execute("SELECT status FROM run_history WHERE id = ?", (run_id,)).fetchone()
+            if current is None:
+                return
+            if current[0] in ("cancelled", "interrupted", "cancelling") and status in ("running", "completed", "partial"):
+                return
             conn.execute(
                 f"UPDATE run_history SET {', '.join(fields)} WHERE id = ?",
                 values)
@@ -203,7 +208,7 @@ class RunHistory:
             cursor = conn.execute(
                 "UPDATE run_history SET status = 'interrupted', "
                 "finished_at = ?, error = ? "
-                "WHERE status IN ('queued', 'running')",
+                "WHERE status IN ('queued', 'running', 'cancelling')",
                 (now, "Interrupted: server restarted while run was active"))
             conn.commit()
         if cursor.rowcount:

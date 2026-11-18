@@ -62,3 +62,7 @@ Individual data source implementations, each extending `DataSourceBase`. 5 adapt
 - Do NOT instantiate adapters directly - use `DataSourceFactory`
 - Do NOT hardcode API credentials - use env vars or config
 - Do NOT skip retry logic on network calls
+
+## 2026-11-18 RELIABILITY CONTRACT
+
+Project `docs/reliability-and-data-contracts.md` supersedes legacy output, adjustment and state details above. Outputs are run-owned manifest artifacts; analyzed/no-data/stale/insufficient/error are distinct. Tushare uses explicit factors and shares, Yahoo adapters reject hfq, and facts preserve units, source and time. Task summaries expose failures. API tests isolate runtime state and do not start unmanaged workers.

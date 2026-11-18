@@ -1,0 +1,173 @@
+"""API-to-worker contracts for cancellation, output ownership and failure states."""
+import json
+import threading
+from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from quantflow.artifacts import atomic_json, create_run_directory, finish_manifest
+from quantflow.execution.storage import ScanResults, StockOutcome
+from quantflow.web.api import runs
+from quantflow.web.engine import RunHistory, RunQueue, SSEManager
+from quantflow.web.engine.run_engine import RunEngine
+from quantflow.web.engine.run_queue import QueueFullError
+
+
+@pytest.fixture
+def env(tmp_path,monkeypatch):
+    history,queue,sse=RunHistory(),RunQueue(),SSEManager()
+    engine=RunEngine(queue,history,sse)
+    monkeypatch.setattr(runs._get_engine,'_instance',engine,raising=False)
+    app=FastAPI(); app.include_router(runs.router)
+    wl=tmp_path/'watch.yaml';wl.write_text('name: watch\nitems:\n- code: AAPL.US\n')
+    return engine,TestClient(app),tmp_path,wl
+
+
+def create(engine,root,wl,kind='watchlist_run'):
+    cfg={'watchlist':str(wl),'output_path':str(root),'strategies':['daily_bull_oversold']}
+    rid=engine._history.create_run('test',kind,cfg)
+    engine._queue.enqueue(rid)
+    return rid
+
+
+def test_cancel_waits_for_worker_before_queue_handoff(env,monkeypatch):
+    engine,client,root,wl=env
+    a=create(engine,root,wl);b=create(engine,root,wl);c=create(engine,root,wl)
+    entered,release=threading.Event(),threading.Event()
+    def execute(*args,**kwargs):
+        entered.set()
+        assert release.wait(5)
+        return ScanResults([], [StockOutcome('AAPL.US','no_signal')])
+    monkeypatch.setattr('quantflow.execution.executor.Executor.execute',execute)
+    reporter=Mock();monkeypatch.setattr('quantflow.reports.markdown.MarkdownReporter.generate',reporter)
+    worker=threading.Thread(target=engine._execute_run,args=(a,));worker.start()
+    assert entered.wait(5)
+    response=client.post(f'/api/runs/{a}/cancel')
+    assert response.json()['status']=='cancelling'
+    assert engine._queue.active==a
+    assert client.delete(f'/api/runs/{a}').status_code==409
+    engine.start_processing.assert_not_called()
+    release.set();worker.join(5);assert not worker.is_alive()
+    assert engine._history.get_run(a).status=='cancelled'
+    reporter.assert_not_called()
+    engine.start_processing.assert_called_once_with(b)
+    assert engine._queue.active==b
+    assert engine._queue.finish(a) is None
+    assert engine._queue.active==b
+    manifest=Path(engine._history.get_run(a).output_path)/'manifest.json'
+    assert json.loads(manifest.read_text())['status']=='cancelled'
+
+
+def test_initialization_failure_releases_queue_and_persists_failed(env,monkeypatch):
+    engine,client,root,wl=env
+    a=create(engine,root,wl); b=create(engine,root,wl)
+    def fail(*a):raise OSError('logging setup failed')
+    monkeypatch.setattr('quantflow.web.engine.run_engine.setup_logging',fail)
+    engine._execute_run(a)
+    assert engine._history.get_run(a).status=='failed'
+    engine.start_processing.assert_called_once_with(b)
+    assert engine._queue.active==b
+    assert not engine._workers
+
+
+@pytest.mark.parametrize('status', ['partial','failed','completed'])
+def test_worker_persists_actual_coverage_state(env,monkeypatch,status):
+    engine,client,root,wl=env
+    rid=create(engine,root,wl)
+    outcomes={'completed':[StockOutcome('AAPL.US','no_signal')],
+              'failed':[StockOutcome('AAPL.US','no_data')],
+              'partial':[StockOutcome('AAPL.US','no_signal'),StockOutcome('B.US','error')]}
+    monkeypatch.setattr('quantflow.execution.executor.Executor.execute',
+                        lambda *a,**k: ScanResults([],outcomes[status]))
+    engine._execute_run(rid)
+    record=engine._history.get_run(rid)
+    assert record.status==status
+    summary=json.loads((Path(record.output_path)/'Run_Summary.json').read_text())
+    assert summary['status']==status
+    assert engine._queue.active is None
+    assert Path(record.report_path).is_file()
+
+
+def test_old_run_deletion_does_not_touch_newer_run(env):
+    engine,client,root,wl=env
+    ids=[]
+    for name in ['old','new']:
+        rid=engine._history.create_run(name,'stock_scan',{})
+        output=create_run_directory(root,rid)
+        atomic_json(output/'AAPL.US_indicators.json',{'run':name})
+        finish_manifest(output,'completed')
+        engine._history.update_status(rid,'completed',output_path=str(output),
+                                      report_path=str(output/'AAPL.US_indicators.json'))
+        ids.append(rid)
+    assert client.delete(f'/api/runs/{ids[0]}').json()['ok']
+    new=engine._history.get_run(ids[1])
+    assert json.loads(Path(new.report_path).read_text())=={'run':'new'}
+    assert client.get(f'/api/runs/{ids[1]}/files').json()['files'][0]['name']=='AAPL.US_indicators.json'
+
+
+def test_legacy_delete_preserves_shared_report(env):
+    engine,client,root,wl=env
+    p=root/'Daily_Report.md';p.write_text('newest report')
+    rid=engine._history.create_run('legacy','task_run',{})
+    engine._history.update_status(rid,'completed',output_path=str(root),report_path=str(p))
+    assert client.delete(f'/api/runs/{rid}').json()['ok']
+    assert p.read_text()=='newest report'
+
+
+def test_cancel_unknown_or_completed_run_is_rejected(env):
+    engine,client,root,wl=env
+    assert client.post('/api/runs/unknown/cancel').status_code==404
+    rid=engine._history.create_run('finished','stock_scan',{})
+    engine._history.update_status(rid,'completed')
+    assert client.post(f'/api/runs/{rid}/cancel').status_code==400
+    assert engine._history.get_run(rid).status=='completed'
+
+
+def test_cancel_pending_never_advances_active_slot(env):
+    engine,client,root,wl=env
+    a=create(engine,root,wl);b=create(engine,root,wl)
+    assert client.post(f'/api/runs/{b}/cancel').json()['status']=='cancelled'
+    assert engine._queue.active==a
+    engine.start_processing.assert_not_called()
+
+
+def test_queue_full_rejects_without_orphan_record(env):
+    engine,client,root,wl=env
+    engine._queue=RunQueue(max_pending=0)
+    create(engine,root,wl)
+    before=len(engine._history.list_runs())
+    response=client.post('/api/runs/',json={'run_type':'watchlist_run','watchlist':str(wl)})
+    assert response.status_code==429
+    assert len(engine._history.list_runs())==before
+
+
+def test_terminal_cancellation_cannot_be_overwritten(env):
+    engine,client,root,wl=env
+    rid=engine._history.create_run('cancelled','watchlist_run',{})
+    engine._history.update_status(rid,'cancelled')
+    engine._history.update_status(rid,'completed')
+    assert engine._history.get_run(rid).status=='cancelled'
+
+
+def test_legacy_report_is_explicitly_unverified(env):
+    engine,client,root,wl=env
+    p=root/'shared.md';p.write_text('possibly newer report')
+    rid=engine._history.create_run('legacy','watchlist_run',{})
+    engine._history.update_status(rid,'completed',report_path=str(p),output_path=str(root))
+    data=client.get(f'/api/runs/{rid}/report').json()
+    assert data['report']=='possibly newer report'
+    assert 'cannot be verified' in data['legacy_warning']
+
+
+def test_owned_report_has_no_legacy_warning(env):
+    from quantflow.artifacts import atomic_text
+    engine,client,root,wl=env
+    rid=engine._history.create_run('owned','watchlist_run',{})
+    output=create_run_directory(root,rid)
+    p=output/'report.md';atomic_text(p,'owned report')
+    finish_manifest(output,'completed')
+    engine._history.update_status(rid,'completed',report_path=str(p),output_path=str(output))
+    assert client.get(f'/api/runs/{rid}/report').json()['legacy_warning'] is None

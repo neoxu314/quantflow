@@ -5,6 +5,7 @@ import {
     getNestedValue,
     setNestedValue,
     formatStockCode,
+    isActiveRunStatus,
 } from "@utils";
 
 describe("MARKET_SUFFIX", () => {
@@ -67,11 +68,11 @@ describe("SETTINGS_FIELD_MAP", () => {
     });
 
     it("maps log-level to correct path", () => {
-        expect(SETTINGS_FIELD_MAP["cfg-log-level"]).toBe("logging.level");
+        expect(SETTINGS_FIELD_MAP["cfg-log-console-level"]).toBe("logging.console_level");
     });
 
     it("has expected number of field mappings", () => {
-        expect(Object.keys(SETTINGS_FIELD_MAP).length).toBe(25);
+        expect(Object.keys(SETTINGS_FIELD_MAP).length).toBe(28);
     });
 });
 
@@ -248,5 +249,14 @@ describe("formatStockCode", () => {
 
     it("handles already formatted code with unknown market", () => {
         expect(formatStockCode("AAPL.US", "UNKNOWN")).toBe("AAPL.US");
+    });
+});
+
+describe("run lifecycle states", () => {
+    it.each(["queued", "running", "cancelling"])("keeps %s active", status => {
+        expect(isActiveRunStatus(status)).toBe(true);
+    });
+    it.each(["completed", "partial", "failed", "cancelled", "interrupted"])("finishes %s", status => {
+        expect(isActiveRunStatus(status)).toBe(false);
     });
 });

@@ -11,3 +11,6 @@ class ExecutionJob:
     strategies: List[Any]
     output_dir: str
     days_back: int = 365
+    end_date: str = None
+    as_of: str = None
+    adjust: str = None

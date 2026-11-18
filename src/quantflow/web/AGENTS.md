@@ -91,3 +91,7 @@ web/
 - Do NOT bypass PreflightChecker for run validation
 - Do NOT write tests that modify production data (watchlists/, config/)
 - Do NOT use production file paths in test code (use tmp_path)
+
+## 2026-11-18 RELIABILITY CONTRACT (supersedes legacy delete/output details above)
+
+Use per-run manifest ownership; do not reload task/watchlist config to infer files. Preserve legacy shared files without manifests. Active runs must finish cancelling before deletion. Show partial status and actual artifact output_path; cancelling remains active for polling. See project docs/reliability-and-data-contracts.md.

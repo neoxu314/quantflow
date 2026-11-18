@@ -7,9 +7,20 @@ from datetime import datetime
 
 from .base import Reporter
 from quantflow.execution.storage import ExecutionResultItem
+from quantflow.artifacts import atomic_text, safe_name
 
 
 class MarkdownReporter(Reporter):
+    @staticmethod
+    def _coverage_lines(summary):
+        if not isinstance(summary, dict):
+            return ["- **Coverage**: unknown (legacy results)", "- **No Signals**: unknown"]
+        return [f"- **Status**: {summary['status']}",
+                f"- **Successfully Analyzed**: {summary['analyzed']}/{summary['total']}",
+                f"- **Coverage**: {summary['coverage']:.1%}",
+                f"- **No Signals**: {summary['no_signal']}",
+                *[f"- **{key}**: {summary[key]}" for key in
+                  ("no_data", "stale", "suspended", "insufficient", "error")]]
     def _get_stock_info(self, watchlist):
         tag_map = {}
         for item in watchlist.items:
@@ -50,8 +61,8 @@ class MarkdownReporter(Reporter):
             header = f"### {buy_label} - {group_name} ({len(group_items)})"
             lines.append(header)
             
-            lines.append("| Code | Name | Market | Resonance | Reasons | Tags |")
-            lines.append("|---|---|---|---|---|---|")
+            lines.append("| Code | Name | Market | Bar Date | Source | Close | Resonance | Reasons | Tags |")
+            lines.append("|---|---|---|---|---|---|---|---|---|")
             
             for item in group_items:
                 info = stock_map.get(item.code, {"market": "-", "tags": [], "name": ""})
@@ -61,7 +72,10 @@ class MarkdownReporter(Reporter):
                 resonance = f"x{count}" if count > 1 else "-"
                 reasons = "; ".join(item.reasons)
                 tags = ", ".join(info.get("tags", [])) or "-"
-                lines.append(f"| {item.code} | {display_name} | {info['market']} | {resonance} | {reasons} | {tags} |")
+                close = f"{item.price:.4f}" if item.price is not None else "-"
+                lines.append(f"| {item.code} | {display_name} | {info['market']} | "
+                             f"{item.bar_date or '-'} | {item.source or '-'} | {close} | "
+                             f"{resonance} | {reasons} | {tags} |")
         
         return lines
 
@@ -93,8 +107,8 @@ class MarkdownReporter(Reporter):
             "\n## Statistics",
             f"- **Buy Signals**: {len(buy_items)}",
             f"- **Sell Signals**: {len(sell_items)}",
-            f"- **No Signals**: {max(0, total_watched - len(results))}",
         ]
+        lines.extend(self._coverage_lines(getattr(results, "summary", None)))
 
         if buy_items:
             lines.extend(self._render_signal_groups(buy_items, "buy", stock_map))
@@ -103,11 +117,14 @@ class MarkdownReporter(Reporter):
             lines.extend(self._render_signal_groups(sell_items, "sell", stock_map))
 
         lines.append("\n## ⚠️ Data Availability")
-        lines.append(f"- Stocks without data or signals: {max(0, total_watched - len(results))}")
+        for outcome in getattr(results, "outcomes", []):
+            if outcome.status not in ("signal", "no_signal"):
+                lines.append(f"- {outcome.code}: {outcome.status}; latest={outcome.bar_date}; "
+                             f"expected={outcome.expected_session}; {outcome.error or ''}")
 
         os.makedirs(output_dir, exist_ok=True)
-        file_path = os.path.join(output_dir, f"{task_name}.md")
-        Path(file_path).write_text("\n".join(lines))
+        file_path = os.path.join(output_dir, f"{safe_name(task_name)}.md")
+        atomic_text(file_path, "\n".join(lines))
         return file_path
 
     def generate_combined(
@@ -115,6 +132,7 @@ class MarkdownReporter(Reporter):
         date_str: str,
         task_runs: list[tuple],
         output_dir: str,
+        summary=None,
     ) -> str:
         """Generate a combined report for multiple tasks."""
         total_buys = 0
@@ -142,7 +160,9 @@ class MarkdownReporter(Reporter):
         lines.append(f"- **Total Watched**: {total_watched}")
         lines.append(f"- **Buy Signals**: {total_buys}")
         lines.append(f"- **Sell Signals**: {total_sells}")
-        lines.append(f"- **No Signals**: {total_no_signal}")
+        lines.extend(self._coverage_lines(summary))
+        for error in (summary or {}).get("task_errors", []):
+            lines.append(f"- **Failed Task**: {error['task']}: {error['error']}")
 
         for name, results, watchlist, strategies in task_runs:
             stock_map = self._get_stock_info(watchlist)
@@ -164,5 +184,5 @@ class MarkdownReporter(Reporter):
 
         os.makedirs(output_dir, exist_ok=True)
         file_path = os.path.join(output_dir, "Daily_Report.md")
-        Path(file_path).write_text("\n".join(lines))
+        atomic_text(file_path, "\n".join(lines))
         return file_path

@@ -171,6 +171,9 @@ class Checkpoint:
     def is_done(self, task_key: str, code: str) -> bool:
         return code in self.get_done(task_key)
 
+    def get_stats(self, task_key: str, code: str) -> dict:
+        return dict(self._data.get("work", {}).get(task_key, {}).get("done", {}).get(code, {}))
+
     def mark_done(self, task_key: str, code: str,
                   stats: Optional[dict] = None,
                   result: Optional[dict] = None) -> None:
@@ -181,6 +184,7 @@ class Checkpoint:
             if result is not None:
                 results = self._data.setdefault("results", {}).setdefault(
                     task_key, [])
+                results[:] = [r for r in results if r.get("code") != code]
                 results.append(result)
             # Persist every unit — a hard kill can happen at any moment.
             self.save()

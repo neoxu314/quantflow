@@ -35,6 +35,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from quantflow.data.base import DataSourceBase, FundamentalData, StockCode
+from quantflow.control import check_cancelled, cancellable_sleep
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,17 @@ class YahooQueryDataSource(DataSourceBase):
     def get_name(self) -> str:
         return "YahooQuery"
 
+    def get_supported_adjusts(self):
+        return ["qfq", "none"]
+
+    def get_supported_periods(self):
+        return ["d", "w", "m"]
+
+    def _validate_request(self, period, adjust):
+        if period not in self.get_supported_periods() or adjust not in self.get_supported_adjusts():
+            raise ValueError(f"Unsupported YahooQuery request: {period}/{adjust}")
+        check_cancelled()
+
     def supports_market(self, market: str) -> bool:
         return market in ["us", "hk", "jp", "kr", "美股", "港股", "日本", "韩国"]
 
@@ -162,15 +175,19 @@ class YahooQueryDataSource(DataSourceBase):
     ) -> pd.DataFrame:
         from yahooquery import Ticker
 
+        adjust = adjust or "qfq"
+        self._validate_request(period, adjust)
         symbol = self._get_yahooquery_symbol(code)
         interval = self.PERIOD_INTERVAL.get(period, "1d")
         adj_ohlc = adjust == "qfq"
 
         logger.info(f"Fetching {period} data for {symbol} via YahooQuery")
 
-        ticker = Ticker(symbol, asynchronous=False)
+        ticker = Ticker(symbol, asynchronous=False, timeout=30)
         raw = ticker.history(
-            start=start_date, end=end_date, interval=interval, adj_ohlc=adj_ohlc
+            start=start_date,
+            end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+            interval=interval, adj_ohlc=adj_ohlc
         )
 
         if raw is None or raw.empty:
@@ -188,13 +205,14 @@ class YahooQueryDataSource(DataSourceBase):
         adjust: Optional[str] = None,
         progress_cb=None,
     ) -> Dict[str, pd.DataFrame]:
+        self._validate_request(period, adjust or "qfq")
         if not codes:
             return {}
 
         from yahooquery import Ticker
 
         interval = self.PERIOD_INTERVAL.get(period, "1d")
-        adj_ohlc = adjust == "qfq"
+        adj_ohlc = (adjust or "qfq") == "qfq"
 
         symbol_to_code: Dict[str, str] = {}
         yq_symbols: List[str] = []
@@ -257,10 +275,11 @@ class YahooQueryDataSource(DataSourceBase):
     ) -> Optional[pd.DataFrame]:
         for attempt in range(1, self._MAX_RETRIES + 1):
             try:
-                ticker = ticker_cls(yq_sym, asynchronous=False)
+                check_cancelled()
+                ticker = ticker_cls(yq_sym, asynchronous=False, timeout=30)
                 raw = ticker.history(
                     start=start_date,
-                    end=end_date,
+                    end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
                     interval=interval,
                     adj_ohlc=adj_ohlc,
                 )
@@ -277,7 +296,7 @@ class YahooQueryDataSource(DataSourceBase):
                 )
 
             if attempt < self._MAX_RETRIES:
-                time.sleep(self._RETRY_DELAY)
+                cancellable_sleep(self._RETRY_DELAY)
 
         return None
 
@@ -312,11 +331,15 @@ class YahooQueryDataSource(DataSourceBase):
 
     def _jitter_sleep(self) -> float:
         duration = random.uniform(self._sleep_min, self._sleep_max)
-        time.sleep(duration)
+        cancellable_sleep(duration)
         return duration
 
-    def fetch_fundamental(self, code: StockCode) -> Optional[FundamentalData]:
+    def fetch_fundamental(self, code: StockCode, as_of=None) -> Optional[FundamentalData]:
         from yahooquery import Ticker
+
+        if as_of and pd.Timestamp(as_of).date() < datetime.now(timezone.utc).date():
+            raise ValueError("YahooQuery fundamentals do not support point-in-time history")
+        check_cancelled()
 
         symbol = self._get_yahooquery_symbol(code)
 
@@ -330,16 +353,20 @@ class YahooQueryDataSource(DataSourceBase):
             sd = summary_detail.get(symbol, {}) if isinstance(summary_detail, dict) else {}
 
             pe_ttm = sd.get("trailingPE") or ks.get("trailingPE")
-            if pe_ttm is None:
-                pe_ttm = ks.get("forwardPE")
 
             pb = ks.get("priceToBook") or sd.get("priceToBook")
-            total_mv = sd.get("marketCap") or ks.get("enterpriseValue")
+            total_mv = sd.get("marketCap")
 
             return FundamentalData(
                 pe_ttm=pe_ttm,
                 pb=pb,
                 total_mv=total_mv,
+                forward_pe=ks.get("forwardPE"), enterprise_value=ks.get("enterpriseValue"),
+                code=code.standard, source="yahooquery", currency=sd.get("currency"),
+                as_of=datetime.now(timezone.utc).isoformat(),
+                available_at=datetime.now(timezone.utc).isoformat(),
+                source_url=f"https://finance.yahoo.com/quote/{symbol}/",
+                quality_flags=["current_snapshot_only", "financial_statements_not_collected"],
             )
         except Exception as e:
             logger.warning(f"Failed to fetch fundamental for {symbol}: {e}")

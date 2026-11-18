@@ -1,5 +1,8 @@
 # Quantflow
 
+> **2026-11-18 运行与数据契约更新**：每次CLI/Web运行现在写入 `<output>/runs/<run_id>/`；daily模式为 `<output>/<date>/runs/<run_id>/`。报告区分成功、缺数据、过期和失败，新增partial/cancelling状态；CLI部分完成/失败返回非零。旧的扁平输出路径示例需要加run目录。详见[结果可靠性与数据契约](docs/reliability-and-data-contracts.md)，该说明优先于下文历史路径与数据源差异描述。
+
+
 Stock Quantitative Analysis System for A-share, US, HK, KR, and JP markets.
 
 ## Architecture
