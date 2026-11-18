@@ -11,7 +11,7 @@ web/
 │   ├── tasks.py         # GET/POST/PUT/DELETE tasks (NO output field)
 │   ├── config.py        # GET/PUT system config
 │   ├── library.py       # Strategy/indicator catalog, parameter updates
-│   ├── runs.py          # Run CRUD, safe delete, SSE logs, indicator data, files
+│   ├── runs.py          # Run CRUD, safe delete, file logs + SSE, checkpoint/resume, indicator data, files
 │   ├── presets.py       # Preset CRUD + run from preset
 │   └── browse.py        # Directory browsing + mkdir
 ├── engine/              # Core execution engine
@@ -29,7 +29,7 @@ web/
 ```
 
 ## KEY COMPONENTS
-- `create_app()`: Wires all API routers, initializes RunEngine/RunHistory/RunQueue/SSEManager, mounts static files
+- `create_app()`: Wires all API routers, initializes RunEngine/RunHistory/RunQueue/SSEManager, mounts static files, and calls `RunHistory.reconcile_stale_runs()` once at startup to mark orphaned `running`/`queued` runs as `interrupted`
 - `start_server()`: Loads WebConfig, opens browser, starts uvicorn
 - `updateCliPreview()`: Real-time CLI command preview generator for New Run modal (all run types)
 - Architecture: API routes are stateless; RunEngine manages execution state via SQLite + in-memory queue
@@ -56,7 +56,14 @@ web/
   - stock_scan: Deletes indicator JSON only
   - watchlist_run: Deletes Executor JSON + Markdown report
   - task_run: Deletes Daily_Report.md, Combined_Results.json, and per-task files
+  - Also removes the run's checkpoint file (`~/.quantflow/checkpoints/<run_id>.json`)
 - **Safety**: Does NOT delete entire directory to prevent user file loss
+
+### Logs & Resume Endpoints
+- `GET /api/runs/{id}/logs?tail=N` — returns the real on-disk log file (`run_history.log_path`), `tail=0` for full text. Progress tab polls this (2s while running); it is the same content as `<output>/logs/*.log`, NOT the SSE summary events.
+- `GET /api/runs/{id}/checkpoint` — checkpoint summary (exists / done count / updated_at).
+- `POST /api/runs/{id}/resume` — resumes a `watchlist_run`/`task_run` in `failed|cancelled|interrupted`: creates a new run, copies the checkpoint (`resumed_from`), returns 400 for other types/states. `stock_scan` is not resumable.
+- `GET /api/runs/{id}/logs:sse` — SSE `progress` events (bar) + `log` summary events; the frontend no longer feeds summary logs into the black log box.
 
 ### tasks.py (Task Management)
 - Task YAML format: **NO output field** (controlled by CLI/Web `--output`)

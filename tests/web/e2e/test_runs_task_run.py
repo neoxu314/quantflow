@@ -326,18 +326,20 @@ class TestRunsTaskRunWorkflow:
         page.click('[data-runtab="progress"]')
         page.wait_for_selector("#run-log-container", state="visible", timeout=15000)
 
+        # The log box now renders the real on-disk log as plain text via
+        # textContent (not child elements), so assert on its text length.
         page.wait_for_function(
             "() => {\n"
             "    const container = document.getElementById('run-log-container');\n"
-            "    return container && container.children.length > 0;\n"
+            "    return container && (container.textContent || '').trim().length > 0;\n"
             "}",
             timeout=30000,
         )
 
-        log_count = page.evaluate(
-            "() => document.getElementById('run-log-container')?.children.length || 0"
+        log_text = page.evaluate(
+            "() => (document.getElementById('run-log-container')?.textContent || '').trim()"
         )
-        assert log_count > 0, "Progress tab should show log entries during execution"
+        assert len(log_text) > 0, "Progress tab should show log text during execution"
 
     def test_files_tab_isolated_per_run(self, page: Page, base_url: str):
         setup_test_task_config(base_url)

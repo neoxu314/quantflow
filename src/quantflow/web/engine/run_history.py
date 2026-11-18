@@ -21,14 +21,19 @@ CREATE TABLE IF NOT EXISTS run_history (
     config TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL,
     started_at TEXT, finished_at TEXT, duration_ms INTEGER, error TEXT,
     output_path TEXT, report_path TEXT, signal_count INTEGER DEFAULT 0,
-    preset_id TEXT
+    preset_id TEXT, log_path TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_run_status ON run_history(status);
 CREATE INDEX IF NOT EXISTS idx_run_created ON run_history(created_at DESC);
 """
 
 RUN_TYPES = ("stock_scan", "watchlist_run", "task_run")
-STATUSES = ("queued", "running", "completed", "failed", "cancelled")
+STATUSES = ("queued", "running", "completed", "failed", "cancelled",
+            "interrupted")
+
+# Added after the initial release: keep old databases working without a
+# destructive migration. Applied on every connection open, idempotently.
+_MIGRATIONS = ("ALTER TABLE run_history ADD COLUMN log_path TEXT",)
 
 
 @dataclass
@@ -47,15 +52,19 @@ class RunRecord:
     report_path: Optional[str] = None
     signal_count: int = 0
     preset_id: Optional[str] = None
+    log_path: Optional[str] = None
 
 
 def _row_to_record(row: tuple) -> RunRecord:
+    # tolerate older rows written before log_path existed
+    log_path = row[14] if len(row) > 14 else None
     return RunRecord(
         id=row[0], name=row[1], run_type=row[2], config=json.loads(row[3]),
         status=row[4], created_at=row[5], started_at=row[6],
         finished_at=row[7], duration_ms=row[8], error=row[9],
         output_path=row[10], report_path=row[11],
         signal_count=row[12] or 0, preset_id=row[13],
+        log_path=log_path,
     )
 
 
@@ -74,6 +83,16 @@ class _ConnectionManager:
                                    check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_INIT_SQL)
+            # Idempotent forward migrations for databases created by older
+            # versions (which lack newer optional columns).
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(run_history)")}
+            for ddl in _MIGRATIONS:
+                col = ddl.split("ADD COLUMN ")[1].split()[0]
+                if col not in cols:
+                    try:
+                        conn.execute(ddl)
+                    except sqlite3.OperationalError:
+                        pass
             conn.commit()
             cls._conn = conn
             return conn
@@ -116,7 +135,7 @@ class RunHistory:
         fields = ["status = ?"]
         values: list = [status]
         for key in ("started_at", "finished_at", "error",
-                     "output_path", "report_path"):
+                     "output_path", "report_path", "log_path"):
             if key in kwargs and kwargs[key] is not None:
                 fields.append(f"{key} = ?")
                 values.append(kwargs[key])
@@ -167,3 +186,27 @@ class RunHistory:
                 "DELETE FROM run_history WHERE id = ?", (run_id,))
             conn.commit()
         return cursor.rowcount > 0
+
+    def reconcile_stale_runs(self) -> int:
+        """Mark runs left in a non-terminal state by a previous server
+        process (e.g. laptop lid closed / hard restart) as ``interrupted``.
+
+        Called once at server startup.  Only ``queued`` and ``running`` are
+        affected; a run actively executing in this process is never touched
+        because this runs before the engine starts processing anything.
+
+        Returns the number of rows updated.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with _ConnectionManager._lock:
+            conn = _ConnectionManager.get()
+            cursor = conn.execute(
+                "UPDATE run_history SET status = 'interrupted', "
+                "finished_at = ?, error = ? "
+                "WHERE status IN ('queued', 'running')",
+                (now, "Interrupted: server restarted while run was active"))
+            conn.commit()
+        if cursor.rowcount:
+            logger.info("Reconciled %d stale run(s) to 'interrupted'",
+                        cursor.rowcount)
+        return cursor.rowcount

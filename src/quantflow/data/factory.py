@@ -168,6 +168,7 @@ class DataSourceFactory:
         end_date: str,
         period: str = "d",
         adjust: str = "qfq",
+        progress_cb=None,
     ) -> Dict[str, tuple[pd.DataFrame, Optional[str]]]:
         if not codes:
             return {}
@@ -185,12 +186,33 @@ class DataSourceFactory:
         all_results: Dict[str, tuple[pd.DataFrame, Optional[str]]] = {}
         failed_codes: List[StockCode] = []
 
+        total_codes = sum(len(g) for g in source_groups.values())
+        done_codes = 0
+
         for source_name, group_codes in source_groups.items():
             adapter = self._get_adapter(source_name)
             try:
+                # Forward a progress callback only when the adapter accepts
+                # one and the caller supplied it. The wrapper maps each
+                # adapter-local index onto a global count across sources.
+                call_kwargs = {}
+                if progress_cb is not None:
+                    import inspect
+                    try:
+                        accepts = "progress_cb" in inspect.signature(
+                            adapter.fetch_batch_ohlcv).parameters
+                    except (TypeError, ValueError):
+                        accepts = False
+                    if accepts:
+                        def _wrap(local_idx, _local_total, code,
+                                  _base=done_codes):
+                            progress_cb(_base + local_idx, total_codes, code)
+                        call_kwargs["progress_cb"] = _wrap
                 batch_result = adapter.fetch_batch_ohlcv(
-                    group_codes, start_date, end_date, period, adjust
+                    group_codes, start_date, end_date, period, adjust,
+                    **call_kwargs
                 )
+                done_codes += len(group_codes)
                 success_count = len(batch_result)
                 for code_str, df in batch_result.items():
                     all_results[code_str] = (df, source_name)

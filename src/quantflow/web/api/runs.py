@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from queue import Empty
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 from quantflow.web.engine.preflight import PreflightChecker
 from quantflow.web.engine.run_engine import RunEngine
@@ -32,7 +36,7 @@ def list_runs(status: Optional[str] = None, limit: int = 50,
               offset: int = 0):
     runs = _get_engine()._history.list_runs(
         status=status, limit=limit, offset=offset)
-    return {"runs": [_to_dict(r) for r in runs], "total": len(runs)}
+    return {"runs": [_with_log_path(r) for r in runs], "total": len(runs)}
 
 
 @router.get("/queue")
@@ -80,7 +84,7 @@ def get_run(run_id: str):
     if not run:
         raise HTTPException(status_code=404,
                             detail=f"Run {run_id} not found")
-    return {"run": _to_dict(run)}
+    return {"run": _with_log_path(run)}
 
 
 @router.post("/{run_id}/cancel")
@@ -143,6 +147,9 @@ def delete_run(run_id: str):
 
     engine._history.delete_run(run_id)
     engine._sse.disconnect_all(run_id)
+    # Remove the resume checkpoint associated with this run (if any).
+    from quantflow.execution.checkpoint import Checkpoint
+    Checkpoint(run_id).delete()
 
     return {"ok": True}
 
@@ -305,6 +312,97 @@ def _delete_watchlist_run_outputs(run, output_dir: Path):
             json_file.unlink()
 
 
+@router.get("/{run_id}/logs")
+def get_log_file(run_id: str, tail: int = 500):
+    """Return the real on-disk log file for a run.
+
+    Unlike the SSE ``log`` events (human-readable summaries published to the
+    live UI), this is the actual Python logging output written to
+    ``<output>/logs/*.log``.  By default the last ``tail`` lines are returned;
+    pass ``tail=0`` for the complete file.
+    """
+    run = _get_engine()._history.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    log_path = Path(run.log_path) if run.log_path else None
+    if log_path is None or not log_path.exists():
+        return {
+            "path": str(log_path) if log_path else None,
+            "content": "",
+            "exists": False,
+            "message": ("Log file not configured for this run"
+                        if log_path is None else "Log file not found"),
+        }
+    try:
+        content = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return {"path": str(log_path), "content": "", "exists": False,
+                "message": f"Cannot read log: {e}"}
+    if tail and tail > 0:
+        lines = content.splitlines()
+        if len(lines) > tail:
+            content = "\n".join(lines[-tail:])
+    return {"path": str(log_path), "content": content,
+            "exists": True, "tail": tail}
+
+
+@router.get("/{run_id}/checkpoint")
+def get_checkpoint(run_id: str):
+    """Return checkpoint status for a run (for the Resume button/UI)."""
+    from quantflow.execution.checkpoint import Checkpoint
+    run = _get_engine()._history.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Not found")
+    cp = Checkpoint.load(run_id)
+    if cp is None:
+        return {"exists": False, "can_resume": False,
+                "reason": "no_checkpoint"}
+    summary = cp.summary()
+    # A completed run has nothing left to resume.
+    return {"exists": True, "can_resume": run.status in
+            ("failed", "cancelled", "interrupted", "running"),
+            "summary": summary}
+
+
+@router.post("/{run_id}/resume")
+def resume_run(run_id: str):
+    """Create a new run that continues from ``run_id``'s checkpoint.
+
+    Only runs that are in a terminal (but incomplete) state can be resumed.
+    A new run record is created with ``resume_from`` set, preserving the
+    original in the history list.
+    """
+    from quantflow.execution.checkpoint import Checkpoint
+    engine = _get_engine()
+    original = engine._history.get_run(run_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Not found")
+    if original.status not in ("failed", "cancelled", "interrupted"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run in status '{original.status}' cannot be resumed")
+    if original.run_type not in ("watchlist_run", "task_run"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Run type '{original.run_type}' does not support resume")
+
+    config = dict(original.config)
+    config["resume_from"] = run_id
+    new_id = engine._history.create_run(
+        f"{original.name} (resume)", original.run_type, config,
+        preset_id=original.preset_id)
+    # Copy the original checkpoint forward so completed items are skipped.
+    if not Checkpoint.copy_to(run_id, new_id):
+        logger.warning("No checkpoint found for run %s on resume", run_id)
+
+    became_active = engine._queue.enqueue(new_id)
+    if became_active:
+        engine.start_processing(new_id)
+    return {"ok": True, "run_id": new_id, "resumed_from": run_id,
+            "status": "active" if became_active else "queued"}
+
+
 @router.get("/{run_id}/report")
 def get_report(run_id: str):
     run = _get_engine()._history.get_run(run_id)
@@ -402,10 +500,18 @@ async def stream_logs(run_id: str):
 
     async def _gen():
         loop = asyncio.get_event_loop()
+        # Send a keepalive comment on timeout so proxies/browsers don't close
+        # an idle stream. queue.Empty is NOT a reason to end the stream —
+        # ending it here silently dropped all progress/log events for runs
+        # with >1s gaps between events (e.g. network-bound stock fetches).
         try:
             while True:
-                msg = await loop.run_in_executor(
-                    None, q.get, True, 1.0)
+                try:
+                    msg = await loop.run_in_executor(
+                        None, q.get, True, 1.0)
+                except Empty:
+                    yield ": keepalive\n\n"
+                    continue
                 if msg is _DISCONNECTED:
                     break
                 if isinstance(msg, dict):
@@ -413,6 +519,8 @@ async def stream_logs(run_id: str):
                         f"event: {msg['event']}\n"
                         f"data: {json.dumps(msg['data'])}\n\n"
                     )
+        except asyncio.CancelledError:
+            raise
         except Exception:
             pass
         finally:
@@ -455,6 +563,11 @@ def _auto_name(run_type: str, config: dict) -> str:
         return f"{Path(wl).stem} Monitor"
     tp = config.get("task_config", "")
     return f"{Path(tp).stem} Task"
+
+
+def _with_log_path(run) -> dict:
+    """Serialize a run, exposing the real on-disk log path to the Web UI."""
+    return {**_to_dict(run), "log_path": getattr(run, "log_path", None)}
 
 
 def _to_dict(run):

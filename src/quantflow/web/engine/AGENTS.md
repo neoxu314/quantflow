@@ -1,5 +1,5 @@
 ## OVERVIEW
-Core execution engine for the Web UI. Manages run lifecycle: creation  queuing  execution  history. Runs stock_scan, watchlist_run, and task_run in background threads with real-time SSE progress reporting. Calls `setup_logging()` at run start for persistent log files.
+Core execution engine for the Web UI. Manages run lifecycle: creation  queuing  execution  history. Runs stock_scan, watchlist_run, and task_run in background threads with real-time SSE progress reporting. Calls `setup_logging()` at run start for persistent log files (path persisted to `run_history.log_path`). Supports checkpoint resume and startup reconciliation of orphaned runs.
 
 ## STRUCTURE
 ```
@@ -20,6 +20,8 @@ engine/
 - Date handling: stock_scan fetches data from `fetch_start` (user start_date minus lookback warmup) to `end_date`, then trims result to user-specified date range using `df["date"]` column filter
 - Cancellation: `CancellationFlag` per run, checked between stock processing
 - Progress: calls `on_progress` callback with `ProgressEvent` objects (type=current/total/code/message/level)
+- Checkpoint: `_exec_watchlist_run()` / `_exec_task_run()` load or create a `Checkpoint` for the run and pass it into `Executor` / `Orchestrator`; a resumed run reuses the copied checkpoint. Checkpoint is deleted on terminal state (completed/failed/cancelled) and on run delete.
+- Log path: `setup_logging()` result is written back via `history.update_status(..., log_path=...)` so the Progress tab can read the real file.
 
 ## Output Logic (Unified)
 
@@ -54,8 +56,11 @@ Note: job.name uses hyphen instead of colon for Windows compatibility
 
 ### RunHistory (run_history.py)
 - SQLite-backed persistent storage at `~/.quantflow/runs.db`
-- `RunRecord` dataclass: id, name, run_type, config, status, timestamps, signal_count, output_path, report_path, error
-- Methods: `create_run()`, `get_run()`, `list_runs()`, `update_status()`, `delete_run()`
+- `RunRecord` dataclass: id, name, run_type, config, status, timestamps, signal_count, output_path, report_path, error, log_path, preset_id
+- Statuses (`STATUSES`): `queued`, `running`, `completed`, `failed`, `cancelled`, `interrupted`
+- Schema is migrated in place (idempotent `ALTER TABLE` for `log_path`); old DBs without the column upgrade transparently
+- Methods: `create_run()`, `get_run()`, `list_runs()`, `update_status()`, `delete_run()`, `reconcile_stale_runs()`
+- `reconcile_stale_runs()` — called once at `create_app()` startup; flips leftover `running`/`queued` rows to `interrupted` with `finished_at` + an explanatory `error`.
 
 ### RunQueue (run_queue.py)
 - In-memory queue with active/pending states
@@ -86,9 +91,11 @@ Note: job.name uses hyphen instead of colon for Windows compatibility
 
 ## CONVENTIONS
 - RunEngine singleton pattern: API modules call `_set_engine()` / `_get_engine()` from server.py
-- SSE event types: `log`, `progress`, `status` — each carries a JSON payload
+- SSE event types: `log`, `progress`, `status` — each carries a JSON payload. `SSEManager` keeps a last-progress snapshot for late subscribers and enforces monotonic progress
+- The black log box reads the real log file via `GET /api/runs/{id}/logs`; SSE `log` events are summary-only and are NOT rendered there (avoids duplicate/inconsistent lines)
 - Validation is synchronous and fast; no network calls in preflight
 - Cancellation is cooperative: checked only between items, not mid-fetch
+- Resume is intentionally limited to `watchlist_run` / `task_run` (multi-stock); single-stock `stock_scan` finishes in seconds and is not resumable
 
 ## ANTI-PATTERNS
 - Do NOT share RunEngine instances across requests — use singleton via `_get_engine()`

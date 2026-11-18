@@ -260,7 +260,10 @@ python -m quantflow.cli web
    - **Watchlist Run**: Runs watchlist with selected strategies, outputs JSON + Markdown report
    - **Task Run**: Executes task file via Orchestrator
    - **Run History**: List of all runs with status, signal count, config details
-   - **Run Details**: 4 sub-tabs — Config, Progress (SSE real-time log), Report, Files
+   - **Run Details**: 4 sub-tabs — Config, Progress, Report, Files
+   - **Progress tab**: real-time progress bar (SSE) + the **actual on-disk log file** shown in the black box. The box displays the same content as `<output>/logs/*.log` (last 500 lines, refreshed every 2s while running) and is also available for finished/interrupted runs. Statuses: `queued`, `running`, `completed`, `failed`, `cancelled`, `interrupted`.
+   - **Resume**: a failed/cancelled/interrupted `watchlist_run` or `task_run` gets a **⏵ Resume** button in the Config tab. It creates a new run that continues from a checkpoint, skipping stocks already completed (data window is frozen to the original run). Checkpoints live in `~/.quantflow/checkpoints/<run-id>.json`.
+   - **Startup reconciliation**: on server start, any run left `running`/`queued` by a previous process (e.g. laptop lid closed) is marked `interrupted` so dead tasks don't linger in a running state.
    - **Presets**: Save and reuse run configurations
 
 4. **Settings** (Interactive Form):

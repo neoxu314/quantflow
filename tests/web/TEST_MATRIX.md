@@ -11,7 +11,9 @@
 | Integration | `test_execution_api_consistency.py` | Verify Execution → API consistency | ✅ 8 tests |
 | Unit | `test_runs_api.py` | API endpoint logic | ✅ 42 tests |
 | Integration | `test_runs_integration.py` | API → DB round-trip | ✅ 20 tests |
+| Unit | `test_resume_and_reconcile.py` | Checkpoint resume, startup reconciliation, file-log API, logging isolation | ✅ 9 tests (added 2026-11-18) |
 | E2E | `e2e/test_runs_*.py` | UI validation (Playwright) | ✅ 28 tests |
+| E2E | `e2e/test_runs_resume_logs.py` | Real file log box, interrupted state, resume button/API (no network) | ✅ 10 tests (added 2026-11-18) |
 
 ## Execution → API Test Matrix
 
@@ -44,8 +46,20 @@
 | daily mode files | `e2e/test_runs_task_run.py::test_task_run_daily_mode_files_validation` | 1 | ✅ New |
 | cancel flow | `e2e/test_runs_cancel.py` | 4 | ✅ Strong |
 | queue behavior | `e2e/test_runs_queue.py` | 3 | ✅ Strong |
+| file log box + resume + interrupted | `e2e/test_runs_resume_logs.py` | 10 | ✅ Strong (DB-seeded, no network) |
 
-## Coverage Summary
+## Resume / Reconciliation / File-Log Coverage (2026-11-18)
+
+| Feature | Unit test | E2E test |
+|---------|-----------|----------|
+| Checkpoint atomic write / load / copy | `test_resume_and_reconcile.py::TestCheckpoint*` | `test_runs_resume_logs.py::TestResumeApi*` |
+| `resume` creates new run + copies checkpoint | `TestResumeApi::test_resume_creates_new_run_and_copies_checkpoint` | `test_resume_button*` |
+| `resume` rejects invalid state / stock_scan | `TestResumeApi::test_resume_rejects_*` | `test_resume_rejects_*` |
+| Startup reconciliation flips stale `running`/`queued` → `interrupted` | `TestStartupReconciliation*` | `test_interrupted_state_rendered` |
+| File log API returns on-disk content (byte-exact) | `TestFileLogApi*` | `test_log_box_shows_real_file*` |
+| Log handlers do not leak across runs | `TestLoggingIsolation::test_repeated_setup_does_not_leak_handlers` | — |
+
+**Coverage Summary**
 
 **Before Refactor:** 12 missing test scenarios  
 **After Refactor:** All critical scenarios covered  
@@ -70,8 +84,14 @@ pytest tests/web/test_execution_api_consistency.py -v
 # All web tests (unit + integration)
 pytest tests/web/ -v --ignore=tests/web/e2e/
 
+# Resume / reconciliation / file-log tests (no network)
+pytest tests/web/test_resume_and_reconcile.py -v
+
 # E2E tests (requires playwright)
 pytest tests/web/e2e/ -v
+
+# New resume/log E2E tests only (fast, DB-seeded)
+pytest tests/web/e2e/test_runs_resume_logs.py -v
 ```
 
 ## Maintenance Checklist

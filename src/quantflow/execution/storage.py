@@ -34,6 +34,20 @@ class ExecutionResultItem:
             "timestamp": self.timestamp.isoformat()
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "ExecutionResultItem":
+        """Rebuild a result from a checkpoint/JSON record."""
+        d = dict(data)
+        ts = d.pop("timestamp", None)
+        item = cls(**{k: v for k, v in d.items()
+                      if k in cls.__dataclass_fields__})
+        if ts:
+            try:
+                item.timestamp = datetime.fromisoformat(ts)
+            except (TypeError, ValueError):
+                pass
+        return item
+
 
 class Storage:
     def __init__(self, base_path: str = "./output"):

@@ -3,9 +3,10 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Callable, Optional
 
 from quantflow.config.lookback import compute_days_back
-from quantflow.execution.executor import Executor
+from quantflow.execution.executor import Executor, ProgressEvent
 from quantflow.execution.job import ExecutionJob
 from quantflow.execution.storage import Storage
 from quantflow.execution.watchlist import Watchlist
@@ -18,12 +19,18 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
     def __init__(self, tasks_config: list,
                  output_override: str = None,
-                 daily_mode: bool = False):
+                 daily_mode: bool = False,
+                 on_progress: Optional[Callable[[ProgressEvent], None]] = None,
+                 checkpoint=None):
         self.tasks = tasks_config
         self.executor = Executor()
         self.reporter = MarkdownReporter()
         self.output_override = output_override
         self.daily_mode = daily_mode
+        self.on_progress = on_progress
+        # Optional resumability: a Checkpoint keyed by task name so each task
+        # can skip stocks already completed in a previous (interrupted) run.
+        self.checkpoint = checkpoint
 
     def _resolve_task_dir(self, cfg):
         base = self.output_override or "./output"
@@ -42,6 +49,19 @@ class Orchestrator:
         task_runs = []
         storage = Storage()
 
+        # Pre-load watchlists once so progress can be reported as a single
+        # global counter across all tasks (avoids the bar resetting to 0%
+        # when a new task starts). Reuse these objects below.
+        watchlists: dict = {}
+        for cfg in self.tasks:
+            try:
+                watchlists[cfg.name] = Watchlist.load(cfg.watchlist_path)
+            except Exception as e:
+                logger.error(f"Watchlist load failed for {cfg.name}: {e}")
+        grand_total = sum(
+            len(wl.items) for wl in watchlists.values())
+        completed = 0
+
         for cfg in self.tasks:
             try:
                 logger.info(f"--> Task: {cfg.name}")
@@ -52,6 +72,8 @@ class Orchestrator:
                     ]
                 except Exception as e:
                     logger.error(f"Strategy resolution failed: {e}")
+                    completed += len(watchlists[cfg.name].items) \
+                        if cfg.name in watchlists else 0
                     continue
 
                 days_back = compute_days_back(
@@ -61,7 +83,25 @@ class Orchestrator:
                     f"   Lookback: {days_back} calendar days "
                     f"| Output: {task_dir}")
 
-                watchlist = Watchlist.load(cfg.watchlist_path)
+                watchlist = watchlists.get(cfg.name)
+                if watchlist is None:
+                    watchlist = Watchlist.load(cfg.watchlist_path)
+                task_total = len(watchlist.items)
+
+                # Wrap the per-stock callback into a global progress counter.
+                task_cb = None
+                if self.on_progress is not None:
+                    def _cb(event, _offset=completed, _total=grand_total):
+                        self.on_progress(ProgressEvent(
+                            type=event.type,
+                            current=_offset + event.current,
+                            total=_total,
+                            code=event.code,
+                            message=event.message,
+                            level=event.level,
+                        ))
+                    task_cb = _cb
+
                 job = ExecutionJob(
                     name=cfg.name,
                     items=watchlist.items,
@@ -69,7 +109,17 @@ class Orchestrator:
                     output_dir=task_dir,
                     days_back=days_back
                 )
-                results = self.executor.execute(job)
+                # Preserve the original call signature for compatibility with
+                # mocks that only accept ``job``.  Extra kwargs (progress,
+                # checkpoint) are passed only when actually needed.
+                exec_kwargs = {}
+                if task_cb is not None:
+                    exec_kwargs["on_progress"] = task_cb
+                if self.checkpoint is not None:
+                    exec_kwargs["checkpoint"] = self.checkpoint
+                    exec_kwargs["task_key"] = cfg.name
+                results = self.executor.execute(job, **exec_kwargs)
+                completed += task_total
                 self.reporter.generate(
                     cfg.name, strategies, results, watchlist,
                     task_dir, self.date_str)
@@ -78,6 +128,8 @@ class Orchestrator:
                     (cfg.name, results, watchlist, strategies))
             except Exception as e:
                 logger.error(f"Task {cfg.name} failed: {e}")
+                completed += len(watchlists[cfg.name].items) \
+                    if cfg.name in watchlists else 0
 
         if task_runs:
             combined_dir = self._resolve_combined_dir()

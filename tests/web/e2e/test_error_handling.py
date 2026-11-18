@@ -85,7 +85,7 @@ class TestInvalidInputValidation:
         if not watchlist_btn.is_visible():
             pass
 
-def test_invalid_stock_code_format(self, page: Page):
+    def test_invalid_stock_code_format(self, page: Page):
         """Invalid stock code format should show error or be blocked."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")

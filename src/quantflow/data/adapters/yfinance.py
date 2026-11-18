@@ -387,7 +387,8 @@ class YFinanceDataSource(DataSourceBase):
         start_date: str,
         end_date: str,
         period: str = "d",
-        adjust: Optional[str] = None
+        adjust: Optional[str] = None,
+        progress_cb=None,
     ) -> Dict[str, pd.DataFrame]:
         if not self.check_version():
             raise RuntimeError(
@@ -422,6 +423,14 @@ class YFinanceDataSource(DataSourceBase):
         for i in range(0, total, chunk_size):
             batch = yf_symbols[i:i + chunk_size]
             chunk_num = (i // chunk_size) + 1
+
+            # Report progress after each chunk so the Web UI bar advances
+            # during a long batch download instead of jumping at the end.
+            if progress_cb is not None:
+                try:
+                    progress_cb(min(i + chunk_size, total), total, batch[0])
+                except Exception:
+                    pass
 
             t0 = time.time()
             chunk_result, was_rate_limited = self._download_chunk(

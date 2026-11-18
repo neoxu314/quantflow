@@ -36,6 +36,7 @@ class RunEngine:
         self._history = history
         self._sse = sse
         self._cancellations: dict[str, CancellationFlag] = {}
+        self._checkpoints: dict[str, object] = {}
 
     def start_processing(self, run_id: str) -> None:
         t = threading.Thread(target=self._execute_run, args=(run_id,),
@@ -71,19 +72,39 @@ class RunEngine:
             label = f"task_run_{Path(run.config.get('task_config', 'unknown')).stem}"
         else:
             label = run.run_type
-        setup_logging(Path(output_path), label)
+        log_path = setup_logging(Path(output_path), label)
+        # Persist the real on-disk log path so the Web UI can render the full
+        # file log (not just the SSE summary lines).
+        if log_path is not None:
+            self._history.update_status(run_id, "running",
+                                        log_path=str(log_path))
+
+        # Load (or create) the resume checkpoint.  A fresh run may resume
+        # from a previous run's checkpoint (see POST /api/runs/{id}/resume).
+        checkpoint = None
+        if run.run_type in ("watchlist_run", "task_run"):
+            from quantflow.execution.checkpoint import Checkpoint
+            root_id = run.config.get("resume_from") or run_id
+            checkpoint = Checkpoint.load_or_create(run_id, dict(run.config))
+            if run.config.get("resume_from"):
+                Checkpoint.copy_to(root_id, run_id)
+                checkpoint = Checkpoint.load_or_create(run_id, dict(run.config))
+                self._sse.publish_log(
+                    run_id, f"Resuming from checkpoint of run {root_id[:8]}...")
+        self._checkpoints[run_id] = checkpoint
 
         try:
             if flag.is_set:
                 self._mark_done(run_id, "cancelled")
                 return
 
+            checkpoint = self._checkpoints.get(run_id)
             if run.run_type == "stock_scan":
                 self._exec_stock_scan(run_id, run, flag)
             elif run.run_type == "watchlist_run":
-                self._exec_watchlist_run(run_id, run, flag)
+                self._exec_watchlist_run(run_id, run, flag, checkpoint)
             elif run.run_type == "task_run":
-                self._exec_task_run(run_id, run, flag)
+                self._exec_task_run(run_id, run, flag, checkpoint)
             else:
                 self._history.update_status(
                     run_id, "failed",
@@ -97,6 +118,7 @@ class RunEngine:
             self._sse.publish_log(run_id, f"ERROR: {e}", "error")
         finally:
             self._cancellations.pop(run_id, None)
+            self._checkpoints.pop(run_id, None)
             nxt = self._queue.dequeue()
             if nxt:
                 self.start_processing(nxt)
@@ -105,7 +127,12 @@ class RunEngine:
         def _cb(event):
             if flag.is_set:
                 return
-            if event.type == "stock_start":
+            if event.type == "fetch":
+                # Emitted by batch adapters *during* the download loop.
+                # No log line (the adapter already logs each ticker); just
+                # advance the bar in real time.
+                self._sse.publish_progress(run_id, event.current, event.total)
+            elif event.type == "stock_start":
                 self._sse.publish_log(
                     run_id,
                     f"[{event.current}/{event.total}] {event.code}...")
@@ -164,6 +191,7 @@ class RunEngine:
             yfinance_config=config_loader.get_yfinance_config(),
             yahooquery_config=config_loader.get_yahooquery_config(),
         )
+        self._sse.publish_progress(run_id, 1, 3)
         df, source = factory.fetch_ohlcv(code, fetch_start, end_date)
 
         if df.empty:
@@ -184,6 +212,7 @@ class RunEngine:
             f"Indicators: {', '.join(i.name for i in indicators)}, calculating...")
 
         df = IndicatorComposer(indicators).compose(df)
+        self._sse.publish_progress(run_id, 2, 3)
 
         if "date" in df.columns:
             # YFinance adds exchange-local timezone; strip it so date comparison
@@ -240,6 +269,7 @@ class RunEngine:
 
         indicator_data = _serialize_df(result_rows)
         data_file.write_text(json.dumps(indicator_data, indent=2))
+        self._sse.publish_progress(run_id, 3, 3)
 
         total_bars = len(result_rows)
         self._history.update_status(
@@ -276,7 +306,8 @@ class RunEngine:
             ]
         return indicators
 
-    def _exec_watchlist_run(self, run_id: str, run, flag: CancellationFlag):
+    def _exec_watchlist_run(self, run_id: str, run, flag: CancellationFlag,
+                            checkpoint=None):
         from datetime import datetime as dt
 
         from quantflow.config.lookback import compute_days_back
@@ -304,8 +335,11 @@ class RunEngine:
         job = ExecutionJob(
             name=f"web-{wl.name}", items=wl.items, strategies=strategies,
             output_dir=output, days_back=days_back)
-        results = Executor().execute(
-            job, on_progress=self._progress_cb(run_id, flag))
+        exec_kwargs = {"on_progress": self._progress_cb(run_id, flag)}
+        if checkpoint is not None:
+            exec_kwargs["checkpoint"] = checkpoint
+            exec_kwargs["task_key"] = "watchlist"
+        results = Executor().execute(job, **exec_kwargs)
 
         date_str = dt.now().strftime("%Y-%m-%d")
         rpath = MarkdownReporter().generate(
@@ -322,7 +356,8 @@ class RunEngine:
         self._sse.publish_status(run_id, "completed",
                                  signal_count=len(results))
 
-    def _exec_task_run(self, run_id: str, run, flag: CancellationFlag):
+    def _exec_task_run(self, run_id: str, run, flag: CancellationFlag,
+                       checkpoint=None):
         from datetime import datetime as dt
 
         from quantflow.orchestration.app import Orchestrator
@@ -338,8 +373,14 @@ class RunEngine:
         self._sse.publish_log(
             run_id,
             f"Running {len(configs)} task(s) via Orchestrator...")
-        signal_count = Orchestrator(
-            configs, output_override=output, daily_mode=daily).run()
+        orch_kwargs = {
+            "output_override": output,
+            "daily_mode": daily,
+            "on_progress": self._progress_cb(run_id, flag),
+        }
+        if checkpoint is not None:
+            orch_kwargs["checkpoint"] = checkpoint
+        signal_count = Orchestrator(configs, **orch_kwargs).run()
 
         rdir = output
         if daily:

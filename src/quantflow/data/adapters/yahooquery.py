@@ -186,6 +186,7 @@ class YahooQueryDataSource(DataSourceBase):
         end_date: str,
         period: str = "d",
         adjust: Optional[str] = None,
+        progress_cb=None,
     ) -> Dict[str, pd.DataFrame]:
         if not codes:
             return {}
@@ -216,6 +217,13 @@ class YahooQueryDataSource(DataSourceBase):
 
         t0 = time.time()
         for idx, yq_sym in enumerate(yq_symbols, 1):
+            # Report progress while fetching (not only after the whole batch
+            # returns) so the Web UI progress bar advances in real time.
+            if progress_cb is not None:
+                try:
+                    progress_cb(idx, total, yq_sym)
+                except Exception:
+                    pass
             df = self._fetch_single_with_retry(
                 Ticker, yq_sym, start_date, end_date, interval, adj_ohlc,
             )

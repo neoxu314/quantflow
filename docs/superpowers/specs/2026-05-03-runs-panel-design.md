@@ -4,6 +4,8 @@
 **Author:** Sisyphus
 **Scope:** Add "Runs" panel to Web UI for executing scans/tasks/monitoring, with execution history, presets, real-time progress, and report viewing.
 
+> **Implementation update (2026-11-18):** This design has evolved in three ways — (1) run status now includes `interrupted` (orphaned `running`/`queued` runs are reconciled at server startup); (2) the Progress tab's log box shows the real on-disk log file via `GET /api/runs/{id}/logs`, with SSE `log` events now summary-only; (3) `watchlist_run`/`task_run` support checkpoint resume via `POST /api/runs/{id}/resume`, storing done-stock state + results at `~/.quantflow/checkpoints/<run-id>.json`. See root `AGENTS.md` and `src/quantflow/web/AGENTS.md` for current behavior. Original design below preserved as a historical record.
+
 ---
 
 ## 1. Overview

@@ -3,6 +3,8 @@
 **Date:** 2026-05-18
 **Status:** Draft
 
+> **Implementation update (2026-11-18):** File logging is implemented. `setup_logging()` now removes prior quantflow handlers before adding new ones (prevents cross-run log leakage in the long-running Web server), and the resolved path is persisted to `run_history.log_path`. The Web UI Progress tab reads this file directly via `GET /api/runs/{id}/logs?tail=N` — the black log box shows byte-exact on-disk content, no longer the SSE `log` summary events. See root `AGENTS.md` and `src/quantflow/web/AGENTS.md` for the current behavior.
+
 ## Problem
 
 CLI and Web UI runs produce no persistent log files. All logging goes to stderr/stdout (CLI) or ephemeral SSE events (Web). After a run completes, there is no way to review what happened — which stocks failed to fetch, which data sources fell back, whether timeouts occurred, etc. This makes debugging difficult.

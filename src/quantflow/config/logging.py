@@ -26,11 +26,25 @@ def setup_logging(output_dir: Path, run_label: str) -> Optional[Path]:
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
 
+    # Remove handlers installed by a previous setup_logging() call.  The Web
+    # UI is a long-lived process: without this, each run adds another
+    # FileHandler to the root logger and every subsequent run's records are
+    # duplicated into *all* earlier runs' log files — so the file log shown
+    # in the UI would contain lines from unrelated runs.
+    for handler in list(root.handlers):
+        if getattr(handler, "_quantflow_handler", False):
+            root.removeHandler(handler)
+            try:
+                handler.close()
+            except Exception:
+                pass
+
     formatter = logging.Formatter(fmt)
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)
+    console_handler._quantflow_handler = True  # type: ignore[attr-defined]
     root.addHandler(console_handler)
 
     if not file_enabled:
@@ -52,6 +66,7 @@ def setup_logging(output_dir: Path, run_label: str) -> Optional[Path]:
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(file_level)
         file_handler.setFormatter(formatter)
+        file_handler._quantflow_handler = True  # type: ignore[attr-defined]
         root.addHandler(file_handler)
     except OSError:
         logging.warning(

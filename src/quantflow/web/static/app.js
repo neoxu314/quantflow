@@ -210,36 +210,93 @@ function renderConfigTab(run) {
     html += `</div></div>`;
     html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
         <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(run.config, null, 2)}</pre></details>`;
+    const canResume = (run.status === "failed" || run.status === "cancelled" ||
+        run.status === "interrupted") &&
+        (run.run_type === "task_run" || run.run_type === "watchlist_run");
     html += `<div class="flex gap-2 mt-4 pt-3 border-t">
         <button onclick="runAgain('${run.id}')" class="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">▶ Run Again</button>
+        ${canResume ? `<button onclick="resumeRun('${run.id}')" class="text-sm px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600" title="Continue from the last checkpoint, skipping already completed stocks">⏵ Resume</button>` : ""}
     </div>`;
     panel.innerHTML = html;
 }
 function renderProgressTab(run) {
+    stopLogPolling();
     const panel = document.getElementById("runtab-progress");
+    let statusHtml = "";
     if (run.status === "completed") {
         const label = run.run_type === "stock_scan" ? "bar(s)" : "signal(s)";
-        panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">✅</div>
+        statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">✅</div>
             <div class="text-lg font-medium">Complete</div>
             ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} ${label}</div>` : ""}</div>`;
     }
     else if (run.status === "failed") {
-        panel.innerHTML = `<div class="text-center py-4"><div class="text-2xl mb-2">❌</div>
+        statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">❌</div>
             <div class="text-lg font-medium text-red-600">Failed</div>
             <div class="text-sm text-red-500 mt-1">${run.error || "unknown"}</div></div>`;
     }
+    else if (run.status === "interrupted") {
+        statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">⚠️</div>
+            <div class="text-lg font-medium text-yellow-600">Interrupted</div>
+            <div class="text-sm text-gray-500 mt-1">${run.error || "Server restarted while run was active"}</div></div>`;
+    }
     else if (run.status === "running") {
-        panel.innerHTML = `<div class="space-y-3">
+        statusHtml = `<div class="space-y-1">
             <div class="h-3 bg-gray-200 rounded overflow-hidden">
                 <div id="run-progress-bar" class="h-full bg-blue-500 transition-all" style="width:0%"></div>
             </div>
             <div id="run-progress-text" class="text-sm text-gray-600">Starting...</div>
-            <div id="run-log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded h-64 overflow-y-auto"></div>
         </div>`;
-        connectSSE(run.id);
     }
     else {
-        panel.innerHTML = `<div class="text-gray-500 text-center py-8">Status: ${run.status}</div>`;
+        statusHtml = `<div class="text-gray-500 text-center py-4">Status: ${run.status}</div>`;
+    }
+    // The black box shows the REAL Python log file from disk, not the SSE
+    // summary lines.  It is shown for every status so refreshed/finished runs
+    // still have their complete log visible.
+    const logBox = `<div class="mt-3">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-500">Log file</span>
+            <span id="run-log-path" class="text-xs text-gray-400 font-mono truncate max-w-[70%]" title="${run.log_path || ''}">${run.log_path || '—'}</span>
+        </div>
+        <div id="run-log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded h-64 overflow-y-auto whitespace-pre-wrap"></div>
+    </div>`;
+    panel.innerHTML = statusHtml + logBox;
+    loadRealLog(run.id, false);
+    if (run.status === "running") {
+        connectSSE(run.id);
+        startLogPolling(run.id);
+    }
+}
+let logPollTimer = null;
+function stopLogPolling() {
+    if (logPollTimer !== null) {
+        window.clearInterval(logPollTimer);
+        logPollTimer = null;
+    }
+}
+function startLogPolling(runId) {
+    stopLogPolling();
+    logPollTimer = window.setInterval(() => loadRealLog(runId, true), 2000);
+}
+async function loadRealLog(runId, appendOnly) {
+    try {
+        const res = await api(`/api/runs/${runId}/logs?tail=500`);
+        const container = document.getElementById("run-log-container");
+        if (!container)
+            return;
+        if (!res.exists) {
+            if (!appendOnly) {
+                container.textContent = res.message || "Log not available yet";
+            }
+            return;
+        }
+        // Replace with file content on first load; on poll, refresh fully so
+        // the box always matches the real file (handles rotation/truncation).
+        container.textContent = res.content || "(log file is empty)";
+        container.scrollTop = container.scrollHeight;
+    }
+    catch (_e) {
+        // transient — keep whatever is rendered
     }
 }
 function renderReportTab(run) {
@@ -568,12 +625,9 @@ function connectSSE(runId) {
     sseTargetRunId = runId;
     try {
         sseSource = new EventSource(`/api/runs/${runId}/logs:sse`);
-        sseSource.addEventListener("log", (ev) => {
-            const data = JSON.parse(ev.data);
-            const logContainer = document.getElementById("run-log-container");
-            if (logContainer)
-                appendLog(logContainer, data.message, data.level || "info");
-        });
+        // NOTE: "log" summary events are intentionally NOT rendered here.
+        // The black box is populated from the real on-disk log file via
+        // loadRealLog(); mixing SSE summaries would duplicate/mismatch it.
         sseSource.addEventListener("progress", (ev) => {
             const data = JSON.parse(ev.data);
             const bar = document.getElementById("run-progress-bar");
@@ -590,6 +644,9 @@ function connectSSE(runId) {
                     sseSource.close();
                 sseSource = null;
                 sseTargetRunId = null;
+                stopLogPolling();
+                // Final refresh of the file log before freezing the view.
+                await loadRealLog(runId, false);
                 if (state.selectedRunId)
                     await selectRun(state.selectedRunId);
                 await loadRuns();
@@ -644,6 +701,19 @@ function runAgain(runId) {
         updateCliPreview();
     }
     toast("Pre-filled from previous run");
+}
+async function resumeRun(runId) {
+    try {
+        const res = await api(`/api/runs/${runId}/resume`, { method: "POST" });
+        if (!res.ok)
+            throw new Error(res.message || "Resume failed");
+        toast("Resumed — continuing from checkpoint");
+        await loadRuns();
+        await selectRun(res.run_id);
+    }
+    catch (e) {
+        toast(`Resume failed: ${e.message}`);
+    }
 }
 async function deleteRun(runId) {
     const run = state.runsList.find(r => r.id === runId);
@@ -1434,11 +1504,12 @@ function highlightStockRow(code) {
     }
 }
 // ---- Browse Directory Modal ----
+const DEFAULT_BROWSE_DIR = "/Users/neo";
 let browseTargetInputId = "run-output-path";
-let browseCurrentPath = "/";
+let browseCurrentPath = DEFAULT_BROWSE_DIR;
 function openBrowseDir(targetInputId, startPath) {
     browseTargetInputId = targetInputId;
-    browseCurrentPath = startPath || "/";
+    browseCurrentPath = startPath || DEFAULT_BROWSE_DIR;
     document.getElementById("browse-new-folder").classList.add("hidden");
     document.getElementById("modal-browse-dir").classList.remove("hidden");
     loadBrowseDir(browseCurrentPath);
@@ -1730,6 +1801,7 @@ function setupEventListeners() {
     // Global helpers for onclick handlers
     window.copyToClipboard = copyToClipboard;
     window.runAgain = runAgain;
+    window.resumeRun = resumeRun;
     window.deleteRun = deleteRun;
     window.openFolder = openFolder;
     // Browse directory buttons

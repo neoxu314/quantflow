@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuantFlow Web</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module" src="/app.js"></script>
+    <!-- cache-bust: bump the version after rebuilding app.js so browsers reload it -->
+    <script type="module" src="/app.js?v=20261118c"></script>
     <style>
         .tab-active { border-color: #3b82f6; color: #2563eb; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
@@ -693,7 +694,7 @@
             </div>
             <!-- Breadcrumb -->
             <div id="browse-breadcrumb" class="px-5 py-2 bg-gray-50 text-xs font-mono text-gray-600 truncate border-b">
-                /
+                /Users/neo
             </div>
             <!-- Directory list -->
             <div id="browse-list" class="overflow-y-auto flex-1 px-3 py-2 space-y-1 min-h-[240px] max-h-[360px]">
@@ -707,7 +708,7 @@
                         <button id="btn-browse-new-ok" class="text-xs px-2 py-1 bg-blue-500 text-white rounded">Create</button>
                     </div>
                 </div>
-                <div class="text-xs text-gray-400 mb-2">Current: <span id="browse-current-path" class="font-mono">/</span></div>
+                <div class="text-xs text-gray-400 mb-2">Current: <span id="browse-current-path" class="font-mono">/Users/neo</span></div>
                 <div class="flex gap-2">
                     <button id="btn-browse-up" class="flex-1 text-sm px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">↑ Parent</button>
                     <button id="btn-browse-new" class="text-sm px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">+ New Folder</button>

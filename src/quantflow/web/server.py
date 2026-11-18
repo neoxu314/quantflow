@@ -40,6 +40,10 @@ def create_app():
     from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
     # Build singletons for the web app
     history = RunHistory()
+    # Runs left 'running'/'queued' by a previous process (e.g. laptop lid
+    # closed, hard restart) can never complete — the in-memory threads and
+    # queue are gone.  Reconcile them to a terminal state at startup.
+    history.reconcile_stale_runs()
     sse = SSEManager()
     queue = RunQueue(on_run_available=lambda rid: None)
     engine = RunEngine(queue=queue, history=history, sse=sse)
