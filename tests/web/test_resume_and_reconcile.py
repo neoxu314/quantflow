@@ -116,6 +116,13 @@ class TestCheckpoint:
         assert loaded.get_context("dates:watchlist")["end_date"] == "2025-02-01"
         assert loaded.done_count() == 2
 
+    def test_load_rejects_an_invalid_nested_structure(self, tmp_path):
+        from quantflow.execution.checkpoint import Checkpoint
+
+        path = tmp_path / "checkpoint.json"
+        path.write_text('{"work": {"task": {"done": []}}}')
+        assert Checkpoint.load("bad", path=path) is None
+
     def test_copy_to_new_run(self, app_and_engine):
         from quantflow.execution.checkpoint import Checkpoint
         _, _, _, _ = app_and_engine
@@ -130,15 +137,23 @@ class TestCheckpoint:
 class TestResumeApi:
     def test_resume_creates_new_run_and_copies_checkpoint(self, app_and_engine, monkeypatch):
         from quantflow.execution.checkpoint import Checkpoint
-        app, engine, history, _ = app_and_engine
-        # Don't actually spin up the executor thread with a fake watchlist.
+        from quantflow.execution.executor import Executor
+
+        app, engine, history, tmp_path = app_and_engine
         monkeypatch.setattr(engine, "start_processing", lambda rid: None)
-        rid = history.create_run("wl", "watchlist_run", {"watchlist": "x.yaml"})
-        history.update_status(rid, "interrupted")
+        file = tmp_path / "watch.yaml"
+        file.write_text("name: watch\nitems:\n  - code: AAPL.US\n")
+        rid = history.create_run("wl", "watchlist_run", {"watchlist": str(file)})
+        history.update_status(rid, "partial")
         cp = Checkpoint(rid)
+        watchlist, job = engine._watchlist_job(history.get_run(rid), tmp_path)
+        cp.freeze_run_plan({
+            "watchlist": watchlist.to_dict(), "execution": Executor().execution_identity(job),
+        })
         cp.mark_done("watchlist", "AAPL.US", result={"code": "AAPL.US"})
 
         client = TestClient(app)
+        assert client.get(f"/api/runs/{rid}/checkpoint").json()["can_resume"]
         r = client.post(f"/api/runs/{rid}/resume")
         assert r.status_code == 200, r.text
         data = r.json()
@@ -147,6 +162,29 @@ class TestResumeApi:
         new_run = history.get_run(new_id)
         assert new_run.config["resume_from"] == rid
         assert Checkpoint.load(new_id).get_done("watchlist") == {"AAPL.US"}
+
+    def test_changed_watchlist_is_rejected_before_enqueue(self, app_and_engine):
+        from quantflow.execution.checkpoint import Checkpoint
+        from quantflow.execution.executor import Executor
+
+        app, engine, history, tmp_path = app_and_engine
+        file = tmp_path / "watch.yaml"
+        file.write_text("name: watch\nitems: [{code: AAPL.US}]\n")
+        rid = history.create_run("wl", "watchlist_run", {"watchlist": str(file)})
+        cp = Checkpoint(rid)
+        watchlist, job = engine._watchlist_job(history.get_run(rid), tmp_path)
+        cp.freeze_run_plan({
+            "watchlist": watchlist.to_dict(), "execution": Executor().execution_identity(job),
+        })
+        client = TestClient(app)
+        history.update_status(rid, "running")
+        assert not client.get(f"/api/runs/{rid}/checkpoint").json()["can_resume"]
+        history.update_status(rid, "interrupted")
+        file.write_text("name: watch\nitems: [{code: MSFT.US}]\n")
+        result = client.get(f"/api/runs/{rid}/checkpoint").json()
+        assert not result["can_resume"] and "changed" in result["reason"]
+        assert client.post(f"/api/runs/{rid}/resume").status_code == 400
+        assert len(history.list_runs()) == 1
 
     def test_resume_rejects_completed_run(self, app_and_engine, monkeypatch):
         app, engine, history, _ = app_and_engine

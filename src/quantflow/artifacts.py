@@ -106,10 +106,11 @@ def register_artifact(path):
             return
 
 
-def finish_manifest(root, status, **metadata):
+def finish_manifest(root, status, *, finished_at=None, **metadata):
     manifest = Path(root) / MANIFEST
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    data.update(metadata, status=status, finished_at=datetime.now(timezone.utc).isoformat())
+    finished_at = finished_at or datetime.now(timezone.utc).isoformat()
+    data.update(metadata, status=status, finished_at=finished_at)
     for relative in data["artifacts"]:
         path = Path(root) / relative
         if path.is_file() and not path.is_symlink():
@@ -118,6 +119,49 @@ def finish_manifest(root, status, **metadata):
                 "size": path.stat().st_size,
             }
     atomic_json(manifest, data, register=False)
+
+
+def recover_finalized_run(root, run_id):
+    """Recover terminal database fields only from a verified finalized manifest."""
+    root = Path(root)
+    manifest = root / MANIFEST
+    if root.name != run_id or root.parent.name != "runs" or root.is_symlink() or manifest.is_symlink():
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        status, result = data["status"], data["run_result"]
+        if (
+            data["run_id"] != run_id or data["schema_version"] != 1
+            or status not in ("completed", "partial", "failed", "cancelled")
+            or not isinstance(result, dict)
+        ):
+            return None
+        finished = datetime.fromisoformat(data["finished_at"])
+        if finished.tzinfo is None:
+            return None
+        artifacts = data["artifacts"]
+        root = root.resolve()
+        for relative, details in artifacts.items():
+            path = root / relative
+            if (
+                Path(relative).is_absolute() or not path.resolve().is_relative_to(root)
+                or path.is_symlink() or path.stat().st_size != details["size"]
+                or hashlib.sha256(path.read_bytes()).hexdigest() != details["sha256"]
+            ):
+                return None
+        report = result.get("report")
+        if (report and report not in artifacts) or (status in ("completed", "partial") and not report):
+            return None
+        count = result.get("signal_count", 0)
+        error = result.get("error")
+        if type(count) is not int or count < 0 or (error is not None and not isinstance(error, str)):
+            return None
+        return {
+            "status": status, "finished_at": data["finished_at"], "signal_count": count,
+            "report_path": str(root / report) if report else None, "error": error,
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError):
+        return None
 
 
 def delete_owned_artifacts(root, run_id):

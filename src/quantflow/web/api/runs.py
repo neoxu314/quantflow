@@ -164,48 +164,51 @@ def get_log_file(run_id: str, tail: int = 500):
             "exists": True, "tail": tail}
 
 
+def _resume_error(engine, run, checkpoint):
+    if run.status not in ("failed", "partial", "cancelled", "interrupted"):
+        return f"Run in status '{run.status}' cannot be resumed"
+    if run.run_type not in ("watchlist_run", "task_run"):
+        return f"Run type '{run.run_type}' does not support resume"
+    if checkpoint is None:
+        return "No checkpoint available. Start a new run."
+    try:
+        engine.check_resume_plan(run, checkpoint)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return str(exc)
+    return None
+
+
 @router.get("/{run_id}/checkpoint")
 def get_checkpoint(run_id: str):
     """Return checkpoint status for a run (for the Resume button/UI)."""
     from quantflow.execution.checkpoint import Checkpoint
-    run = _get_engine()._history.get_run(run_id)
+
+    engine = _get_engine()
+    run = engine._history.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
-    cp = Checkpoint.load(run_id)
-    if cp is None:
-        return {"exists": False, "can_resume": False,
-                "reason": "no_checkpoint"}
-    summary = cp.summary()
-    # A completed run has nothing left to resume.
-    return {"exists": True, "can_resume": run.status in
-            ("failed", "cancelled", "interrupted", "running"),
-            "summary": summary}
+    checkpoint = Checkpoint.load(run_id)
+    error = _resume_error(engine, run, checkpoint)
+    response = {"exists": checkpoint is not None, "can_resume": error is None}
+    if checkpoint:
+        response["summary"] = checkpoint.summary()
+    if error:
+        response["reason"] = "no_checkpoint" if checkpoint is None else error
+    return response
 
 
 @router.post("/{run_id}/resume")
 def resume_run(run_id: str):
-    """Create a new run that continues from ``run_id``'s checkpoint.
-
-    Only runs that are in a terminal (but incomplete) state can be resumed.
-    A new run record is created with ``resume_from`` set, preserving the
-    original in the history list.
-    """
+    """Create a new run continuing the verified plan of an incomplete run."""
     from quantflow.execution.checkpoint import Checkpoint
+
     engine = _get_engine()
     original = engine._history.get_run(run_id)
     if not original:
         raise HTTPException(status_code=404, detail="Not found")
-    if original.status not in ("failed", "partial", "cancelled", "interrupted"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Run in status '{original.status}' cannot be resumed")
-    if original.run_type not in ("watchlist_run", "task_run"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Run type '{original.run_type}' does not support resume")
-
-    if Checkpoint.load(run_id) is None:
-        raise HTTPException(status_code=400, detail="No checkpoint available; start a new run")
+    error = _resume_error(engine, original, Checkpoint.load(run_id))
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     config = dict(original.config)
     config["resume_from"] = run_id
     new_id = engine._history.create_run(

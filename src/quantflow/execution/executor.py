@@ -8,6 +8,7 @@ import logging
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pandas as pd
@@ -16,7 +17,7 @@ from quantflow.artifacts import ArtifactWriteError, atomic_json, safe_name
 from quantflow.config.loader import ConfigLoader
 from quantflow.control import check_cancelled
 from quantflow.data import StockCode
-from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv
+from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 from quantflow.data.trading_calendar import CALENDARS, completed_session
 from quantflow.execution.storage import ExecutionResultItem, ScanResults, StockOutcome, Storage
 from quantflow.indicators.composer import IndicatorComposer
@@ -110,6 +111,37 @@ class Executor:
     def _code_str(code):
         return code.standard if hasattr(code, "standard") else str(code)
 
+    def execution_identity(self, job, indicators=None):
+        indicators = self._indicators(job.strategies) if indicators is None else indicators
+        source_root = Path(__file__).resolve().parents[1]
+        code_hash = hashlib.sha256(
+            b"".join(p.read_bytes() for p in sorted(source_root.rglob("*.py")))
+        ).hexdigest()
+        dependencies = {}
+        for package in ("exchange-calendars", "pandas", "numpy", *self.factory.ADAPTER_MAP):
+            try:
+                dependencies[package] = version(package)
+            except PackageNotFoundError:
+                dependencies[package] = None
+        return {
+            "items": [
+                getattr(item, "to_dict", lambda: {"code": self._code_str(item.code)})()
+                for item in job.items
+            ],
+            "strategies": [strategy.name for strategy in job.strategies],
+            "indicators": {indicator.name: indicator.params for indicator in indicators},
+            "adjust": job.adjust or self.adjust,
+            "days_back": job.days_back,
+            "end_date": job.end_date,
+            "data_config": asdict(self.factory.config),
+            "batch_config": {
+                "yfinance": self.config.get_yfinance_config(),
+                "yahooquery": self.config.get_yahooquery_config(),
+            },
+            "code_hash": code_hash,
+            "dependencies": dependencies,
+        }
+
     @IndicatorFactory.snapshot()
     def execute(self, job, on_progress=None, checkpoint=None, task_key=""):
         check_cancelled()
@@ -117,21 +149,7 @@ class Executor:
         indicators = self._indicators(job.strategies)
         min_history_bars = max((i.lookback_bars for i in indicators), default=1)
         adjust = job.adjust or self.adjust
-        identity = {
-            "items": [
-                getattr(i, "to_dict", lambda: {"code": self._code_str(i.code)})() for i in job.items
-            ],
-            "strategies": [s.name for s in job.strategies],
-            "indicators": {i.name: i.params for i in indicators},
-            "adjust": adjust,
-            "days_back": job.days_back,
-            "end_date": job.end_date,
-            "data_config": asdict(self.factory.config),
-        }
-        source_root = Path(__file__).resolve().parents[1]
-        identity["code_hash"] = hashlib.sha256(
-            b"".join(p.read_bytes() for p in sorted(source_root.rglob("*.py")))
-        ).hexdigest()
+        identity = self.execution_identity(job, indicators)
         fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         key = f"execution:{task_key}"
         frozen = checkpoint.get_context(key) if checkpoint else None
@@ -297,6 +315,10 @@ class Executor:
                                 "query_start": start,
                                 "expected_session": session,
                                 "calendar_warning": calendar_warning,
+                                "trading_status_source": df.attrs.get("trading_status_source"),
+                                "listing_date": df.attrs.get("listing_date"),
+                                "listing_date_source": df.attrs.get("listing_date_source"),
+                                "price_adjustment_basis": df.attrs.get("price_adjustment_basis"),
                                 "rows": df.to_dict("records"),
                             },
                         )
@@ -307,6 +329,8 @@ class Executor:
                         quality = inspect_daily_bars(clean, code, session)
                         outcome.missing_sessions = quality.missing_sessions
                         outcome.unexpected_dates = quality.unexpected_dates
+                        outcome.confirmed_suspensions = quality.confirmed_suspensions
+                        outcome.listing_date = df.attrs.get("listing_date")
                         outcome.bar_date = (
                             clean.date.iloc[-1].strftime("%Y-%m-%d") if not clean.empty else None
                         )
@@ -314,7 +338,7 @@ class Executor:
                             outcome.status = quality.status
                         else:
                             result = self._process_single(
-                                item, code, clean, job, indicators=indicators
+                                item, code, tradable_bars(clean), job, indicators=indicators
                             )
                             outcome.status = "signal" if result else "no_signal"
                 except ArtifactWriteError:

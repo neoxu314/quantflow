@@ -42,14 +42,33 @@ def normalize_ohlcv(frame, start=None, end=None):
         raise ValueError("Non-finite OHLCV values")
     if (df[["open", "high", "low", "close"]] <= 0).any().any() or (df.volume < 0).any():
         raise ValueError("Non-positive prices or negative volume")
-    if (
-        (df.high < df[["open", "close", "low"]].max(axis=1))
-        | (df.low > df[["open", "close", "high"]].min(axis=1))
-    ).any():
+    high = df[["open", "close", "low"]].max(axis=1)
+    low = df[["open", "close", "high"]].min(axis=1)
+    # Independent adjusted OHLC calculations can differ by a few float ULPs.
+    tolerance = 8 * np.finfo(float).eps * high
+    if ((high - df.high > tolerance) | (df.low - low > tolerance)).any():
         raise ValueError("Inconsistent OHLC price range")
+    df["high"] = df.high.clip(lower=high)
+    df["low"] = df.low.clip(upper=low)
     df = df.sort_values("date")
     df.attrs.update(frame.attrs)
     return df.reset_index(drop=True)
+
+
+def daily_sessions(code, first, last):
+    first, last = pd.Timestamp(first), pd.Timestamp(last)
+    calendar = CALENDARS[code.exchange]
+    sessions = pd.DatetimeIndex([])
+    for year in range(first.year, last.year + 1):
+        dates = session_schedule(calendar, year).index
+        sessions = sessions.union(dates[(dates >= first) & (dates <= last)])
+    return sessions
+
+
+def tradable_bars(frame):
+    if "trade_status" not in frame.columns:
+        return frame
+    return frame.loc[~frame.trade_status.eq("0")].reset_index(drop=True)
 
 
 @dataclass(frozen=True)
@@ -57,6 +76,7 @@ class DailyBarQuality:
     status: str
     missing_sessions: tuple[str, ...] = ()
     unexpected_dates: tuple[str, ...] = ()
+    confirmed_suspensions: tuple[str, ...] = ()
 
 
 def inspect_daily_bars(frame, code, expected):
@@ -67,20 +87,22 @@ def inspect_daily_bars(frame, code, expected):
     last = dates[-1]
     if last != pd.Timestamp(expected):
         return DailyBarQuality("stale")
-    if frame.volume.iloc[-1] <= 0:
-        return DailyBarQuality("suspended")
+    suspended = ()
+    if "trade_status" in frame:
+        suspended = tuple(dates[frame.trade_status.eq("0")].strftime("%Y-%m-%d"))
+    if frame.volume.iloc[-1] <= 0 or expected in suspended:
+        return DailyBarQuality("suspended", confirmed_suspensions=suspended)
 
-    # Leading absence may be a new listing. Only gaps after the first observed
-    # bar are measurable here. The indicator independently checks its lookback.
     first = dates[0]
-    calendar = CALENDARS[code.exchange]
-    sessions = pd.DatetimeIndex([])
-    for year in range(first.year, last.year + 1):
-        year_dates = session_schedule(calendar, year).index
-        sessions = sessions.union(year_dates[(year_dates >= first) & (year_dates <= last)])
+    listing = frame.attrs.get("listing_date")
+    requested = frame.attrs.get("query_start")
+    if listing and requested:
+        first = min(first, max(pd.Timestamp(listing), pd.Timestamp(requested)))
+    sessions = daily_sessions(code, first, last)
     missing = tuple(sessions.difference(dates).strftime("%Y-%m-%d"))
     unexpected = tuple(dates.difference(sessions).strftime("%Y-%m-%d"))
-    return DailyBarQuality("data_gap" if missing or unexpected else "ok", missing, unexpected)
+    status = "data_gap" if missing or unexpected else "ok"
+    return DailyBarQuality(status, missing, unexpected, suspended)
 
 
 def prepare_daily_frame(frame, code, end_date, now=None):

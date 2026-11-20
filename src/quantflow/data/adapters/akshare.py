@@ -36,6 +36,7 @@ import logging
 from typing import Optional, List
 from enum import Enum
 
+from quantflow.control import check_cancelled
 from quantflow.data.base import DataSourceBase, SectorDataSource, StockCode
 from quantflow.data.quality import normalize_ohlcv
 
@@ -119,8 +120,10 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
         adjust = adjust or "qfq"
         if adjust not in self.get_supported_adjusts():
             raise ValueError(f"AKShare HK does not support adjustment {adjust}")
+        check_cancelled()
         fetch = _akshare_api(ak, "stock_hk_hist_sina", "stock_hk_daily")
         df = fetch(symbol=code.code.zfill(5), adjust="" if adjust == "none" else adjust)
+        check_cancelled()
         df = df.rename(columns={
             "日期": "date", "开盘": "open", "最高": "high", "最低": "low",
             "收盘": "close", "成交量": "volume",

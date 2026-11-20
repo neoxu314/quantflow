@@ -10,7 +10,7 @@ from quantflow.config.loader import ConfigLoader
 from quantflow.config.lookback import load_lookback_config
 from quantflow.control import check_cancelled
 from quantflow.data import StockCode
-from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv
+from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 from quantflow.data.trading_calendar import completed_session
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.factory import IndicatorFactory
@@ -83,6 +83,10 @@ def scan_stock(cfg, output, now=None):
             "query_start": fetch_start,
             "expected_session": session,
             "calendar_warning": calendar.calendar_warning,
+            "trading_status_source": raw.attrs.get("trading_status_source"),
+            "listing_date": raw.attrs.get("listing_date"),
+            "listing_date_source": raw.attrs.get("listing_date_source"),
+            "price_adjustment_basis": raw.attrs.get("price_adjustment_basis"),
             "rows": raw.to_dict("records"),
         },
     )
@@ -95,6 +99,7 @@ def scan_stock(cfg, output, now=None):
         if quality.unexpected_dates:
             message += f"; non-trading bars: {', '.join(quality.unexpected_dates)}"
         raise ValueError(message)
+    df = tradable_bars(df)
     if len(df) < min_history_bars:
         raise ValueError(f"Insufficient indicator history: {len(df)}/{min_history_bars} bars")
     df = IndicatorComposer(indicators).compose(df)
@@ -113,6 +118,7 @@ def scan_stock(cfg, output, now=None):
         "period": "d",
         "volume_unit": "shares",
         "as_of": now,
+        "price_adjustment_basis": raw.attrs.get("price_adjustment_basis"),
         "bar_date": df.date.iloc[-1].strftime("%Y-%m-%d"),
         "expected_session": session,
         "calendar_warning": calendar.calendar_warning,

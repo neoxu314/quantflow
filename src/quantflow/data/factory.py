@@ -17,7 +17,7 @@ from quantflow.data.adapters import (
     YFinanceDataSource,
 )
 from quantflow.data.config import DEFAULT_CONFIG
-from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv
+from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +91,10 @@ class DataSourceFactory:
         clean.attrs.update(
             source=source, period=period, adjust=adjust, volume_unit="shares", end_inclusive=True
         )
+        if source in ("yfinance", "yahooquery"):
+            clean.attrs["price_adjustment_basis"] = (
+                "yahoo_split_adjusted" if adjust == "none" else "yahoo_dividend_and_split_adjusted"
+            )
         return clean
 
     def fetch_ohlcv(
@@ -154,7 +158,7 @@ class DataSourceFactory:
             return False
         if period == "d":
             status = inspect_daily_bars(frame, code, end_date).status
-            return status != "suspended" and (status != "ok" or len(frame) < min_bars)
+            return status != "suspended" and (status != "ok" or len(tradable_bars(frame)) < min_bars)
         return self._latest_date(frame) != end_date
 
     def _prefer_history(self, candidate, previous, code, period, end_date, require_end_session,
@@ -168,10 +172,10 @@ class DataSourceFactory:
             return candidate_date > previous_date
         return (
             require_end_session and period == "d" and candidate_date == end_date
-            and len(candidate) >= min_bars
+            and len(tradable_bars(candidate)) >= min_bars
             and inspect_daily_bars(candidate, code, end_date).status == "ok"
             and (
-                len(previous) < min_bars
+                len(tradable_bars(previous)) < min_bars
                 or inspect_daily_bars(previous, code, end_date).status == "data_gap"
             )
         )

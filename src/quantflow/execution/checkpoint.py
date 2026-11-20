@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import tempfile
 import threading
 from datetime import datetime, timezone
@@ -32,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 CHECKPOINT_DIR = Path.home() / ".quantflow" / "checkpoints"
 VERSION = 1
+
+
+class ResumePlanError(ValueError):
+    """The saved work cannot be reused with the requested run inputs."""
 
 
 def _utcnow() -> str:
@@ -70,6 +73,15 @@ class Checkpoint:
             data = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             logger.warning("Checkpoint %s unreadable, ignoring: %s", p, e)
+            return None
+        if (
+            not isinstance(data, dict) or data.get("run_id", run_id) != run_id
+            or any(not isinstance(data.get(key, {}), dict)
+                   for key in ("config", "context", "work", "results"))
+            or any(not isinstance(task, dict) or not isinstance(task.get("done", {}), dict)
+                   for task in data.get("work", {}).values())
+        ):
+            logger.warning("Checkpoint %s has invalid structure", p)
             return None
         cp = cls(run_id, p)
         # Merge the full payload so custom metadata (e.g. ``resumed_from``)
@@ -125,24 +137,18 @@ class Checkpoint:
     @classmethod
     def copy_to(cls, src_run_id: str, dst_run_id: str) -> bool:
         """Copy a checkpoint to a new run id (used when resuming)."""
-        src = checkpoint_path(src_run_id)
-        if not src.exists():
+        checkpoint = cls.load(src_run_id)
+        if checkpoint is None:
             return False
-        dst = checkpoint_path(dst_run_id)
+        destination = cls(dst_run_id)
+        destination._data = checkpoint._data
+        destination._data["run_id"] = dst_run_id
+        destination._data["resumed_from"] = src_run_id
         try:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            data = json.loads(dst.read_text(encoding="utf-8"))
-            data["run_id"] = dst_run_id
-            data["resumed_from"] = src_run_id
-            tmp = dst.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
-            os.replace(tmp, dst)
+            destination.save()
             return True
-        except (OSError, ValueError) as e:
-            logger.warning("Failed to copy checkpoint %s -> %s: %s",
-                           src_run_id, dst_run_id, e)
+        except OSError as exc:
+            logger.warning("Failed to copy checkpoint %s -> %s: %s", src_run_id, dst_run_id, exc)
             return False
 
     @classmethod
@@ -164,6 +170,23 @@ class Checkpoint:
     def set_context(self, key: str, value: Any) -> None:
         with self._lock:
             self._data.setdefault("context", {})[key] = value
+
+    def check_run_plan(self, plan: dict) -> None:
+        saved = self.get_context("run:plan")
+        if saved is None:
+            if self.done_count():
+                raise ResumePlanError("Checkpoint lacks a verified run plan. Start a new run.")
+            return
+        if json.dumps(saved, sort_keys=True) != json.dumps(plan, sort_keys=True):
+            raise ResumePlanError(
+                "Run configuration or calculation inputs changed. Start a new run."
+            )
+
+    def freeze_run_plan(self, plan: dict) -> None:
+        self.check_run_plan(plan)
+        if self.get_context("run:plan") is None:
+            self.set_context("run:plan", plan)
+            self.save()
 
     def get_done(self, task_key: str) -> Set[str]:
         return set(self._data.get("work", {}).get(task_key, {}).get("done", {}))

@@ -7,6 +7,7 @@ from functools import wraps
 import time
 
 from quantflow.data.base import DataSourceBase, StockCode
+from quantflow.data.quality import daily_sessions
 from quantflow.control import check_cancelled, cancellable_sleep
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ class BaoStockDataSource(DataSourceBase):
         self.adjust = adjust
         self._bs = None
         self._logged_in = False
+        self._listing_dates = {}
     
     def get_name(self) -> str:
         return "BaoStock"
@@ -122,6 +124,22 @@ class BaoStockDataSource(DataSourceBase):
             self._bs.logout()
             self._logged_in = False
     
+    def _listing_date(self, code):
+        if code in self._listing_dates:
+            return self._listing_dates[code]
+        check_cancelled()
+        reply = self._bs.query_stock_basic(code=code)
+        check_cancelled()
+        if reply.error_code != "0" or not reply.next():
+            return None
+        raw = dict(zip(reply.fields, reply.get_row_data())).get("ipoDate")
+        date = pd.to_datetime(raw, format="%Y-%m-%d", errors="coerce")
+        if pd.isna(date):
+            return None
+        listing = date.strftime("%Y-%m-%d")
+        self._listing_dates[code] = listing
+        return listing
+
     @retry(max_retries=3)
     def fetch_ohlcv(
         self,
@@ -148,7 +166,7 @@ class BaoStockDataSource(DataSourceBase):
         start = start_date
         end = end_date
         
-        fields = ",".join(self.DEFAULT_FIELDS)
+        fields = ",".join(self.DEFAULT_FIELDS + (["tradestatus"] if period == "d" else []))
         
         logger.info(f"Fetching {period} data for {code.standard} from {start_date} to {end_date}")
         
@@ -166,7 +184,10 @@ class BaoStockDataSource(DataSourceBase):
         
         data = []
         while rs.error_code == "0" and rs.next():
+            check_cancelled()
             data.append(rs.get_row_data())
+        if rs.error_code != "0":
+            raise RuntimeError(f"BaoStock page fetch failed: {rs.error_msg}")
         
         if not data:
             logger.warning(f"No data for {code.standard}")
@@ -197,4 +218,22 @@ class BaoStockDataSource(DataSourceBase):
         df.attrs.update(source="baostock", adjust=actual_adjust, volume_unit="shares",
                         adjustment_anchor=df["date"].iloc[-1].strftime("%Y-%m-%d"))
         
-        return df[["date", "open", "high", "low", "close", "volume"]]
+        columns = ["date", "open", "high", "low", "close", "volume"]
+        if "tradestatus" in df.columns:
+            df = df.rename(columns={"tradestatus": "trade_status"})
+            columns.append("trade_status")
+            df.attrs["trading_status_source"] = "baostock:tradestatus"
+            planned = daily_sessions(code, start, df.date.iloc[0])
+            if len(planned) and planned[0] < df.date.iloc[0]:
+                try:
+                    listing = self._listing_date(bs_code)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    logger.warning("Could not verify listing date for %s: %s", code.standard, exc)
+                else:
+                    if listing:
+                        df.attrs.update(
+                            listing_date=listing,
+                            listing_date_source="baostock:query_stock_basic",
+                            query_start=start,
+                        )
+        return df[columns]

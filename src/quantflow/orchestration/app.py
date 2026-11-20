@@ -58,6 +58,43 @@ class Orchestrator:
     def _resolve_combined_dir(self):
         return self._resolve_task_dir(None)
 
+    def prepare_tasks(self, output_dir):
+        """Resolve the ordered task inputs once, before processing any stock."""
+        prepared = []
+        for cfg in self.tasks:
+            check_cancelled()
+            path = Path(cfg.watchlist_path)
+            if not path.is_absolute() and not path.exists():
+                path = Path(__file__).resolve().parents[3] / path
+            watchlist, job, error = None, None, None
+            try:
+                watchlist = Watchlist.load(str(path))
+                strategies = [get_strategy_class(name)() for name in cfg.strategy_names]
+                if not strategies:
+                    raise ValueError("Task has no strategies")
+                self.executor._indicators(strategies)
+                job = ExecutionJob(
+                    cfg.name, watchlist.items, strategies, str(output_dir),
+                    compute_days_back(strategies, cfg.days_back), as_of=self.as_of,
+                )
+            except Exception as exc:
+                error = exc
+            prepared.append((cfg, path.resolve(), watchlist, job, error))
+        return prepared
+
+    def run_plan(self, prepared):
+        return {"tasks": [
+            {
+                "name": cfg.name,
+                "watchlist_path": str(path),
+                "watchlist": watchlist.to_dict() if watchlist else None,
+                "strategy_ids": cfg.strategy_names,
+                "configured_days_back": cfg.days_back,
+                "execution": self.executor.execution_identity(job) if job else None,
+            }
+            for cfg, path, watchlist, job, _ in prepared
+        ]}
+
     @IndicatorFactory.snapshot()
     def run(self):
         self.date_str = datetime.now().strftime("%Y-%m-%d")
@@ -79,29 +116,21 @@ class Orchestrator:
                 logfile = setup_logging(self.output_dir, "task_run")
                 if logfile:
                     register_artifact(logfile)
+            prepared = self.prepare_tasks(self.output_dir)
+            if self.checkpoint:
+                self.checkpoint.freeze_run_plan(self.run_plan(prepared))
             offset = 0
-            loaded = {}
-            for cfg in self.tasks:
+            total = sum(len(watchlist.items) for _, _, watchlist, _, _ in prepared if watchlist)
+            for cfg, _, wl, job, input_error in prepared:
                 check_cancelled()
-                try:
-                    path = Path(cfg.watchlist_path)
-                    if not path.is_absolute() and not path.exists():
-                        path = Path(__file__).resolve().parents[3] / path
-                    loaded[cfg.name] = Watchlist.load(str(path))
-                except Exception as exc:
-                    errors.append({"task": cfg.name, "error": str(exc)})
+                if wl is None:
+                    errors.append({"task": cfg.name, "error": str(input_error)})
                     unreadable_watchlists += 1
-            total = sum(len(w.items) for w in loaded.values())
-            for cfg in self.tasks:
-                check_cancelled()
-                if cfg.name not in loaded:
                     continue
-                wl = loaded[cfg.name]
-                results = None
                 try:
-                    strategies = [get_strategy_class(s)() for s in cfg.strategy_names]
-                    if not strategies:
-                        raise ValueError("Task has no strategies")
+                    if input_error is not None:
+                        raise input_error
+                    strategies = job.strategies
 
                     def progress(event, base_offset=offset):
                         check_cancelled()
@@ -116,14 +145,6 @@ class Orchestrator:
                             )
                         )
 
-                    job = ExecutionJob(
-                        cfg.name,
-                        wl.items,
-                        strategies,
-                        str(self.output_dir),
-                        compute_days_back(strategies, cfg.days_back),
-                        as_of=self.as_of,
-                    )
                     kwargs = {}
                     if self.on_progress:
                         kwargs["on_progress"] = progress

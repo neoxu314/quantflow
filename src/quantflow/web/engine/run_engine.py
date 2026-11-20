@@ -16,6 +16,7 @@ from quantflow.artifacts import (
 from quantflow.config.logging import setup_logging
 from quantflow.control import ExecutionCancelled, cancellation_scope, check_cancelled
 from quantflow.execution.scanner import build_indicators, scan_stock
+from quantflow.indicators.factory import IndicatorFactory
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -154,15 +155,27 @@ class RunEngine:
                 with self._state_lock:
                     if flag.is_set and status in ("completed", "partial"):
                         status = "cancelled"
+                    finished_at = datetime.now(timezone.utc).isoformat()
                     if output:
                         try:
-                            finish_manifest(output, status)
+                            report = fields.get("report_path")
+                            finish_manifest(
+                                output, status, finished_at=finished_at,
+                                run_result={
+                                    "report": (
+                                        Path(report).relative_to(output).as_posix()
+                                        if report else None
+                                    ),
+                                    "signal_count": fields.get("signal_count", 0),
+                                    "error": fields.get("error"),
+                                },
+                            )
                         except Exception as exc:
                             logger.exception("Could not finalize run manifest")
                             status = "failed"
                             fields["error"] = f"Manifest finalization failed: {exc}"
                     self._history.update_status(
-                        run_id, status, finished_at=datetime.now(timezone.utc).isoformat(), **fields
+                        run_id, status, finished_at=finished_at, **fields
                     )
                     self._sse.publish_status(run_id, status)
             finally:
@@ -202,37 +215,70 @@ class RunEngine:
     def _build_indicators_for_run(self, names, run_id=None):
         return build_indicators(names)
 
-    def _exec_watchlist_run(self, run_id, run, flag, checkpoint=None):
+    @staticmethod
+    def _watchlist_job(run, output):
         from quantflow.config.lookback import compute_days_back
-        from quantflow.execution.executor import Executor
         from quantflow.execution.job import ExecutionJob
         from quantflow.execution.watchlist import Watchlist
         from quantflow.orchestration.registry import get_strategy_class
+
+        cfg = run.config
+        path = Path(cfg["watchlist"])
+        watchlist = Watchlist.load(str(path if path.is_absolute() else PROJECT_ROOT / path))
+        strategies = [
+            get_strategy_class(name)()
+            for name in (cfg.get("strategies") or ["daily_bull_oversold", "daily_bull_mid_range"])
+        ]
+        job = ExecutionJob(
+            f"web-{watchlist.name}", watchlist.items, strategies, str(output),
+            compute_days_back(strategies, cfg.get("days_back")),
+        )
+        return watchlist, job
+
+    @staticmethod
+    def _load_task_config(run):
+        from quantflow.orchestration.loader import TaskConfig
+
+        path = Path(run.config["task_config"])
+        return TaskConfig.load(str(path if path.is_absolute() else PROJECT_ROOT / path))
+
+    @IndicatorFactory.snapshot()
+    def check_resume_plan(self, run, checkpoint):
+        from quantflow.execution.executor import Executor
+        from quantflow.orchestration.app import Orchestrator
+
+        if run.run_type == "task_run":
+            orchestrator = Orchestrator(self._load_task_config(run))
+            plan = orchestrator.run_plan(orchestrator.prepare_tasks("."))
+        else:
+            watchlist, job = self._watchlist_job(run, ".")
+            plan = {
+                "watchlist": watchlist.to_dict(),
+                "execution": Executor().execution_identity(job),
+            }
+        checkpoint.check_run_plan(plan)
+
+    @IndicatorFactory.snapshot()
+    def _exec_watchlist_run(self, run_id, run, flag, checkpoint=None):
+        from quantflow.execution.executor import Executor
         from quantflow.reports.markdown import MarkdownReporter
 
         with cancellation_scope(flag):
-            cfg = run.config
-            wp = Path(cfg["watchlist"])
-            wl = Watchlist.load(str(wp if wp.is_absolute() else PROJECT_ROOT / wp))
-            strategies = [
-                get_strategy_class(s)()
-                for s in (cfg.get("strategies") or ["daily_bull_oversold", "daily_bull_mid_range"])
-            ]
             output = self._output(run_id, run)
-            job = ExecutionJob(
-                f"web-{wl.name}",
-                wl.items,
-                strategies,
-                str(output),
-                compute_days_back(strategies, cfg.get("days_back")),
-            )
+            wl, job = self._watchlist_job(run, output)
+            executor = Executor()
+            if checkpoint:
+                checkpoint.freeze_run_plan(
+                    {"watchlist": wl.to_dict(), "execution": executor.execution_identity(job)}
+                )
             kwargs = {"on_progress": self._progress_cb(run_id, flag)}
             if checkpoint:
                 kwargs.update(checkpoint=checkpoint, task_key="watchlist")
-            results = Executor().execute(job, **kwargs)
+            results = executor.execute(job, **kwargs)
             check_cancelled()
             path = MarkdownReporter().generate(
-                job.name, strategies, results, wl, str(output), datetime.now().strftime("%Y-%m-%d")
+                job.name, job.strategies, results, wl, str(output),
+                datetime.now().strftime("%Y-%m-%d"),
             )
             summary = results.summary
             atomic_json(output / "Run_Summary.json", summary)
@@ -240,11 +286,8 @@ class RunEngine:
 
     def _exec_task_run(self, run_id, run, flag, checkpoint=None):
         from quantflow.orchestration.app import Orchestrator
-        from quantflow.orchestration.loader import TaskConfig
-
         with cancellation_scope(flag):
-            tp = Path(run.config["task_config"])
-            tasks = TaskConfig.load(str(tp if tp.is_absolute() else PROJECT_ROOT / tp))
+            tasks = self._load_task_config(run)
             output = self._output(run_id, run)
             orch = Orchestrator(
                 tasks,

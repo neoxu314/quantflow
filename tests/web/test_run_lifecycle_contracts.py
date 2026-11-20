@@ -185,13 +185,13 @@ def test_worker_publishes_terminal_status_after_manifest(env, monkeypatch, fail)
     statuses = []
     monkeypatch.setattr(engine._sse, "publish_status", lambda _, status: statuses.append(status))
 
-    def finalize(output, status):
+    def finalize(output, status, **metadata):
         assert engine._history.get_run(run_id).status == "running"
         assert statuses == ["running"]
         assert engine._queue.active == run_id
         if fail:
             raise OSError("disk full")
-        finish_manifest(output, status)
+        finish_manifest(output, status, **metadata)
 
     finalize_manifest = Mock(side_effect=finalize)
     monkeypatch.setattr("quantflow.web.engine.run_engine.finish_manifest", finalize_manifest)
@@ -318,3 +318,40 @@ def test_cancel_during_yahooquery_session_setup_skips_history(env, monkeypatch, 
     ticker.history.assert_not_called()
     assert engine._history.get_run(active).status == "cancelled"
     engine.start_processing.assert_called_once_with(next_id)
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_restart_reconciles_crash_between_manifest_and_database(env, monkeypatch, corrupt):
+    from quantflow.web.engine.run_history import RunHistory
+
+    engine, client, root, wl = env
+    run_id = create(engine, root, wl)
+    monkeypatch.setattr(
+        "quantflow.execution.executor.Executor.execute",
+        lambda *args, **kwargs: ScanResults([], [StockOutcome("AAPL.US", "no_signal")]),
+    )
+    update_status = engine._history.update_status
+
+    def fail_after_manifest(rid, status, **fields):
+        if status == "completed":
+            raise OSError("SQLite went away at final commit")
+        return update_status(rid, status, **fields)
+
+    monkeypatch.setattr(engine._history, "update_status", fail_after_manifest)
+    with pytest.raises(OSError, match="final commit"):
+        engine._execute_run(run_id)
+    before = engine._history.get_run(run_id)
+    assert before.status == "running" and before.report_path is None
+    manifest = json.loads((Path(before.output_path) / "manifest.json").read_text())
+    report = Path(before.output_path) / manifest["run_result"]["report"]
+    if corrupt:
+        report.write_text("changed")
+
+    restarted = RunHistory()
+    assert restarted.reconcile_stale_runs() == 1
+    after = restarted.get_run(run_id)
+    assert after.status == ("interrupted" if corrupt else "completed")
+    if not corrupt:
+        assert after.report_path == str(report)
+        assert after.finished_at == manifest["finished_at"]
+    assert restarted.reconcile_stale_runs() == 0

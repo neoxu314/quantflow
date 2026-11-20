@@ -161,9 +161,11 @@ class TestInterruptedStateE2E:
 
 class TestResumeE2E:
 
-    def test_resume_button_visible_for_failed_task_run(self, page: Page, seeded_runs):
-        rid = seeded_runs("e2e_resume_btn", "task_run", "failed",
+    def test_resume_button_visible_for_partial_task_run_with_checkpoint(self, page: Page, seeded_runs):
+        rid = seeded_runs("e2e_resume_btn", "task_run", "partial",
                           config={"task_config": "config/tasks_test.yaml"})
+        CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+        (CHECKPOINT_DIR / f"{rid}.json").write_text(json.dumps({"run_id": rid}))
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
         page.click('button[data-tab="runs"]')
@@ -202,33 +204,16 @@ class TestResumeE2E:
         assert resp.status_code == 400
         assert "does not support resume" in resp.json()["detail"].lower()
 
-    def test_resume_copies_checkpoint_and_creates_new_run(self, seeded_runs):
-        """End-to-end resume: checkpoint copied forward, original preserved."""
-        rid = seeded_runs("e2e_resume_ok", "watchlist_run", "interrupted",
-                          config={"watchlist": "watchlists/nonexistent.yaml"})
+    def test_rejects_checkpoint_with_unverified_cached_results(self, seeded_runs):
+        rid = seeded_runs("e2e_resume_old", "watchlist_run", "interrupted",
+                          config={"watchlist": "watchlists/djia.yaml"})
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-        cp_file = CHECKPOINT_DIR / f"{rid}.json"
-        cp_file.write_text(json.dumps({
-            "version": 1, "run_id": rid, "config": {}, "context": {},
+        (CHECKPOINT_DIR / f"{rid}.json").write_text(json.dumps({
+            "version": 1, "run_id": rid,
             "work": {"watchlist": {"done": {"AAPL.US": {"done_at": "2026-01-01"}}}},
-            "results": {"watchlist": [{"code": "AAPL.US", "buy_signals": 1}]},
-        }), encoding="utf-8")
-
-        resp = httpx.post(f"{SERVER_URL}/api/runs/{rid}/resume", timeout=15)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["resumed_from"] == rid
-        new_id = body["run_id"]
-        try:
-            # original preserved, new record linked back via resume_from
-            orig = httpx.get(f"{SERVER_URL}/api/runs/{rid}", timeout=10).json()["run"]
-            assert orig["status"] == "interrupted"
-            new = httpx.get(f"{SERVER_URL}/api/runs/{new_id}", timeout=10).json()["run"]
-            assert new["config"].get("resume_from") == rid
-            # checkpoint cloned to the new run id
-            new_cp = httpx.get(f"{SERVER_URL}/api/runs/{new_id}/checkpoint",
-                               timeout=10).json()
-            assert new_cp["exists"] is True
-            assert new_cp["summary"]["done_count"] == 1
-        finally:
-            _delete_run(new_id)
+        }))
+        checkpoint = httpx.get(f"{SERVER_URL}/api/runs/{rid}/checkpoint", timeout=10).json()
+        assert checkpoint["exists"] and not checkpoint["can_resume"]
+        assert "verified run plan" in checkpoint["reason"]
+        response = httpx.post(f"{SERVER_URL}/api/runs/{rid}/resume", timeout=10)
+        assert response.status_code == 400

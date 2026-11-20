@@ -286,3 +286,37 @@ def test_completed_session_check_distinguishes_gaps_from_holidays_and_short_hist
     assert quality.status == "data_gap"
     assert quality.missing_sessions == ()
     assert quality.unexpected_dates == ("2026-11-26",)
+
+
+def test_signed_off_listing_date_and_halted_placeholder_are_distinct_from_data_gap():
+    from quantflow.data.quality import inspect_daily_bars, tradable_bars
+
+    code = StockCode("001309", "SZ")
+    frame = normalize_ohlcv(pd.concat([
+        sample().iloc[[0]].assign(date="2026-11-16", trade_status="1"),
+        sample().iloc[[0]].assign(date="2026-11-17", trade_status="0", volume=0),
+        sample().iloc[[1]].assign(date="2026-11-18", trade_status="1"),
+    ]))
+    frame.attrs.update(listing_date="2026-11-16", query_start="2026-11-10")
+    quality = inspect_daily_bars(frame, code, "2026-11-18")
+    assert quality.status == "ok"
+    assert quality.confirmed_suspensions == ("2026-11-17",)
+    assert len(tradable_bars(frame)) == 2
+    assert inspect_daily_bars(frame.iloc[:2], code, "2026-11-17").status == "suspended"
+
+    frame.attrs["listing_date"] = "2026-11-13"
+    quality = inspect_daily_bars(frame, code, "2026-11-18")
+    assert quality.status == "data_gap"
+    assert quality.missing_sessions == ("2026-11-13",)
+
+
+def test_ohlc_allows_float_roundoff_but_rejects_a_material_price_violation():
+    import numpy as np
+
+    quotes = sample()
+    quotes.loc[0, "high"] = np.nextafter(quotes.loc[0, "close"], 0)
+    clean = normalize_ohlcv(quotes)
+    assert clean.loc[0, "high"] == clean.loc[0, "close"]
+    quotes.loc[0, "high"] = quotes.loc[0, "close"] - 0.01
+    with pytest.raises(ValueError, match="Inconsistent"):
+        normalize_ohlcv(quotes)

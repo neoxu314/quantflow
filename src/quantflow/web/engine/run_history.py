@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from quantflow.artifacts import recover_finalized_run
+
 logger = logging.getLogger(__name__)
 
 QUANTFLOW_DIR = Path.home() / ".quantflow"
@@ -193,25 +195,30 @@ class RunHistory:
         return cursor.rowcount > 0
 
     def reconcile_stale_runs(self) -> int:
-        """Mark runs left in a non-terminal state by a previous server
-        process (e.g. laptop lid closed / hard restart) as ``interrupted``.
-
-        Called once at server startup.  Only ``queued`` and ``running`` are
-        affected; a run actively executing in this process is never touched
-        because this runs before the engine starts processing anything.
-
-        Returns the number of rows updated.
-        """
+        """Finish verified outputs or mark abandoned work interrupted during startup."""
         now = datetime.now(timezone.utc).isoformat()
         with _ConnectionManager._lock:
             conn = _ConnectionManager.get()
-            cursor = conn.execute(
-                "UPDATE run_history SET status = 'interrupted', "
-                "finished_at = ?, error = ? "
-                "WHERE status IN ('queued', 'running', 'cancelling')",
-                (now, "Interrupted: server restarted while run was active"))
-            conn.commit()
-        if cursor.rowcount:
-            logger.info("Reconciled %d stale run(s) to 'interrupted'",
-                        cursor.rowcount)
-        return cursor.rowcount
+            rows = conn.execute(
+                "SELECT id, output_path FROM run_history "
+                "WHERE status IN ('queued', 'running', 'cancelling')"
+            ).fetchall()
+            with conn:
+                for run_id, output in rows:
+                    recovered = recover_finalized_run(output, run_id) if output else None
+                    if recovered:
+                        conn.execute(
+                            "UPDATE run_history SET status=:status, finished_at=:finished_at, "
+                            "report_path=:report_path, signal_count=:signal_count, error=:error "
+                            "WHERE id=:run_id",
+                            dict(recovered, run_id=run_id),
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE run_history SET status='interrupted', finished_at=?, error=? "
+                            "WHERE id=?",
+                            (now, "Interrupted: server restarted while run was active", run_id),
+                        )
+        if rows:
+            logger.info("Reconciled %d stale run(s) after restart", len(rows))
+        return len(rows)

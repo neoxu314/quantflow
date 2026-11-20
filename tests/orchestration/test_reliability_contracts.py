@@ -82,3 +82,38 @@ def test_resumed_task_run_reuses_original_cutoff_for_all_tasks(tmp_path, monkeyp
 
     assert cutoffs == [initial] * 4
     assert resumed.last_summary["as_of"] == initial
+
+
+@pytest.mark.parametrize("change", ["watchlist", "reorder", "strategy", "add", "remove"])
+def test_runs_reject_changes_to_unstarted_tasks_before_processing(tmp_path, monkeypatch, change):
+    from quantflow.execution.checkpoint import ResumePlanError
+
+    first, second = tmp_path / "one.yaml", tmp_path / "two.yaml"
+    first.write_text("name: one\nitems: [{code: AAPL.US}]\n")
+    second.write_text("name: two\nitems: [{code: MSFT.US}]\n")
+    tasks = [
+        TaskConfig("one", str(first), ["daily_bull_oversold"]),
+        TaskConfig("two", str(second), ["daily_bull_oversold"]),
+    ]
+    checkpoint = Checkpoint("original", path=tmp_path / "checkpoint.json")
+    original = Orchestrator(tasks, output_override=tmp_path, checkpoint=checkpoint)
+    checkpoint.freeze_run_plan(original.run_plan(original.prepare_tasks(tmp_path)))
+    checkpoint.mark_done("one", "AAPL.US")
+    reloaded = Checkpoint.load("original", path=checkpoint.path)
+
+    ran = []
+    monkeypatch.setattr(original.executor, "execute", lambda *args, **kwargs: ran.append(args))
+    if change == "watchlist":
+        second.write_text("name: two\nitems: [{code: NVDA.US}]\n")
+    elif change == "reorder":
+        tasks.reverse()
+    elif change == "strategy":
+        tasks[1].strategy_names = ["daily_bull_mid_range"]
+    elif change == "add":
+        tasks.append(TaskConfig("three", str(first), ["daily_bull_oversold"]))
+    elif change == "remove":
+        tasks.pop()
+    original.checkpoint = reloaded
+    with pytest.raises(ResumePlanError, match="inputs changed"):
+        original.run()
+    assert ran == []

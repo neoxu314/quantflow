@@ -24,6 +24,8 @@ class StockOutcome:
     calendar_warning: Optional[str] = None
     missing_sessions: tuple[str, ...] = ()
     unexpected_dates: tuple[str, ...] = ()
+    confirmed_suspensions: tuple[str, ...] = ()
+    listing_date: Optional[str] = None
 
 
 class ScanResults(list):

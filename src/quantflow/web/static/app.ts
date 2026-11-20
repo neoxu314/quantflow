@@ -294,14 +294,34 @@ function renderConfigTab(run: RunRecord) {
     html += `</div></div>`;
     html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
         <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(run.config, null, 2)}</pre></details>`;
-    const canResume = (run.status === "failed" || run.status === "partial" || run.status === "cancelled" ||
-                       run.status === "interrupted") &&
-                      (run.run_type === "task_run" || run.run_type === "watchlist_run");
+    const checkResume = (run.status === "failed" || run.status === "partial" ||
+                         run.status === "cancelled" || run.status === "interrupted") &&
+                        (run.run_type === "task_run" || run.run_type === "watchlist_run");
     html += `<div class="flex gap-2 mt-4 pt-3 border-t">
         <button onclick="runAgain('${run.id}')" class="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">▶ Run Again</button>
-        ${canResume ? `<button onclick="resumeRun('${run.id}')" class="text-sm px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600" title="Continue from the last checkpoint, skipping already completed stocks">⏵ Resume</button>` : ""}
+        ${checkResume ? '<span id="resume-action"></span>' : ""}
     </div>`;
     panel.innerHTML = html;
+    const resumeAction = panel.querySelector("#resume-action");
+    if (resumeAction) {
+        api<{ can_resume: boolean; reason?: string }>(`/api/runs/${run.id}/checkpoint`)
+            .then(checkpoint => {
+                if (!resumeAction.isConnected) return;
+                if (!checkpoint.can_resume) {
+                    if (checkpoint.reason && checkpoint.reason !== "no_checkpoint") {
+                        resumeAction.textContent = checkpoint.reason;
+                    }
+                    return;
+                }
+                const button = document.createElement("button");
+                button.textContent = "⏵ Resume";
+                button.className = "text-sm px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600";
+                button.onclick = () => resumeRun(run.id);
+                resumeAction.append(button);
+            }).catch(() => {
+                if (resumeAction.isConnected) resumeAction.textContent = "Cannot check checkpoint";
+            });
+    }
 }
 
 function renderProgressTab(run: RunRecord) {
