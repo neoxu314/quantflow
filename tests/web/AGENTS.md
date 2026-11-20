@@ -14,6 +14,8 @@ See the [test matrix](TEST_MATRIX.md) for the coverage map and the
   production flow. Use an `integration` marker and `--live-market` for actual provider checks.
 - Use `frontend/` for Vitest coverage of actual frontend modules. Browser cases should
   check the user-visible result and, where necessary, the corresponding persisted state.
+- Use the `folder_launcher` fixture in API tests for Open Folder. Assert the selected
+  command and directory while keeping the native file browser closed.
 - For run regressions verify the terminal status, progress or error, coverage,
   and the owned output files relevant to the behavior. A successful HTTP response
   alone only proves request handling.

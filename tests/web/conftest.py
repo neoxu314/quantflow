@@ -1,6 +1,9 @@
 """Shared fixtures for web module tests."""
 import shutil
 import pathlib
+import subprocess
+from unittest.mock import Mock
+
 import pytest
 
 
@@ -17,7 +20,6 @@ def isolated_run_state(tmp_path, monkeypatch, request):
     from quantflow.web.engine import run_history, presets
     from quantflow.execution import checkpoint
     from quantflow.web.engine.run_engine import RunEngine
-    from unittest.mock import Mock
     run_history._ConnectionManager.reset()
     monkeypatch.setattr(run_history, "DB_PATH", tmp_path / "runs.db")
     monkeypatch.setattr(run_history, "QUANTFLOW_DIR", tmp_path)
@@ -26,6 +28,14 @@ def isolated_run_state(tmp_path, monkeypatch, request):
     monkeypatch.setattr(RunEngine, "start_processing", Mock())
     yield
     run_history._ConnectionManager.reset()
+
+
+@pytest.fixture
+def folder_launcher(monkeypatch):
+    """Record the native file browser command without launching a desktop window."""
+    launcher = Mock(spec=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", launcher)
+    return launcher
 
 
 @pytest.fixture

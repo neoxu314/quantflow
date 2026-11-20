@@ -288,26 +288,19 @@ class TestReportEndpointExecutionConsistency:
 
 
 class TestOpenFolderExecutionConsistency:
-    """Verify open_folder behavior matches user expectations."""
+    """Verify the system launcher receives the run's actual output directory."""
 
-    def test_task_run_daily_mode_open_folder_has_files_or_subdir(self, client, tmp_path):
-        """daily mode: output_path is empty (only subdir), verify UX expectation.
-        
-        Note: This test documents current behavior - open_folder opens output_path
-        which contains only YYYY-MM-DD/ subdirectory. User must navigate into it.
-        This may be a UX issue - should we open report_path directory instead?
-        """
+    def test_task_run_daily_mode_opens_run_directory(self, client, tmp_path, folder_launcher):
         h = run_history.RunHistory()
         rid = h.create_run(
             "Daily Open", "task_run",
             {"task_config": "config/tasks.yaml", "daily": True}
         )
 
-        output_dir = tmp_path
-        date_dir = output_dir / "2026-05-05"
-        date_dir.mkdir(parents=True)
+        output_dir = tmp_path / "2026-05-05" / "runs" / rid
+        output_dir.mkdir(parents=True)
 
-        report_file = date_dir / "Daily_Report.md"
+        report_file = output_dir / "Daily_Report.md"
         report_file.write_text("# Report")
 
         h.update_status(
@@ -321,25 +314,16 @@ class TestOpenFolderExecutionConsistency:
         assert folder_resp.status_code == 200
 
         data = folder_resp.json()
-        assert data["ok"] is True
+        assert data == {"ok": True, "path": str(output_dir)}
+        assert folder_launcher.call_count == 1
+        assert folder_launcher.call_args.args[0][1:] == [str(report_file.parent)]
 
-        # Current behavior: opens output_path (contains only subdir)
-        # Document this - may need UX improvement
-        assert data["path"] == str(output_dir)
-
-        # Verify directory exists but is mostly empty (UX issue)
-        output_path = Path(data["path"])
-        assert output_path.exists()
-        entries = list(output_path.iterdir())
-        assert len(entries) == 1  # Only YYYY-MM-DD/ subdirectory
-        assert entries[0].name == "2026-05-05"
-
-    def test_stock_scan_open_folder_has_direct_files(self, client, tmp_path):
-        """stock_scan: output_path contains files directly (good UX)."""
+    def test_stock_scan_opens_run_directory(self, client, tmp_path, folder_launcher):
         h = run_history.RunHistory()
         rid = h.create_run("Stock Open", "stock_scan", {"code": "AAPL.US"})
 
-        output_dir = tmp_path
+        output_dir = tmp_path / "runs" / rid
+        output_dir.mkdir(parents=True)
 
         indicator_file = output_dir / "AAPL.US_indicators.json"
         indicator_file.write_text("[]")
@@ -354,10 +338,6 @@ class TestOpenFolderExecutionConsistency:
         assert folder_resp.status_code == 200
 
         data = folder_resp.json()
-        assert data["ok"] is True
-        assert data["path"] == str(output_dir)
-
-        # Verify directory has files directly (good UX)
-        output_path = Path(data["path"])
-        files = [f for f in output_path.iterdir() if f.is_file()]
-        assert len(files) >= 1  # Has direct files
+        assert data == {"ok": True, "path": str(output_dir)}
+        assert folder_launcher.call_count == 1
+        assert folder_launcher.call_args.args[0][1:] == [str(indicator_file.parent)]

@@ -1,5 +1,6 @@
 from tests.web.artifact_fixtures import own_test_artifacts
 """Tests for Runs API endpoints."""
+import platform
 from pathlib import Path
 
 
@@ -441,7 +442,14 @@ class TestFilesEndpoint:
 
 
 class TestOpenFolderEndpoint:
-    def test_open_folder_success(self, client, tmp_path):
+    @pytest.mark.parametrize(
+        ("system", "command"),
+        [("Darwin", "open"), ("Windows", "explorer"), ("Linux", "xdg-open")],
+    )
+    def test_open_folder_success(
+        self, client, tmp_path, folder_launcher, monkeypatch, system, command
+    ):
+        monkeypatch.setattr(platform, "system", lambda: system)
         folder = tmp_path / "output_test"
         folder.mkdir()
         r = client.post("/api/runs/", json={
@@ -456,8 +464,9 @@ class TestOpenFolderEndpoint:
         data = r2.json()
         assert data["ok"] is True
         assert data["path"] == str(folder)
+        folder_launcher.assert_called_once_with([command, str(folder)], check=True)
 
-    def test_open_folder_no_output_path(self, client):
+    def test_open_folder_no_output_path(self, client, folder_launcher):
         r = client.post("/api/runs/", json={
             "run_type": "stock_scan",
             "code": "NVDA.US",
@@ -468,8 +477,9 @@ class TestOpenFolderEndpoint:
         data = r2.json()
         assert data["ok"] is False
         assert "No output path" in data["message"]
+        folder_launcher.assert_not_called()
 
-    def test_open_folder_nonexistent_path(self, client, tmp_path):
+    def test_open_folder_nonexistent_path(self, client, tmp_path, folder_launcher):
         fake_path = str(tmp_path / "does_not_exist")
         r = client.post("/api/runs/", json={
             "run_type": "stock_scan",
@@ -483,10 +493,12 @@ class TestOpenFolderEndpoint:
         data = r2.json()
         assert data["ok"] is False
         assert "does not exist" in data["message"]
+        folder_launcher.assert_not_called()
 
-    def test_open_folder_nonexistent_run(self, client):
+    def test_open_folder_nonexistent_run(self, client, folder_launcher):
         r = client.post("/api/runs/nonexistent-id/open-folder")
         assert r.status_code == 404
+        folder_launcher.assert_not_called()
 
 
 class TestTaskRunNaming:
