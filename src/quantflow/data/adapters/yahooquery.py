@@ -184,12 +184,14 @@ class YahooQueryDataSource(DataSourceBase):
         logger.info(f"Fetching {period} data for {symbol} via YahooQuery")
 
         ticker = Ticker(symbol, asynchronous=False, timeout=30)
+        check_cancelled()
         raw = ticker.history(
             start=start_date,
             end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
             interval=interval, adj_ohlc=adj_ohlc
         )
 
+        check_cancelled()
         if raw is None or raw.empty:
             logger.warning(f"No data for {symbol}")
             return pd.DataFrame()
@@ -277,12 +279,14 @@ class YahooQueryDataSource(DataSourceBase):
             try:
                 check_cancelled()
                 ticker = ticker_cls(yq_sym, asynchronous=False, timeout=30)
+                check_cancelled()
                 raw = ticker.history(
                     start=start_date,
                     end=(pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
                     interval=interval,
                     adj_ohlc=adj_ohlc,
                 )
+                check_cancelled()
                 if raw is not None and not raw.empty:
                     return self._normalize_single(raw, adj_ohlc)
             except KeyError:

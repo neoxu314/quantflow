@@ -275,3 +275,46 @@ def test_cancel_during_provider_io_or_backoff(env, monkeypatch, mode):
             http_thread.join()
             if worker.ident is not None:
                 worker.join(3)
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_cancel_during_yahooquery_session_setup_skips_history(env, monkeypatch, batch):
+    from quantflow.data import StockCode
+    from quantflow.data.adapters.yahooquery import YahooQueryDataSource
+
+    engine, client, root, wl = env
+    active = create(engine, root, wl)
+    next_id = create(engine, root, wl)
+    setting_up, release = threading.Event(), threading.Event()
+    ticker = Mock()
+
+    def connect(*_args, **_kwargs):
+        setting_up.set()
+        assert release.wait(5)
+        return ticker
+
+    def execute(*_args, **_kwargs):
+        provider = YahooQueryDataSource()
+        code = StockCode("AAPL", "US")
+        args = ("2026-11-16", "2026-11-20")
+        if batch:
+            provider.fetch_batch_ohlcv([code], *args)
+        else:
+            provider.fetch_ohlcv(code, *args)
+        pytest.fail("Cancellation should stop before asking for history")
+
+    monkeypatch.setattr("yahooquery.Ticker", connect)
+    monkeypatch.setattr("quantflow.execution.executor.Executor.execute", execute)
+    worker = threading.Thread(target=engine._execute_run, args=(active,))
+    worker.start()
+    try:
+        assert setting_up.wait(3)
+        assert client.post(f"/api/runs/{active}/cancel").json()["status"] == "cancelling"
+        assert engine._queue.active == active
+    finally:
+        release.set()
+        worker.join(5)
+    assert not worker.is_alive()
+    ticker.history.assert_not_called()
+    assert engine._history.get_run(active).status == "cancelled"
+    engine.start_processing.assert_called_once_with(next_id)
