@@ -10,7 +10,7 @@ the save/cancel boundary is correctly enforced.
 """
 import yaml
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 from pathlib import Path
 
 from tests.web.e2e.conftest import PROJECT_ROOT, SERVER_URL
@@ -29,7 +29,7 @@ class TestSettingsCancelBoundary:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -54,7 +54,7 @@ class TestSettingsCancelBoundary:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         logging_select = page.locator("#cfg-log-console-level")
@@ -143,18 +143,12 @@ class TestWatchlistEditCancelBoundary:
         page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
         page.wait_for_selector("#stock-table", timeout=5000)
 
-        name_span = page.locator(".editable-name").first
-        name_span.click()
-        page.wait_for_timeout(300)
-
-        name_input = page.locator("#stock-table input[type='text']").first
-        if name_input.is_visible():
-            name_input.clear()
-            name_input.fill("Changed Name")
-            name_input.press("Escape")
-            page.wait_for_timeout(300)
-
-        assert not page.locator("#btn-save-watchlist").is_visible()
+        page.locator(".editable-name").first.click()
+        name_input = page.locator("#stock-table input[type='text']")
+        name_input.fill("Changed Name")
+        name_input.press("Escape")
+        expect(page.locator(".editable-name").first).to_have_text("Apple")
+        expect(page.locator("#btn-save-watchlist")).to_be_hidden()
 
         with open(wl_path, "r", encoding="utf-8") as f:
             current = yaml.safe_load(f)
@@ -189,25 +183,22 @@ class TestTaskEditCancelBoundary:
         
         with open(task_path, "r", encoding="utf-8") as f:
             original = yaml.safe_load(f)
-        original_task_count = len(original.get("tasks", []))
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Tasks").click()
+        page.get_by_role("button", name="Tasks", exact=True).click()
         page.wait_for_selector("#task-file-list", timeout=5000)
-        page.get_by_text(TEST_TASK_FILE).click()
+        page.locator("#task-file-list").get_by_role("button", name=TEST_TASK_FILE).click()
         page.wait_for_selector("#task-table", timeout=5000)
 
-        if page.locator(".task-edit-btn").first.is_visible():
-            page.locator(".task-edit-btn").first.click()
-            page.wait_for_timeout(500)
-            page.locator("#modal-task .close-btn").click()
+        page.locator("#task-table").get_by_role("button", name="Edit", exact=True).click()
+        page.locator("#task-name").fill("Cancelled change")
+        page.locator("#btn-cancel-task").click()
+        expect(page.locator("#modal-task")).to_be_hidden()
 
         with open(task_path, "r", encoding="utf-8") as f:
             current = yaml.safe_load(f)
-        current_task_count = len(current.get("tasks", []))
-
-        assert current_task_count == original_task_count
+        assert current == original
 
 
 class TestModifySaveSequence:
@@ -223,7 +214,7 @@ class TestModifySaveSequence:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -236,7 +227,7 @@ class TestModifySaveSequence:
             after_first = yaml.safe_load(f)
         assert after_first["lookback"]["buffer_days"] == original_buffer + 10
 
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
         buffer_field = page.locator("#cfg-lookback-buffer")
         buffer_field.fill(str(original_buffer + 20))
@@ -261,7 +252,7 @@ class TestRefreshAfterSave:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         multiplier_field = page.locator("#cfg-lookback-multiplier")
@@ -272,7 +263,7 @@ class TestRefreshAfterSave:
 
         page.reload()
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         multiplier_field = page.locator("#cfg-lookback-multiplier")
@@ -286,13 +277,13 @@ class TestSwitchTabWhileEditing:
         """Switching tab while editing Settings should not trigger dirty warning."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
         buffer_field.fill("999")
 
-        page.get_by_role("button", name="Tasks").click()
+        page.get_by_role("button", name="Tasks", exact=True).click()
         page.wait_for_selector("#task-file-list", timeout=5000)
 
         dirty_indicator = page.locator("#settings-dirty-indicator")

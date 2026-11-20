@@ -1,5 +1,7 @@
 # Run Logging Design — Persistent Log Files for All Run Types
 
+> **历史资料。** 以下内容保留文件名所示日期的方案和假设。当前入口、路径与约束见 [项目文档](../../../README.md) 和 [运行契约](../../reliability-and-data-contracts.md)。
+
 **Date:** 2026-05-18
 **Status:** Draft
 

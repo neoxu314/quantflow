@@ -1,3 +1,3 @@
-"""Backtest layer (reserved for future implementation)."""
+"""Backtests over frozen market data."""
 
 __all__ = []

@@ -1,3 +1,6 @@
+{历史参考公式。当前 Python 实现见 src/quantflow/indicators/custom/brick_chart.py。}
+{生产实现处理平价分母、恢复后的平滑和拐点有效区间，公式保留原参考口径。}
+
 {1. 基础动能计算 - 保持原逻辑不变}
 VAR1A:=(HHV(HIGH,4)-CLOSE)/(HHV(HIGH,4)-LLV(LOW,4))*100-90;
 VAR2A:=SMA(VAR1A,4,1)+100;

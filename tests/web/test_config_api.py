@@ -85,6 +85,21 @@ def test_get_config_values_match_file(config_client):
     assert resp["web"] == file_data.get("web", {})
 
 
+def test_tushare_token_is_write_only_and_survives_an_unrelated_edit(config_client):
+    client, config_path = config_client
+    payload = client.get("/api/config").json()
+    payload["raw"]["tushare"] = {"token": "test-credential"}
+    assert client.put("/api/config", json=payload).status_code == 200
+
+    response = client.get("/api/config")
+    assert "test-credential" not in response.text
+    payload = response.json()
+    assert payload["tushare"]["tokenConfigured"] is True
+    payload["raw"]["tushare"]["token"] = ""
+    assert client.put("/api/config", json=payload).status_code == 200
+    assert yaml.safe_load(config_path.read_text())["tushare"]["token"] == "test-credential"
+
+
 # ─── PUT /api/config tests ───────────────────────────────────────────
 
 def test_put_config_updates_file(config_client):

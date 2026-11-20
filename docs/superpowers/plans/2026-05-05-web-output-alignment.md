@@ -1,5 +1,7 @@
 # Web Output Logic Alignment Implementation Plan
 
+> **历史资料。** 以下内容保留文件名所示日期的方案和假设。当前入口、路径与约束见 [项目文档](../../../README.md) 和 [运行契约](../../reliability-and-data-contracts.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Align Web output logic across stock_scan/watchlist_run/task_run to use direct output paths without run_id subdirectory isolation, matching task_run's "所见即所得" model.

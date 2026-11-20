@@ -9,13 +9,10 @@ from quantflow.indicators.factory import IndicatorFactory
 
 
 class DualLineBearZoneSell(SellStrategy):
-    """
-    策略定义：双线空头区间卖出策略 (Dual Line Bear Zone Sell)
+    """在日线进入双线空头区间时发出卖出信号。
 
-    卖出逻辑（需同时满足）：
-    1) 空头区间：双线战法中，进入空头状态（is_bear_zone == True）。
-       即：短期趋势线 < 多空线，且状态刚转为空头。
-       意义：趋势由多转空，应及时卖出离场。
+    短期趋势线低于多空线，且前一根日线尚未处于空头区间。
+    持续处于空头区间时只在进入的那根日线触发。
     """
 
     @property

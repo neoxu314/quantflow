@@ -8,7 +8,7 @@ from copy import deepcopy
 
 import pandas as pd
 
-from quantflow.control import check_cancelled
+from quantflow.control import ExecutionCancelled, check_cancelled
 from quantflow.data.adapters import (
     AKShareDataSource,
     BaoStockDataSource,
@@ -138,6 +138,8 @@ class DataSourceFactory:
                         df, code, period, end_date, require_end_session, min_history_bars
                     ):
                         break
+            except ExecutionCancelled:
+                raise
             except Exception as exc:
                 self.failures.setdefault(code.standard, []).append(f"{source}: {exc}")
                 logger.warning("Source %s failed for %s: %s", source, code, exc)
@@ -209,6 +211,8 @@ class DataSourceFactory:
                     )
                     if not df.empty:
                         results[code.standard] = (df, src)
+            except ExecutionCancelled:
+                raise
             except Exception as exc:
                 self.failures.setdefault(code.standard, []).append(str(exc))
                 missing.append(code)
@@ -234,6 +238,7 @@ class DataSourceFactory:
                     group, start_date, end_date, period, adjust, **kwargs
                 )
                 check_cancelled()
+                self._record_batch_errors(adapter, source, group)
                 for code in group:
                     try:
                         df = self._frame(
@@ -249,6 +254,8 @@ class DataSourceFactory:
                     except Exception as exc:
                         missing.append(code)
                         self.failures.setdefault(code.standard, []).append(f"{source}: {exc}")
+            except ExecutionCancelled:
+                raise
             except Exception as exc:
                 logger.warning("Batch from %s failed: %s", source, exc)
                 for code in group:
@@ -259,15 +266,38 @@ class DataSourceFactory:
             missing, start_date, end_date, period, adjust, results, require_end_session,
             min_history_bars,
         )
+        retry = [
+            code for code in missing
+            if self.failures.get(code.standard)
+            and self._needs_fallback(
+                results.get(code.standard, (pd.DataFrame(), None))[0],
+                code, period, end_date, require_end_session, min_history_bars,
+            )
+        ]
+        if retry:
+            logger.info("Rechecking %d unresolved provider failures: %s",
+                        len(retry), ", ".join(code.standard for code in retry))
+            self._batch_fallback(
+                retry, start_date, end_date, period, adjust, results, require_end_session,
+                min_history_bars, use_primary=True,
+            )
         return results
+
+    def _record_batch_errors(self, adapter, source, codes):
+        errors = getattr(adapter, "batch_errors", None)
+        if isinstance(errors, dict):
+            for code in codes:
+                if error := errors.get(code.standard):
+                    self.failures.setdefault(code.standard, []).append(f"{source}: {error}")
 
     def _batch_fallback(
         self, failed_codes, start_date, end_date, period, adjust, all_results, require_end_session,
-        min_history_bars,
+        min_history_bars, *, use_primary=False,
     ):
         groups = {}
+        source_for = self.config.get_primary if use_primary else self.config.get_fallback
         for code in failed_codes:
-            source = self.config.get_fallback(self._detect_market(code))
+            source = source_for(self._detect_market(code))
             if source:
                 groups.setdefault(source, []).append(code)
         for source, group in groups.items():
@@ -286,9 +316,12 @@ class DataSourceFactory:
                             batch[code.standard] = adapter.fetch_ohlcv(
                                 code, start_date, end_date, period, adjust
                             )
+                        except ExecutionCancelled:
+                            raise
                         except Exception as exc:
                             self.failures.setdefault(code.standard, []).append(f"{source}: {exc}")
                 check_cancelled()
+                self._record_batch_errors(adapter, source, group)
                 for code in group:
                     try:
                         df = self._frame(
@@ -304,6 +337,8 @@ class DataSourceFactory:
                             all_results[code.standard] = (df, source)
                     except Exception as exc:
                         self.failures.setdefault(code.standard, []).append(f"{source}: {exc}")
+            except ExecutionCancelled:
+                raise
             except Exception as exc:
                 logger.warning("Fallback %s failed: %s", source, exc)
                 for code in group:

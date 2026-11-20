@@ -4,7 +4,9 @@ import {
     getNestedValue, 
     setNestedValue,
     formatStockCode,
-    isActiveRunStatus
+    isActiveRunStatus,
+    escapeHtml,
+    mdToHtml
 } from "./utils.js";
 
 interface WatchlistItem {
@@ -77,6 +79,16 @@ interface RunRecord {
     signal_count: number;
     preset_id: string | null;
     log_path: string | null;
+    progress?: RunProgress | null;
+}
+
+interface RunProgress {
+    current: number;
+    total: number;
+    percentage: number;
+    phase?: "download" | "analysis";
+    task?: string | null;
+    sequence?: number;
 }
 
 interface TaskFileInfo {
@@ -158,6 +170,7 @@ async function loadWatchlists() {
 
 // Runs data fetch
 let runsPollingTimer: ReturnType<typeof setInterval> | null = null;
+let activeRunTab = "config";
 
 async function loadRuns() {
     try {
@@ -175,6 +188,8 @@ async function loadRuns() {
                 } else {
                     connectSSE(updated.id);
                 }
+            } else if (updated?.progress) {
+                applyRunProgress(updated.id, updated.progress);
             }
         }
     } catch (e) {
@@ -206,7 +221,7 @@ function renderRunsList() {
         const time = new Date(r.created_at).toLocaleString();
         return `<li class="px-3 py-2 rounded cursor-pointer hover:bg-gray-100 ${active}" data-run-id="${r.id}">` +
             `<div class="flex items-center justify-between">` +
-            `<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">${r.name}</div>` +
+            `<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">${escapeHtml(r.name)}</div>` +
             `<div class="text-xs text-gray-500">${r.run_type} • ${r.status} • ${time}</div></div>` +
             `<button class="ml-2 text-gray-400 hover:text-red-500 p-1 rounded flex-shrink-0" onclick="event.stopPropagation(); deleteRun('${r.id}')" title="Delete run">✕</button>` +
             `</div></li>`;
@@ -220,10 +235,17 @@ function renderRunsList() {
 }
 
 async function selectRun(runId: string) {
+    if (state.selectedRunId !== runId) {
+        activeRunTab = "config";
+        sseSource?.close();
+        sseSource = null;
+        sseTargetRunId = null;
+    }
     state.selectedRunId = runId;
     renderRunsList();
     try {
         const data = await api<{ run: RunRecord }>(`/api/runs/${runId}`);
+        if (state.selectedRunId !== runId) return;
         state.selectedRun = data.run;
         renderRunsDetail(state.selectedRun);
         if (isActiveRunStatus(data.run.status)) {
@@ -253,18 +275,19 @@ function renderRunsDetail(run: RunRecord | null) {
     renderReportTab(run);
     renderFilesTab(run);
 
-    // Reset to Config tab
-    document.querySelectorAll(".run-subtab").forEach(t => {
-        (t as HTMLElement).style.borderColor = "transparent";
-        (t as HTMLElement).style.color = "#6b7280";
+    showRunTab(activeRunTab);
+}
+
+function showRunTab(tab: string) {
+    activeRunTab = tab;
+    document.querySelectorAll<HTMLElement>(".run-subtab").forEach(button => {
+        const active = button.dataset.runtab === tab;
+        button.style.borderColor = active ? "#3b82f6" : "transparent";
+        button.style.color = active ? "#2563eb" : "#6b7280";
     });
-    const firstTab = document.querySelector('[data-runtab="config"]') as HTMLElement;
-    if (firstTab) {
-        firstTab.style.borderColor = "#3b82f6";
-        firstTab.style.color = "#2563eb";
-    }
-    document.querySelectorAll(".run-tab-content").forEach(p => p.classList.add("hidden"));
-    document.getElementById("runtab-config")!.classList.remove("hidden");
+    document.querySelectorAll(".run-tab-content").forEach(panel => {
+        panel.classList.toggle("hidden", panel.id !== `runtab-${tab}`);
+    });
 }
 
 function renderConfigTab(run: RunRecord) {
@@ -277,23 +300,23 @@ function renderConfigTab(run: RunRecord) {
     if (run.finished_at) html += `<span class="text-gray-500">Finished:</span><span>${new Date(run.finished_at).toLocaleString()}</span>`;
     if (run.duration_ms) html += `<span class="text-gray-500">Duration:</span><span>${(run.duration_ms / 1000).toFixed(1)}s</span>`;
     if (run.run_type === "stock_scan") {
-        if (run.config?.code) html += `<span class="text-gray-500">Code:</span><span class="font-mono">${run.config.code}</span>`;
-        if (run.config?.start_date) html += `<span class="text-gray-500">Start:</span><span class="font-mono">${run.config.start_date}</span>`;
-        if (run.config?.end_date) html += `<span class="text-gray-500">End:</span><span class="font-mono">${run.config.end_date}</span>`;
+        if (run.config?.code) html += `<span class="text-gray-500">Code:</span><span class="font-mono">${escapeHtml(run.config.code)}</span>`;
+        if (run.config?.start_date) html += `<span class="text-gray-500">Start:</span><span class="font-mono">${escapeHtml(run.config.start_date)}</span>`;
+        if (run.config?.end_date) html += `<span class="text-gray-500">End:</span><span class="font-mono">${escapeHtml(run.config.end_date)}</span>`;
         if (run.config?.indicators) {
             const indNames = (run.config.indicators as string[]).join(", ");
-            html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${indNames}</span>`;
+            html += `<span class="text-gray-500">Indicators:</span><span class="font-mono">${escapeHtml(indNames)}</span>`;
         }
-        if (run.config?.output_path) html += `<span class="text-gray-500">Output:</span><span class="font-mono text-xs">${run.output_path || run.config.output_path}</span>`;
+        if (run.config?.output_path) html += `<span class="text-gray-500">Output:</span><span class="font-mono text-xs">${escapeHtml(run.output_path || run.config.output_path)}</span>`;
     }
     if (run.signal_count) {
         const label = run.run_type === "stock_scan" ? "Bars:" : "Signals:";
         html += `<span class="text-gray-500">${label}</span><span>${run.signal_count}</span>`;
     }
-    if (run.error) html += `<span class="text-gray-500">Error:</span><span class="text-red-600">${run.error}</span>`;
+    if (run.error) html += `<span class="text-gray-500">Error:</span><span class="text-red-600">${escapeHtml(run.error)}</span>`;
     html += `</div></div>`;
     html += `<details class="mt-3"><summary class="text-sm text-gray-500 cursor-pointer">Raw Config (JSON)</summary>
-        <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${JSON.stringify(run.config, null, 2)}</pre></details>`;
+        <pre class="mt-2 bg-gray-50 p-3 rounded text-xs overflow-x-auto">${escapeHtml(JSON.stringify(run.config, null, 2))}</pre></details>`;
     const checkResume = (run.status === "failed" || run.status === "partial" ||
                          run.status === "cancelled" || run.status === "interrupted") &&
                         (run.run_type === "task_run" || run.run_type === "watchlist_run");
@@ -338,15 +361,15 @@ function renderProgressTab(run: RunRecord) {
     } else if (run.status === "failed") {
         statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">❌</div>
             <div class="text-lg font-medium text-red-600">Failed</div>
-            <div class="text-sm text-red-500 mt-1">${run.error || "unknown"}</div></div>`;
+            <div class="text-sm text-red-500 mt-1">${escapeHtml(run.error || "unknown")}</div></div>`;
     } else if (run.status === "interrupted") {
         statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">⚠️</div>
             <div class="text-lg font-medium text-yellow-600">Interrupted</div>
-            <div class="text-sm text-gray-500 mt-1">${run.error || "Server restarted while run was active"}</div></div>`;
+            <div class="text-sm text-gray-500 mt-1">${escapeHtml(run.error || "Server restarted while run was active")}</div></div>`;
     } else if (["running", "cancelling"].includes(run.status)) {
         statusHtml = `<div class="space-y-1">
             <div class="h-3 bg-gray-200 rounded overflow-hidden">
-                <div id="run-progress-bar" class="h-full bg-blue-500 transition-all" style="width:0%"></div>
+                <div id="run-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="h-full bg-blue-500 transition-all" style="width:0%"></div>
             </div>
             <div id="run-progress-text" class="text-sm text-gray-600">${run.status === "cancelling" ? "Stopping — waiting for the current request..." : "Starting..."}</div>
         </div>`;
@@ -354,9 +377,8 @@ function renderProgressTab(run: RunRecord) {
         statusHtml = `<div class="text-gray-500 text-center py-4">Status: ${run.status}</div>`;
     }
 
-    // The black box shows the REAL Python log file from disk, not the SSE
-    // summary lines.  It is shown for every status so refreshed/finished runs
-    // still have their complete log visible.
+    // Read the latest lines from the run's log file, including after completion.
+    // SSE progress events use a separate update path.
     const logBox = `<div class="mt-3">
         <div class="flex items-center justify-between mb-1">
             <span class="text-xs font-medium text-gray-500">Log file</span>
@@ -365,6 +387,7 @@ function renderProgressTab(run: RunRecord) {
         <div id="run-log-container" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded h-64 overflow-y-auto whitespace-pre-wrap"></div>
     </div>`;
     panel.innerHTML = statusHtml + logBox;
+    if (run.progress) applyRunProgress(run.id, run.progress);
 
     loadRealLog(run.id, false);
     if (["running", "cancelling"].includes(run.status)) {
@@ -392,15 +415,14 @@ async function loadRealLog(runId: string, appendOnly: boolean) {
         const res = await api<{ content: string; exists: boolean; path: string | null; message?: string }>(
             `/api/runs/${runId}/logs?tail=500`);
         const container = document.getElementById("run-log-container");
-        if (!container) return;
+        if (!container || state.selectedRunId !== runId) return;
         if (!res.exists) {
             if (!appendOnly) {
                 container.textContent = res.message || "Log not available yet";
             }
             return;
         }
-        // Replace with file content on first load; on poll, refresh fully so
-        // the box always matches the real file (handles rotation/truncation).
+        // Replace the displayed tail with the current file tail on each poll.
         container.textContent = res.content || "(log file is empty)";
         container.scrollTop = container.scrollHeight;
     } catch (_e) {
@@ -421,7 +443,7 @@ function renderReportTab(run: RunRecord) {
         api<{ data: Record<string, any>[] | null; code?: string; bar_count?: number; message?: string; legacy_warning?: string }>(`/api/runs/${run.id}/indicator-data`)
             .then(data => {
                 if (!data.data || data.data.length === 0) {
-                    panel.innerHTML = `<div class="text-gray-500 text-center py-8">${data.message || "No indicator data"}</div>`;
+                    panel.innerHTML = `<div class="text-gray-500 text-center py-8">${escapeHtml(data.message || "No indicator data")}</div>`;
                     return;
                 }
                 const cols = Object.keys(data.data[0]).filter(k => k !== "index");
@@ -471,7 +493,7 @@ function renderReportTab(run: RunRecord) {
                 const warning = data.legacy_warning ? '<div class="text-amber-700 mb-2">This older report may have been replaced by a later run.</div>' : '';
                 panel.innerHTML = warning + `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
             } else {
-                panel.innerHTML = `<div class="text-gray-500 text-center py-8">${data.message || "No content"}</div>`;
+                panel.innerHTML = `<div class="text-gray-500 text-center py-8">${escapeHtml(data.message || "No content")}</div>`;
             }
         }).catch(() => { panel.innerHTML = '<div class="text-red-500 text-center">Failed to load</div>'; });
 }
@@ -634,7 +656,7 @@ async function executeRun() {
         errDiv.classList.add("hidden");
         if (!result.ok) {
             errDiv.classList.remove("hidden");
-            errDiv.innerHTML = result.errors!.map((e: string) => `• ${e}`).join("<br>");
+            errDiv.innerHTML = result.errors!.map((e: string) => `• ${escapeHtml(e)}`).join("<br>");
             return;
         }
         closeModal("modal-new-run");
@@ -665,7 +687,7 @@ async function preflightCheck() {
         });
         if (!result.ok) {
             errDiv.classList.remove("hidden");
-            errDiv.innerHTML = result.errors!.map((e: string) => `• ${e}`).join("<br>");
+            errDiv.innerHTML = result.errors!.map((e: string) => `• ${escapeHtml(e)}`).join("<br>");
         } else {
             errDiv.classList.add("hidden");
             toast("Checks passed");
@@ -686,52 +708,41 @@ function formatRelativeTime(isoStr: string): string {
     return date.toLocaleDateString();
 }
 
-function mdToHtml(md: string): string {
-    let html = md
-        .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-4">$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-6">$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-8">$1</h1>')
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/\*(.+?)\*/g, "<em>$1</em>")
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>')
-        .replace(/\*\s+(.+?)(?=\n|$)/gm, '<li class="ml-4 list-disc">$1</li>')
-        .replace(/^[-•]\s+(.+?)(?=\n|$)/gm, '<li class="ml-4 list-disc">$1</li>');
-    html = html.replace(/((?:\|.+\|\n?)+)/g, (match) => {
-        const rows = match.trim().split("\n").filter(r => !r.match(/^\|-+[-| ]+$/));
-        if (rows.length < 2) return match;
-        let t = '<table class="min-w-full divide-y divide-gray-200 text-sm mt-2 mb-4"><tbody>';
-        rows.forEach(row => {
-            const cells = row.split("|").filter(c => c.trim()).map(c => c.trim());
-            t += '<tr class="bg-white">';
-            cells.forEach(cell => { t += `<td class="px-4 py-2 border border-gray-200">${cell}</td>`; });
-            t += "</tr>";
-        });
-        return t + "</tbody></table>";
-    });
-    html = html.replace(/^(?!<\/?[a-zA-Z\/\d])((?!$).+)$/gm, '<p class="text-sm text-gray-700 mb-1">$1</p>');
-    return html;
-}
-
 let sseSource: EventSource | null = null;
 let sseTargetRunId: string | null = null;
+
+function applyRunProgress(runId: string, progress: RunProgress) {
+    const run = state.selectedRun;
+    if (state.selectedRunId !== runId || run?.id !== runId || run.status !== "running") return;
+    if ((progress.sequence ?? 0) < (run.progress?.sequence ?? 0)) return;
+    run.progress = progress;
+    const bar = document.getElementById("run-progress-bar");
+    const text = document.getElementById("run-progress-text");
+    const phase = progress.phase === "download" ? "Downloading "
+        : progress.phase === "analysis" ? "Analyzing " : "";
+    if (bar) {
+        bar.style.width = `${progress.percentage}%`;
+        bar.setAttribute("aria-valuenow", String(progress.percentage));
+    }
+    if (text) text.textContent = `${phase}${progress.percentage}% (${progress.current}/${progress.total})`;
+}
 
 function connectSSE(runId: string) {
     if (sseTargetRunId === runId && sseSource) return;
     if (sseSource) sseSource.close();
     sseTargetRunId = runId;
     try {
-        sseSource = new EventSource(`/api/runs/${runId}/logs:sse`);
+        const stream = new EventSource(`/api/runs/${runId}/logs:sse`);
+        sseSource = stream;
         // NOTE: "log" summary events are intentionally NOT rendered here.
         // The black box is populated from the real on-disk log file via
         // loadRealLog(); mixing SSE summaries would duplicate/mismatch it.
-        sseSource.addEventListener("progress", (ev: Event) => {
-            const data = JSON.parse((ev as MessageEvent).data);
-            const bar = document.getElementById("run-progress-bar");
-            const txt = document.getElementById("run-progress-text");
-            if (bar) bar.style.width = `${data.percentage}%`;
-            if (txt) txt.textContent = `${data.percentage}% (${data.current}/${data.total})`;
+        stream.addEventListener("progress", (ev: Event) => {
+            if (sseSource !== stream) return;
+            applyRunProgress(runId, JSON.parse((ev as MessageEvent).data));
         });
-        sseSource.addEventListener("status", async (ev: Event) => {
+        stream.addEventListener("status", async (ev: Event) => {
+            if (sseSource !== stream || state.selectedRunId !== runId) return;
             const data = JSON.parse((ev as MessageEvent).data);
             if (!isActiveRunStatus(data.status)) {
                 if (sseSource) sseSource.close();
@@ -782,16 +793,33 @@ function runAgain(runId: string) {
     openModal("modal-new-run");
     resetRunModal();
     selectRunType(orig.run_type);
-    if (orig.run_type === "stock_scan" && orig.config?.code) {
-        (document.getElementById("run-stock-code") as HTMLInputElement).value = orig.config.code;
-        if (orig.config?.start_date) {
-            (document.getElementById("run-start-date") as HTMLInputElement).value = orig.config.start_date;
+    const config = orig.config;
+    if (orig.run_type === "stock_scan") {
+        (document.getElementById("run-stock-code") as HTMLInputElement).value = config.code || "";
+        if (config.start_date) {
+            (document.getElementById("run-start-date") as HTMLInputElement).value = config.start_date;
         }
-        if (orig.config?.end_date) {
-            (document.getElementById("run-end-date") as HTMLInputElement).value = orig.config.end_date;
+        if (config.end_date) {
+            (document.getElementById("run-end-date") as HTMLInputElement).value = config.end_date;
         }
-        updateCliPreview();
+        if (Array.isArray(config.indicators)) {
+            document.querySelectorAll<HTMLInputElement>(".run-indicator").forEach(input => {
+                input.checked = config.indicators.includes(input.value);
+            });
+        }
+    } else if (orig.run_type === "watchlist_run") {
+        (document.getElementById("run-watchlist-select") as HTMLSelectElement).value = config.watchlist || "";
+        if (Array.isArray(config.strategies) && config.strategies.length) {
+            document.querySelectorAll<HTMLInputElement>("#run-strategy-checkboxes input").forEach(input => {
+                input.checked = config.strategies.includes(input.value);
+            });
+        }
+    } else if (orig.run_type === "task_run") {
+        (document.getElementById("run-task-config-select") as HTMLSelectElement).value = config.task_config || "";
+        (document.getElementById("run-daily-mode") as HTMLInputElement).checked = !!config.daily;
     }
+    (document.getElementById("run-output-path") as HTMLInputElement).value = config.output_path || "";
+    updateCliPreview();
     toast("Pre-filled from previous run");
 }
 
@@ -857,12 +885,12 @@ function renderTaskFileSidebar() {
         const isSelected = state.selectedTaskFile === tf.filename;
         li.innerHTML = `
             <div class="flex items-center justify-between">
-              <button data-filename="${tf.filename}" class="task-file-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
+              <button data-filename="${escapeHtml(tf.filename)}" class="task-file-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
                   ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "hover:bg-gray-100 text-gray-700"}">
-                <div class="truncate">${tf.filename}</div>
+                <div class="truncate">${escapeHtml(tf.filename)}</div>
                 <div class="text-xs text-gray-400">${tf.taskCount} tasks</div>
               </button>
-              <button class="tf-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${tf.filename}">×</button>
+              <button class="tf-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${escapeHtml(tf.filename)}">×</button>
             </div>`;
         list.appendChild(li);
     }
@@ -1052,12 +1080,12 @@ function renderWatchlistSidebar() {
         const isSelected = state.selectedWatchlist === wl.filename;
         li.innerHTML = `
             <div class="flex items-center justify-between">
-              <button data-filename="${wl.filename}" class="watchlist-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
+              <button data-filename="${escapeHtml(wl.filename)}" class="watchlist-item flex-1 text-left px-3 py-2 rounded text-sm transition-colors
                   ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "hover:bg-gray-100 text-gray-700"}">
-                <div class="truncate">${wl.name}</div>
+                <div class="truncate">${escapeHtml(wl.name)}</div>
                 <div class="text-xs text-gray-400">${wl.itemCount} stocks</div>
               </button>
-              <button class="wl-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${wl.filename}">×</button>
+              <button class="wl-delete-btn text-red-500 hover:text-red-700 px-2 opacity-50 hover:opacity-100" data-filename="${escapeHtml(wl.filename)}">×</button>
             </div>`;
         list.appendChild(li);
     }
@@ -1093,10 +1121,10 @@ function renderStockTable() {
         const item = items[i];
         const tr = document.createElement("tr");
         tr.className = "hover:bg-gray-50";
-        const tags = (item.tags || []).map(t => `<span class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">${t}</span>`).join(" ");
+        const tags = (item.tags || []).map(t => `<span class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">${escapeHtml(t)}</span>`).join(" ");
         tr.innerHTML = `
             <td class="px-4 py-2 text-sm text-gray-900">${item.code}</td>
-            <td class="px-4 py-2 text-sm text-gray-600"><span class="editable-name cursor-pointer hover:bg-gray-100 px-1 rounded" data-idx="${i}" title="Click to edit">${item.name || "-"}</span></td>
+            <td class="px-4 py-2 text-sm text-gray-600"><span class="editable-name cursor-pointer hover:bg-gray-100 px-1 rounded" data-idx="${i}" title="Click to edit">${escapeHtml(item.name || "-")}</span></td>
             <td class="px-4 py-2 text-sm text-gray-600"><div class="editable-tags cursor-pointer hover:bg-gray-100 px-1 rounded min-h-[20px]" data-idx="${i}" title="Click to edit tags">${tags || "-"}</div></td>
             <td class="px-4 py-2 text-sm"><button data-idx="${i}" class="text-red-600 hover:text-red-800 delete-stock-btn">Delete</button></td>`;
         tbody.appendChild(tr);
@@ -1144,7 +1172,10 @@ function startEditName(idx: number) {
     input.addEventListener("blur", finish);
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { input.blur(); }
-        if (e.key === "Escape") { renderStockTable(); }
+        if (e.key === "Escape") {
+            input.removeEventListener("blur", finish);
+            renderStockTable();
+        }
     });
     span.replaceWith(input);
     input.focus();
@@ -1168,7 +1199,7 @@ function startEditTags(idx: number) {
         for (let t = 0; t < (item.tags || []).length; t++) {
             const pill = document.createElement("span");
             pill.className = "bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-0.5";
-            pill.innerHTML = `${item.tags[t]}<span class="tag-remove-btn cursor-pointer font-bold ml-0.5" data-tag-idx="${t}">&times;</span>`;
+            pill.innerHTML = `${escapeHtml(item.tags[t])}<span class="tag-remove-btn cursor-pointer font-bold ml-0.5" data-tag-idx="${t}">&times;</span>`;
             pillsDiv.appendChild(pill);
         }
     };
@@ -1494,7 +1525,7 @@ async function saveSettings(): Promise<void> {
             method: "PUT",
             body: JSON.stringify({ raw: collectFormValues() }),
         });
-        state.rawConfig = collectFormValues();
+        await loadConfig();
         const status = document.getElementById("settings-save-status")!;
         status.textContent = "✅ Saved successfully";
         status.className = "text-sm text-green-600";
@@ -1874,18 +1905,8 @@ function setupEventListeners() {
     });
 
     // Run sub-tab switching
-    document.querySelectorAll('[data-runtab]').forEach(btn => {
-        btn.addEventListener("click", () => {
-            const tab = (btn as HTMLElement).dataset.runtab!;
-            document.querySelectorAll(".run-subtab").forEach(t => {
-                (t as HTMLElement).style.borderColor = "transparent";
-                (t as HTMLElement).style.color = "#6b7280";
-            });
-            (btn as HTMLElement).style.borderColor = "#3b82f6";
-            (btn as HTMLElement).style.color = "#2563eb";
-            document.querySelectorAll(".run-tab-content").forEach(p => p.classList.add("hidden"));
-            document.getElementById(`runtab-${tab}`)?.classList.remove("hidden");
-        });
+    document.querySelectorAll<HTMLElement>('[data-runtab]').forEach(button => {
+        button.addEventListener("click", () => showRunTab(button.dataset.runtab!));
     });
 
     // Global helpers for onclick handlers

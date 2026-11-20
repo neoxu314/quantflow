@@ -1,49 +1,26 @@
-# EXECUTION - QUANTFLOW
+# Execution
 
-**Scope:** `src/quantflow/execution/`
+`ExecutionJob` supplies items, strategies, an output directory and a calendar-day lookback.
+It can also specify an adjustment, as-of time or end date.
+`scanner.py` handles individual indicator scans, while `Executor` handles watchlist and task
+jobs. Both use the market contract for the last completed trading day and normalized inputs.
 
-## OVERVIEW
-
-Execution layer for processing strategy jobs. Accepts `ExecutionJob` objects, fetches data, calculates indicators, runs strategies, and persists results.
-
-## STRUCTURE
-
-```
-execution/
-├── executor.py        # Executor - core processing logic
-├── job.py             # ExecutionJob - input data model
-├── storage.py         # Storage - JSON persistence
-├── checkpoint.py      # Checkpoint - resumable per-stock progress (atomic JSON)
-├── watchlist.py       # Watchlist management
-└── alerts/
-    └── base.py        # Alert interfaces
-```
-
-## KEY CLASSES
-
-- `Executor`: Main class. Loads `ConfigLoader` at init, partitions items into batch (non-A-share) and sequential (A-share) groups. `execute(job)` order:
-  1. Partition items by primary data source batch support: `batch_items` (non-A-share, e.g. US/HK/JP/KR via YahooQuery/YFinance) vs `sequential_items` (A-share via BaoStock/Tushare).
-  2. Batch items → `fetch_batch_ohlcv()` (YahooQuery sequential per-ticker internally, or YFinance chunked download as fallback).
-  3. Batch signals processed in-memory.
-  4. Sequential items (A-share) → individual `fetch_ohlcv()` calls with primary/fallback (BaoStock → Tushare).
-  - **Progress Logging**: Via optional `on_progress` callback emitting `ProgressEvent` objects (`type="stock_start"|"stock_done"`, with `current`, `total`, `code`, `message`, `level`). Used by Web UI RunEngine for SSE real-time updates.
-  - **Summary Logging**: At end of `execute()`, logs task summary: `Task {name} complete: {total} stocks | {data_ok} analyzed, {no_data} no data, {errors} errors | {len(results)} with signals`.
-  - **Helper**: `_process_single()` for indicator + signal generation per stock.
-  - **Enrichment**: Extracts `matched_*_strategies` lists and passes `name` from `WatchlistItem`.
-  - **Resumable (optional)**: `execute(job, checkpoint=None, task_key="")` — when a `Checkpoint` is supplied, stocks marked done for `task_key` are skipped and cached results folded back; emit `stock_done` events for them so progress stays monotonic. The fetch date window is frozen in `checkpoint.context["dates:<task_key>"]` on first run and reused on resume (raw OHLCV is NOT cached).
-
-- `ExecutionJob`: Dataclass containing list of stocks, strategies, config, and `days_back`.
-
-- `Storage`: Handles saving `ExecutionResultItem` to JSON.
-  - `ExecutionResultItem`: Now includes `name`, `matched_buy_strategies`, and `matched_sell_strategies` to support Markdown report grouping and resonance analysis. Has `to_dict()` / `from_dict()` so cached results survive checkpoint serialization.
-
-- `Checkpoint` (checkpoint.py): Persists per-task done codes (`work.<task>.done`), cached result dicts (`results.<task>`), a config snapshot, and a `context` map at `~/.quantflow/checkpoints/<run_id>.json`. Atomic save (temp + fsync + `os.replace`). API: `load`/`load_or_create`, `mark_done(task, code, stats, result)`, `get_done`, `get_results`, `set_context`/`get_context`, `copy_to`, `delete`, `summary`. Failed stocks are not marked done (retried); only analyzed stocks are marked done; no-data/stale/error/insufficient stocks remain retryable.
-
-## CONVENTIONS
-
-- Executor is stateless regarding strategy logic; it only orchestrates the pipeline.
-- Strategies must be fully instantiated before passing to the Job.
-- Checkpoint/resume parameters are optional and default to `None`/`""` so CLI callers and test mocks accepting only `job` remain unaffected.
-## RELIABILITY UPDATE
-
-See project `docs/reliability-and-data-contracts.md`. Executor returns list-compatible ScanResults with per-stock outcomes; indicators and strategy signals are isolated. Snapshot/coverage writes are mandatory and atomic. Resume rejects changed configuration/code and missing input snapshots.
+- Fetch in bounded batches of up to 50 where the configured provider supports batch
+  requests. Process and persist each batch before fetching the next. Fetch other items
+  individually. The provider may split execution batches into smaller requests.
+- Instantiate indicators from the frozen configuration for the strategy dependencies.
+  Evaluate each strategy separately. Classify every stock outcome, including those
+  missing data or prerequisites. `ScanResults` is a list of signal items with additional
+  per-stock outcomes and summary counters.
+- Publish download and analysis progress separately. `ProgressEvent` carries enough
+  information for the Web engine to update the current phase and counters.
+- `Storage` and the shared artifact writer persist outputs. Required writes propagate failures.
+  `Checkpoint` stores per-task analyzed codes and their results in
+  `~/.quantflow/checkpoints/<run_id>.json`. See `run:plan`, `execution:<task_key>`
+  and `orchestration:as_of` for plan, execution identity and shared cutoff.
+  Analyzed inputs live in `snapshots/<task>/<code>.json` under the run directory.
+- Resume copies the checkpoint and validates the recorded plan and source fingerprint.
+  Reuse successful items only after validating their saved input snapshots. Retry unfinished
+  stocks against the original cutoff. Separate manifests track each run's artifact ownership.
+- Run `python -m pytest tests/execution tests/test_rebound_workflows.py`.
+  See [reliability and data contracts](../../../docs/reliability-and-data-contracts.md).

@@ -1,10 +1,7 @@
 from tests.web.artifact_fixtures import own_test_artifacts
 """Tests for Runs API endpoints."""
-import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
 
 import pytest
 from fastapi.testclient import TestClient
@@ -518,32 +515,6 @@ class TestTaskRunNaming:
             assert "tasks_named" in detail["run"]["name"]
         finally:
             preflight.PROJECT_ROOT = orig
-
-
-class TestMdToHtmlFrontend:
-    """Verify mdToHtml handles markdown lists."""
-
-    def test_md_list_star_syntax(self):
-        """List syntax should produce <li> elements."""
-        from pathlib import Path
-        ts = Path(__file__).resolve().parents[2]
-        app_ts = (
-            ts / "src" / "quantflow" / "web" / "static" / "app.ts"
-        )
-        content = app_ts.read_text()
-        lines = content.split("\n")
-        md_start = None
-        md_end = None
-        for i, line in enumerate(lines):
-            if "function mdToHtml" in line:
-                md_start = i
-            if md_start is not None and "return html;" in line:
-                md_end = i
-                break
-        assert md_start is not None
-        md_body = "\n".join(lines[md_start:md_end + 1])
-        assert "<li" in md_body
-        assert "list-disc" in md_body
 
 
 class TestGetReportEndpoint:

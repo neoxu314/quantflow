@@ -30,6 +30,7 @@ logging:
 lookback:
   calendar_multiplier: 2
   buffer_days: 30
+# Local download policy. Provider limits and availability may vary.
 yfinance:
   batch:
     chunk_size: 35
@@ -40,6 +41,8 @@ yfinance:
     cooldown_base: 60
     recovery_max_passes: 3
     recovery_chunk_size: 10
+# Batch history requests are sequential. Only sleep_min and sleep_max affect that loop.
+# chunk_size and max_workers remain accepted for compatibility.
 yahooquery:
   batch:
     chunk_size: 100

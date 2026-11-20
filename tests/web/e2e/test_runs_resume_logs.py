@@ -1,12 +1,7 @@
-"""E2E tests for the three Runs improvements:
+"""Verify run log display, startup recovery and Resume eligibility.
 
-1. Progress log box shows the REAL on-disk Python log (not SSE summaries).
-2. Startup reconciliation renders the ``interrupted`` state in the UI.
-3. Resume button visibility + checkpoint API + resume guard rails.
-
-These tests seed run rows directly into the live SQLite DB (WAL mode, safe to
-write from the test process) and remove them afterwards.  They do NOT launch
-any real data download, so they are fast and network-independent.
+Seed SQLite records in the test server's temporary state directory. The checks
+exercise job history without making market data requests.
 """
 from __future__ import annotations
 
@@ -149,12 +144,11 @@ class TestInterruptedStateE2E:
             "Interrupted", exact=True).wait_for(state="visible", timeout=10000)
 
     def test_reconcile_endpoint_via_api(self, seeded_runs):
-        """The checkpoint API reports can_resume for an interrupted run."""
+        """An interrupted run without a checkpoint cannot be resumed."""
         rid = seeded_runs("e2e_interrupted_api", "task_run", "interrupted")
         resp = httpx.get(f"{SERVER_URL}/api/runs/{rid}/checkpoint", timeout=10)
         assert resp.status_code == 200
         body = resp.json()
-        # No checkpoint seeded -> exists False, but run is still resumable by status
         assert body["exists"] is False
         assert body["can_resume"] is False
 
@@ -192,7 +186,7 @@ class TestResumeE2E:
         rid = seeded_runs("e2e_resume_reject", "task_run", "completed")
         # Drive the endpoint via the same call the UI button makes, but assert
         # the guard rail: a completed run cannot be resumed.
-        # Use raw HTTP to the live server instead (no in-process client here).
+        # Send the request to the test-owned loopback server.
         resp = httpx.post(f"{SERVER_URL}/api/runs/{rid}/resume", timeout=10)
         assert resp.status_code == 400
         assert "cannot be resumed" in resp.json()["detail"].lower()

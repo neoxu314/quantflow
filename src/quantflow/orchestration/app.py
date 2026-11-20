@@ -134,6 +134,9 @@ class Orchestrator:
 
                     def progress(event, base_offset=offset):
                         check_cancelled()
+                        if event.type == "fetch":
+                            self.on_progress(event)
+                            return
                         self.on_progress(
                             ProgressEvent(
                                 event.type,

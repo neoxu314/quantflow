@@ -21,10 +21,9 @@ class WebConfig:
     def load(cls, path: Optional[str] = None) -> "WebConfig":
         """Load web configuration from a YAML file.
 
-        If no path is provided, attempt to locate a bundled quantflow.yaml in the
-        repository/package (config/quantflow.yaml). If found, it will be used to
-        override defaults. If no file can be found, defaults are returned.
-        If a path is provided but does not exist, a FileNotFoundError is raised.
+        With no explicit path, look for config/quantflow.yaml relative to the
+        source checkout. If it is absent, use the default address and port.
+        An explicit missing file raises FileNotFoundError.
         """
         cfg = cls()
 

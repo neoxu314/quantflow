@@ -320,3 +320,30 @@ def test_ohlc_allows_float_roundoff_but_rejects_a_material_price_violation():
     quotes.loc[0, "high"] = quotes.loc[0, "close"] - 0.01
     with pytest.raises(ValueError, match="Inconsistent"):
         normalize_ohlcv(quotes)
+
+
+def test_batch_rechecks_only_symbols_with_unresolved_transport_errors(monkeypatch):
+    a, b = StockCode("A", "US"), StockCode("B", "US")
+    primary = FakeAdapter({"A.US": sample()})
+    fallback = FakeAdapter({})
+    factory = DataSourceFactory()
+
+    def fetch(codes, *args):
+        names = [code.standard for code in codes]
+        primary.calls.append(names)
+        if len(primary.calls) == 1:
+            primary.batch_errors = {"B.US": "TimeoutError: simulated network interruption"}
+            return {"A.US": sample()}
+        primary.batch_errors = {}
+        return {"B.US": sample()}
+
+    monkeypatch.setattr(primary, "fetch_batch_ohlcv", fetch)
+    monkeypatch.setattr(
+        factory, "_get_adapter", lambda name: primary if name == "yahooquery" else fallback,
+    )
+    result = factory.fetch_batch_ohlcv([a, b], "2026-11-17", "2026-11-18")
+    assert {code: source for code, (_, source) in result.items()} == {
+        "A.US": "yahooquery", "B.US": "yahooquery",
+    }
+    assert primary.calls == [["A.US", "B.US"], ["B.US"]]
+    assert fallback.calls == [["B.US"]]

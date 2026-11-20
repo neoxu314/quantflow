@@ -18,7 +18,7 @@ class StockCode:
     BaoStock format: sh.600000 (converted internally)
     """
     code: str           # 6-digit code: 600000
-    exchange: str       # Exchange: SH/SZ/HK/US
+    exchange: str       # Standard exchange: SH, SZ, HK, US, T or KS
     name: Optional[str] = None
     
     @property

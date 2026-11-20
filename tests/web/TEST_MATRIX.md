@@ -1,175 +1,31 @@
-# Web Layer Test Coverage Matrix
+# Web test matrix
 
-**Generated:** 2026-05-05
-**Purpose:** Track Execution → API data flow test coverage
+The offline Python suite checks API contracts and worker behavior. Browser cases check
+flows across the UI, API and real worker with replayed market data. Vitest checks
+frontend logic directly. Use the narrowest layer that would catch the regression and
+a browser case when the behavior depends on wiring across layers.
 
-## Test Pyramid Layers
+| Flow | API, worker or shared result contract | Browser or Web system sample |
+| --- | --- | --- |
+| Watchlists and tasks | [Watchlist API](test_watchlist_api.py), [task API](test_task_api.py) | [Workspace UI](e2e/test_web_ui.py), [YAML persistence](e2e/test_yaml_sync.py) |
+| Library and Settings | [Catalog and parameters](test_library_api.py), [settings and token](test_config_api.py), [Web config](test_web_config.py) | [Workspace UI](e2e/test_web_ui.py), [YAML persistence](e2e/test_yaml_sync.py) |
+| New Run and saved presets | [Preflight and run API](test_runs_api.py), [path consistency](test_path_consistency_contract.py) | [Common controls](e2e/test_acceptance_controls.py), [watchlist preflight](e2e/test_runs_watchlist_preflight.py), [presets](e2e/test_presets.py) |
+| Stock Scan, Watchlist Run and Task Run | [Shared result cases](../test_rebound_workflows.py), [entry-point consistency](test_execution_api_consistency.py), [engine](test_runs_engine.py) | [Stock Scan](e2e/test_runs_stock_scan.py), [Watchlist Run](e2e/test_runs_watchlist_run.py), [Task Run](e2e/test_runs_task_run.py), [indicators](e2e/test_runs_indicator_data.py) |
+| Progress, logs, coverage and report | [Lifecycle](test_run_lifecycle_contracts.py), [serialization](test_nan_serialization.py), [shared result cases](../test_rebound_workflows.py) | [Watchlist Run progress and report](e2e/test_runs_watchlist_run.py), [Resume and logs](e2e/test_runs_resume_logs.py) |
+| Queue, cancellation and restart | [Lifecycle](test_run_lifecycle_contracts.py), [reconcile and Resume](test_resume_and_reconcile.py) | [Queue](e2e/test_runs_queue.py), [cancellation](e2e/test_runs_cancel.py), [restart isolation](e2e/test_server_isolation.py) |
+| Files, directories and errors | [Run outputs](test_runs_integration.py), [browse API](test_browse_api.py), [static assets](test_static_serving.py) | [Directory selection](e2e/test_browse_api.py), [data isolation](e2e/test_data_boundary.py), [errors](e2e/test_error_handling.py) |
+| Frontend handling | [Vitest app tests](frontend/app.test.ts), [utility tests](frontend/utils.test.ts) | Covered in relevant flows above |
 
-| Layer | Files | Purpose | Coverage |
-|-------|-------|---------|----------|
-| Contract | `test_path_consistency_contract.py` | Validate path structure invariants | ✅ 4 tests |
-| Integration | `test_execution_api_consistency.py` | Verify Execution → API consistency | ✅ 8 tests |
-| Unit | `test_runs_api.py` | API endpoint logic | ✅ 42 tests |
-| Integration | `test_runs_integration.py` | API → DB round-trip | ✅ 20 tests |
-| Unit | `test_resume_and_reconcile.py` | Checkpoint resume, startup reconciliation, file-log API, logging isolation | ✅ 9 tests (added 2026-11-18) |
-| E2E | `e2e/test_runs_*.py` | UI validation (Playwright) | ✅ 28 tests |
-| E2E | `e2e/test_runs_resume_logs.py` | Real file log box, interrupted state, resume button/API (no network) | ✅ 10 tests (added 2026-11-18) |
-
-## Execution → API Test Matrix
-
-| Run Type | Mode | Endpoint | Test File | Status |
-|----------|------|----------|-----------|--------|
-| stock_scan | - | files | `test_execution_api_consistency.py::test_stock_scan_files_endpoint_finds_indicator_json` | ✅ |
-| stock_scan | - | report | `test_runs_api.py::TestGetReportEndpoint::test_get_report_success` | ✅ |
-| stock_scan | - | open_folder | `test_execution_api_consistency.py::test_stock_scan_open_folder_has_direct_files` | ✅ |
-| stock_scan | - | delete | `test_runs_integration.py::test_stock_scan_cleanup_on_delete` | ✅ |
-| watchlist_run | - | files | `test_execution_api_consistency.py::test_watchlist_run_files_endpoint_finds_markdown_and_json` | ✅ |
-| watchlist_run | - | report | `test_execution_api_consistency.py::test_watchlist_run_report_endpoint_reads_markdown` | ✅ |
-| watchlist_run | - | open_folder | ❌ MISSING | ⚠️ Low priority |
-| watchlist_run | - | delete | `test_runs_integration.py::test_watchlist_run_cleanup_on_delete` | ✅ |
-| task_run | normal | files | `test_execution_api_consistency.py::test_task_run_normal_mode_files_endpoint` | ✅ |
-| task_run | normal | report | `test_runs_api.py::TestGetReportEndpoint::*` | ⚠️ Weak |
-| task_run | normal | open_folder | ❌ MISSING | ⚠️ Low priority |
-| task_run | normal | delete | `test_runs_integration.py::test_task_run_cleanup_on_delete` | ✅ |
-| task_run | **daily** | files | `test_execution_api_consistency.py::test_task_run_daily_mode_files_endpoint_finds_subdirectory_files` | ✅ |
-| task_run | **daily** | report | `test_execution_api_consistency.py::test_task_run_daily_mode_report_endpoint_reads_correct_file` | ✅ |
-| task_run | **daily** | open_folder | `test_execution_api_consistency.py::test_task_run_daily_mode_open_folder_has_files_or_subdir` | ✅ (documents UX issue) |
-| task_run | **daily** | delete | `test_runs_integration.py::test_task_run_daily_mode_cleanup_removes_subdirectory` | ✅ |
-
-## E2E Test Coverage
-
-| Feature | Test File | Tests | Validation Strength |
-|---------|-----------|-------|---------------------|
-| stock_scan lifecycle | `e2e/test_runs_stock_scan.py` | 2 | ✅ Strong (checks indicator data accuracy) |
-| watchlist_run lifecycle | `e2e/test_runs_watchlist_run.py` | 2 | ⚠️ Weak (no files endpoint validation) |
-| task_run lifecycle | `e2e/test_runs_task_run.py` | 6 | ✅ Strong (after refactor) |
-| daily mode files | `e2e/test_runs_task_run.py::test_task_run_daily_mode_files_validation` | 1 | ✅ New |
-| cancel flow | `e2e/test_runs_cancel.py` | 4 | ✅ Strong |
-| queue behavior | `e2e/test_runs_queue.py` | 3 | ✅ Strong |
-| file log box + resume + interrupted | `e2e/test_runs_resume_logs.py` | 10 | ✅ Strong (DB-seeded, no network) |
-
-## Resume / Reconciliation / File-Log Coverage (2026-11-18)
-
-| Feature | Unit test | E2E test |
-|---------|-----------|----------|
-| Checkpoint atomic write / load / copy | `test_resume_and_reconcile.py::TestCheckpoint*` | `test_runs_resume_logs.py::TestResumeApi*` |
-| `resume` creates new run + copies checkpoint | `TestResumeApi::test_resume_creates_new_run_and_copies_checkpoint` | `test_resume_button*` |
-| `resume` rejects invalid state / stock_scan | `TestResumeApi::test_resume_rejects_*` | `test_resume_rejects_*` |
-| Startup reconciliation flips stale `running`/`queued` → `interrupted` | `TestStartupReconciliation*` | `test_interrupted_state_rendered` |
-| File log API returns on-disk content (byte-exact) | `TestFileLogApi*` | `test_log_box_shows_real_file*` |
-| Log handlers do not leak across runs | `TestLoggingIsolation::test_repeated_setup_does_not_leak_handlers` | — |
-
-**Coverage Summary**
-
-**Before Refactor:** 12 missing test scenarios  
-**After Refactor:** All critical scenarios covered  
-**Remaining Gaps:**
-- watchlist_run open_folder test (low priority)
-- task_run normal mode open_folder test (low priority)
-
-**Total Tests Added:**
-- Integration tests: 8 new tests (Execution → API consistency)
-- Contract tests: 4 new tests (path structure validation)
-- E2E tests: 1 improved test + 1 new test (stronger validation)
-
-## Test Execution Commands
+## Run the checks
 
 ```bash
-# Contract tests
-pytest tests/web/test_path_consistency_contract.py -v
-
-# Integration tests (Execution → API)
-pytest tests/web/test_execution_api_consistency.py -v
-
-# All web tests (unit + integration)
-pytest tests/web/ -v --ignore=tests/web/e2e/
-
-# Resume / reconciliation / file-log tests (no network)
-pytest tests/web/test_resume_and_reconcile.py -v
-
-# E2E tests (requires playwright)
-pytest tests/web/e2e/ -v
-
-# New resume/log E2E tests only (fast, DB-seeded)
-pytest tests/web/e2e/test_runs_resume_logs.py -v
+python -m pytest tests/web
+python -m pytest tests/web/e2e --run-browser
+npm --prefix tests/web/frontend test
 ```
 
-## Maintenance Checklist
-
-When adding new run_type or mode:
-1. Add test to `test_execution_api_consistency.py` (files/report/open_folder)
-2. Add contract test to `test_path_consistency_contract.py` if new path structure
-3. Add E2E test to `e2e/test_runs_*.py` for UI validation
-4. Update this matrix document
-
-## Test Design Principles
-
-### 1. Test Pyramid Balance
-
-```
-Contract Tests (4)      → Validate invariants (path structure)
-    ↑
-Integration Tests (8)   → Verify Execution → API data flow
-    ↑
-Unit Tests (42)         → API endpoint logic
-    ↑
-E2E Tests (28)          → UI validation (Playwright)
-```
-
-### 2. Data Flow Testing
-
-Each test verifies a complete chain:
-- **Config → Execution → FileSystem → API → UI**
-
-Example: `test_task_run_daily_mode_files_endpoint_finds_subdirectory_files`
-1. Create run config (daily=True)
-2. Simulate execution (create files in YYYY-MM-DD/)
-3. Verify API finds files (files endpoint returns correct paths)
-4. Verify UI shows files (E2E test validates file names)
-
-### 3. Contract Testing
-
-Path structure invariants:
-- `output_path` vs `report_path` relationship
-- Daily mode: `report_path` contains date, `output_path` does not
-- Each run has isolated `output_path`
-
-### 4. Validation Strength Levels
-
-| Level | Example | Before | After |
-|-------|---------|--------|-------|
-| Weak | `assert len(files) > 0` | ✅ | ✅ (E2E only) |
-| Medium | `assert "Daily_Report.md" in file_names` | ❌ | ✅ |
-| Strong | `assert Path(f["path"]).exists() and "2026-05-05" in f["path"]` | ❌ | ✅ |
-
-**Improvement:** All critical tests now at Medium+ strength.
-
-## Known UX Issues (Documented by Tests)
-
-### 1. Daily Mode Open Folder
-
-**Test:** `test_task_run_daily_mode_open_folder_has_files_or_subdir`
-
-**Issue:** Opens `output_path` which contains only `YYYY-MM-DD/` subdirectory.
-User must manually navigate into date directory.
-
-**Possible Fix:** Open `report_path` directory instead (contains actual files).
-
-**Priority:** Medium (UX improvement, not bug).
-
-## Test Metrics
-
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| Total tests | ~200 | ~215 | +15 tests |
-| Integration tests | ~18 | ~26 | +8 tests |
-| Contract tests | 0 | 4 | +4 tests |
-| E2E validation strength | Weak | Strong | ✅ |
-| Critical gaps | 12 | 0 | ✅ Fixed |
-
-## Next Steps
-
-1. Monitor test execution time (integration tests should stay under 2 minutes)
-2. Add watchlist_run open_folder test if needed (low priority)
-3. Review UX issue: daily mode open_folder behavior
-4. Keep matrix updated as new features added
+Follow the [README](../../README.md#testing) to install dependencies and Playwright.
+Offline replay bars have known signals and no-signal cases, and exercise production
+calculation and report generation. Check real provider behavior separately with
+`python -m pytest --live-market -m integration`. That suite depends on connectivity
+and provider permissions. It is separate from the deterministic acceptance checks.

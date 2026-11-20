@@ -262,7 +262,7 @@ class TestOrchestratorPathResolution:
         assert app._resolve_task_dir(cfg) == "/base/2026-05-05"
 
     def test_resolve_combined_dir_without_daily(self):
-        """Without daily mode, uses base or 'reports' default."""
+        """Without daily mode, use the specified base."""
         app = Orchestrator([], output_override="/base", daily_mode=False)
         app.date_str = "2026-05-05"
         assert app._resolve_combined_dir() == "/base"
@@ -274,7 +274,7 @@ class TestOrchestratorPathResolution:
         assert app._resolve_task_dir(cfg) == "output"
 
     def test_resolve_combined_dir_fallback_to_reports(self):
-        """Without override, defaults to 'reports'."""
+        """With no override, the combined report uses the default output base."""
         app = Orchestrator([], daily_mode=False)
         assert app._resolve_combined_dir() == "output"
 

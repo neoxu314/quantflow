@@ -6,7 +6,7 @@
     <title>QuantFlow Web</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- cache-bust: bump the version after rebuilding app.js so browsers reload it -->
-    <script type="module" src="/app.js?v=20261118c"></script>
+    <script type="module" src="/app.js?v=20261120b"></script>
     <style>
         .tab-active { border-color: #3b82f6; color: #2563eb; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
@@ -333,7 +333,7 @@
                             </span>
                         </label>
                         <div class="flex items-center gap-2">
-                            <input id="cfg-tushare-token" type="password" class="flex-1 border rounded px-2 py-1" placeholder="留空表示未配置" data-path="tushare.token" />
+                            <input id="cfg-tushare-token" type="password" class="flex-1 border rounded px-2 py-1" placeholder="留空保留已保存的 Token" data-path="tushare.token" />
                             <button type="button" id="btn-toggle-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">👁️</button>
                             <button type="button" id="btn-copy-token" class="text-sm px-2 py-1 text-gray-500 hover:text-gray-700">📋</button>
                         </div>

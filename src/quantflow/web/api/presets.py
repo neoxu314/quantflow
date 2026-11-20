@@ -53,11 +53,19 @@ def create(body: dict):
 
 @router.put("/{pid}")
 def update(pid: str, body: dict):
-    if not PresetManager.get(pid):
+    preset = PresetManager.get(pid)
+    if not preset:
         raise HTTPException(status_code=404, detail="Not found")
-    ok = PresetManager.update(
-        pid, body.get("name"), body.get("run_type"),
-        body.get("config", {}))
+    name = body.get("name", preset.name)
+    run_type = body.get("run_type", preset.run_type)
+    config = body.get("config", preset.config)
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(status_code=400, detail="Preset name is required")
+    if run_type not in ("stock_scan", "watchlist_run", "task_run"):
+        raise HTTPException(status_code=400, detail="Invalid run_type")
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=400, detail="Preset config must be an object")
+    ok = PresetManager.update(pid, name, run_type, config)
     if not ok:
         raise HTTPException(status_code=500, detail="Update failed")
     return {"ok": True}

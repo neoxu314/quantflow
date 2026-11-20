@@ -2,10 +2,12 @@ from quantflow.web.config import WebConfig
 import yaml
 
 
-def test_default_config():
-    cfg = WebConfig.load()
+def test_default_config_without_web_settings(web_config_yaml_path):
+    with open(web_config_yaml_path, "w", encoding="utf-8") as config:
+        config.write("{}")
+    cfg = WebConfig.load(web_config_yaml_path)
     assert cfg.host == "127.0.0.1"
-    assert cfg.port == 8082
+    assert cfg.port == 8080
 
 
 def test_load_from_yaml(web_config_yaml_path):

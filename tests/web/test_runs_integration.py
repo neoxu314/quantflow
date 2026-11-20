@@ -486,12 +486,7 @@ class TestCrossRunTypeFileCleanup:
         assert d.exists(), "Base output directory should be preserved (safety)"
 
     def test_delete_run_removes_report_path_file_first(self):
-        """Verify report_path file and indicator file are deleted, directory preserved.
-        
-        After Phase 1.1: stock_scan no longer creates run_id subdirectory.
-        Output directory may contain files from other runs, so we only delete
-        specific files, not the entire directory.
-        """
+        """Delete owned report and indicator files, preserving the unowned file."""
         h, runs_api, engine = self._setup_engine()
 
         rid = h.create_run("Report Delete", "stock_scan", {"code": "X"})

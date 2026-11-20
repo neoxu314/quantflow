@@ -1,197 +1,139 @@
-"""E2E tests for Runs Panel - Watchlist Run Workflow."""
-from __future__ import annotations
+"""Watchlist submission and continuation from a genuine partial run."""
 
-import sqlite3
-import time
+import json
 from pathlib import Path
 
-import httpx
-import yaml
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
-from .conftest import SERVER_URL, TEST_WATCHLIST_NAME
+from .run_helpers import (
+    open_new_run,
+    open_run_tab,
+    open_runs,
+    pause_provider,
+    result,
+    select_run,
+    submit_run,
+    wait_run,
+    wait_until,
+)
 
-DB_PATH = None
-TEST_STOCK_CODE = "NVDA.US"
-RUN_TIMEOUT_SEC = 120
-WATCHLIST_YAML = None
 
-
-def setup_test_watchlist(e2e_url):
-    payload = {
-        "name": TEST_WATCHLIST_NAME,
-        "description": "E2E test watchlist",
-        "items": [{"code": TEST_STOCK_CODE, "name": "Nvidia", "tags": []}],
-    }
-    resp = httpx.put(
-        f"{e2e_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
-        json=payload,
-        timeout=30,
+def test_watchlist_reports_the_known_candidate(page, client, e2e_url):
+    open_runs(page, e2e_url)
+    open_new_run(page, "watchlist_run")
+    page.locator("#run-watchlist-select").select_option("watchlists/djia.yaml")
+    expect(page.locator("#run-cli-preview")).to_contain_text(
+        "monitor --watchlist watchlists/djia.yaml"
     )
-    assert resp.status_code in (201, 200)
-    assert WATCHLIST_YAML.exists()
-    data = yaml.safe_load(WATCHLIST_YAML.read_text())
-    assert len(data.get("items", [])) == 1
+    run_id = submit_run(page, e2e_url)
+    assert wait_run(client, run_id)["signal_count"] == 1
+    select_run(page, run_id, "completed")
+    report = open_run_tab(page, "report")
+    expect(report).to_contain_text("AAPL.US")
+    expect(report).to_contain_text("Oversold J=4.4 in bull channel")
+    files = open_run_tab(page, "files")
+    expect(files.get_by_role("cell", name="web-DJIA.md", exact=True)).to_be_visible()
 
 
-class TestRunsWatchlistRunWorkflow:
+def test_back_allows_changing_run_type(page, e2e_url):
+    open_runs(page, e2e_url)
+    open_new_run(page, "stock_scan")
+    page.locator("#btn-back-run").click()
+    expect(page.locator("#run-step-type")).to_be_visible()
+    expect(page.locator("#run-config-stock_scan")).to_be_hidden()
+    page.locator('[data-type="watchlist_run"]').click()
+    expect(page.locator("#run-config-watchlist_run")).to_be_visible()
+    expect(page.locator("#run-config-stock_scan")).to_be_hidden()
 
-    def wait_for_run_completion(self, e2e_url: str, run_type: str) -> dict | None:
-        deadline = time.time() + RUN_TIMEOUT_SEC
-        while time.time() < deadline:
-            try:
-                resp = httpx.get(f"{e2e_url}/api/runs/")
-                if resp.status_code == 200:
-                    for run in resp.json().get("runs", []):
-                        if run.get("run_type") == run_type:
-                            if run["status"] == "completed":
-                                return run
-                            if run["status"] == "failed":
-                                return run
-            except Exception:
-                pass
-            time.sleep(3)
-        return None
 
-    def test_watchlist_run_full_lifecycle(self, page: Page, e2e_url: str):
-        setup_test_watchlist(e2e_url)
-
-        page.goto(SERVER_URL)
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
-
-        page.click("#btn-new-run")
-        page.wait_for_selector("#modal-new-run", state="visible")
-
-        page.click("button[data-type='watchlist_run']")
-        page.wait_for_selector("#run-config-watchlist_run", state="visible")
-
-        page.locator("#run-watchlist-select").select_option(index=0)
-        page.wait_for_timeout(500)
-
-        page.click("#btn-execute-run")
-        page.wait_for_timeout(2000)
-
-        validation_errors = page.locator("#run-validation-errors")
-        if validation_errors.is_visible():
-            raise AssertionError(
-                f"Preflight validation failed: {validation_errors.text_content()}"
-            )
-
-        page.wait_for_selector("#modal-new-run", state="hidden", timeout=10000)
-
-        page.wait_for_function(
-            f"""(wlName) => {{
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {{
-                    if (item.textContent.includes(wlName)) return true;
-                }}
-                return false;
-            }}""",
-            arg=TEST_WATCHLIST_NAME,
-            timeout=15000,
+def test_resume_creates_new_completed_run_and_keeps_original(page, client, e2e_url, web_server):
+    result(
+        client.put(
+            "/api/watchlists/resume-fixture.yaml",
+            json={
+                "name": "resume-fixture",
+                "items": [{"code": "AAPL.US"}, {"code": "BROKEN.US"}],
+            },
         )
-
-        run = self.wait_for_run_completion(e2e_url, "watchlist_run")
-        assert run is not None, "Run did not complete within timeout"
-        assert run["status"] == "completed", f"Run failed: {run.get('error')}"
-
-        page.reload()
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
-
-        page.wait_for_function(
-            f"""(wlName) => {{
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {{
-                    if (item.textContent.includes(wlName) && item.textContent.includes('completed')) {{
-                        return true;
-                    }}
-                }}
-                return false;
-            }}""",
-            arg=TEST_WATCHLIST_NAME,
-            timeout=10000,
+    )
+    body = result(
+        client.post(
+            "/api/runs/",
+            json={
+                "run_type": "watchlist_run",
+                "watchlist": "watchlists/resume-fixture.yaml",
+                "strategies": ["daily_bull_oversold"],
+            },
         )
+    )
+    original_id = body["run_id"]
+    original = wait_run(client, original_id, "partial")
+    assert original["signal_count"] == 1
+    (coverage,) = Path(original["output_path"]).glob("*_coverage.json")
+    outcome = next(
+        row for row in json.loads(coverage.read_text())["outcomes"] if row["code"] == "BROKEN.US"
+    )
+    assert outcome["status"] == "error"
+    assert "connection timeout" in outcome["error"]
+    request_log = web_server.root / "provider-requests.log"
+    first_requests = request_log.read_text().splitlines()
+    (web_server.root / "provider-available").touch()
 
-        run_item = page.locator(
-            f"li[data-run-id]:has-text('{TEST_WATCHLIST_NAME}')"
-        ).first
-        run_item.click()
-        page.wait_for_selector("#runs-detail", state="visible")
-        expect(page.locator("#runtab-config")).to_contain_text("completed")
+    open_runs(page, e2e_url)
+    select_run(page, original_id, "partial")
+    with page.expect_response(
+        lambda r: r.url == f"{e2e_url}/api/runs/{original_id}/resume" and r.request.method == "POST"
+    ) as resumed:
+        page.get_by_role("button", name="⏵ Resume", exact=True).click()
+    new_id = resumed.value.json()["run_id"]
+    assert new_id != original_id
+    finished = wait_run(client, new_id)
+    assert finished["config"]["resume_from"] == original_id
+    assert finished["output_path"] != original["output_path"]
+    assert finished["signal_count"] == 1
+    assert request_log.read_text().splitlines()[len(first_requests) :] == ["BROKEN.US"]
+    assert result(client.get(f"/api/runs/{original_id}"))["run"]["status"] == "partial"
+    select_run(page, new_id, "completed")
+    expect(open_run_tab(page, "report")).to_contain_text("Oversold J=4.4 in bull channel")
 
-        page.click('[data-runtab="report"]')
-        expect(page.locator("#runtab-report")).not_to_contain_text(
-            "No report available"
+
+def test_progress_during_download_and_after_reconnect(page, client, e2e_url, web_server):
+    result(
+        client.put(
+            "/api/watchlists/progress.yaml",
+            json={
+                "name": "Progress",
+                "items": [{"code": "AAPL.US"}, {"code": "MSFT.US"}],
+            },
         )
-        expect(page.locator("#runtab-report")).not_to_contain_text("Failed to load")
-
-        page.click('[data-runtab="files"]')
-        expect(
-            page.locator("#runtab-files table tbody tr td").first
-        ).to_contain_text(".md")
-
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            rows = conn.execute(
-                "SELECT status, report_path, output_path, signal_count FROM run_history WHERE config LIKE ? ORDER BY created_at DESC LIMIT 1",
-                (f"%{TEST_WATCHLIST_NAME}%",),
-            ).fetchall()
-
-        assert len(rows) > 0, "Run should exist in DB"
-        status, report_path, output_path, signal_count = rows[0]
-        assert status == "completed", f"Expected completed, got {status}"
-        assert report_path is not None, "Report path should not be null"
-        assert output_path is not None, "Output path should not be null"
-
-        report_file = Path(report_path)
-        assert report_file.exists(), f"Report file should exist: {report_file}"
-        report_text = report_file.read_text()
-        assert "daily_bull_oversold" in report_text or "Buy" in report_text
-
-        page.on("dialog", lambda dialog: dialog.accept())
-        delete_btn = page.locator(
-            f'li[data-run-id]:has-text("{TEST_WATCHLIST_NAME}"):has(button[title="Delete run"])'
-        ).locator("button[title=\"Delete run\"]").first
-        delete_btn.click()
-
-        page.wait_for_function(
-            f"""(wlName) => {{
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {{
-                    if (item.textContent.includes(wlName)) return false;
-                }}
-                return true;
-            }}""",
-            arg=TEST_WATCHLIST_NAME,
-            timeout=10000,
+    )
+    gate = pause_provider(web_server, "MSFT.US")
+    run_id = result(
+        client.post(
+            "/api/runs/",
+            json={
+                "run_type": "watchlist_run",
+                "watchlist": "watchlists/progress.yaml",
+                "strategies": ["daily_bull_oversold"],
+            },
         )
+    )["run_id"]
+    wait_until(gate.with_suffix(".entered").exists, "Second stock was never requested")
+    open_runs(page, e2e_url)
+    select_run(page, run_id, "running")
+    progress = open_run_tab(page, "progress")
+    expect(progress.locator("#run-progress-text")).to_have_text("Downloading 50% (1/2)")
+    expect(progress.get_by_role("progressbar")).to_have_attribute("aria-valuenow", "50")
 
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            count = conn.execute(
-                "SELECT count(*) FROM run_history WHERE config LIKE ?",
-                (f"%{TEST_WATCHLIST_NAME}%",),
-            ).fetchone()[0]
+    page.route("**/logs:sse", lambda route: route.abort())
+    open_runs(page, e2e_url)
+    select_run(page, run_id, "running")
+    progress = open_run_tab(page, "progress")
+    expect(progress.locator("#run-progress-text")).to_have_text("Downloading 50% (1/2)")
+    assert not list(Path(wait_run(client, run_id, "running")["output_path"]).glob("snapshots/*/*"))
 
-        assert count == 0, "Run should be deleted from DB"
-
-    def test_run_type_cannot_modify_after_select(self, page: Page, e2e_url: str):
-        setup_test_watchlist(e2e_url)
-
-        page.goto(SERVER_URL)
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
-
-        page.click("#btn-new-run")
-        page.wait_for_selector("#modal-new-run", state="visible")
-
-        page.click("button[data-type='stock_scan']")
-        page.wait_for_selector("#run-config-stock_scan", state="visible")
-
-        page.click("#btn-back-run")
-        page.wait_for_selector("#run-step-type", state="visible")
-
-        step_type = page.locator("#run-step-type")
-        expect(step_type).to_be_visible()
-        config_stock = page.locator("#run-config-stock_scan")
-        expect(config_stock).to_be_hidden()
+    gate.unlink()
+    assert wait_run(client, run_id)["signal_count"] == 1
+    expect(progress).to_contain_text("Complete", timeout=7000)
+    expect(progress).to_be_visible()
+    expect(open_run_tab(page, "report")).to_contain_text("Oversold J=4.4 in bull channel")

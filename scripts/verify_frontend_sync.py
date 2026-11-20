@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Verify that compiled app.js is up-to-date with app.ts source.
+Check local app.js timestamps and a few expected symbols.
 
-Run this after frontend changes to catch missing compilation steps.
+The CI rebuild and comparison checks the full emitted JavaScript.
 """
 import sys
 from pathlib import Path
@@ -30,11 +30,10 @@ def main() -> int:
         print(f"STALE: app.js is older than app.ts")
         print(f"  app.ts: {APP_TS}")
         print(f"  app.js: {APP_JS}")
-        print(f"  Run: tsc --target ES2020 --removeComments --noEmitHelpers \\")
-        print(f"       --lib ES2020,DOM --outFile src/quantflow/web/static/app.js \\")
-        print(f"       --module none --strict false \\")
-        print(f"       --ignoreDeprecations \"6.0\" \\")
-        print(f"       src/quantflow/web/static/app.ts")
+        print(
+            "  Run from the project root: tests/web/frontend/node_modules/.bin/tsc "
+            "--project src/quantflow/web/static/tsconfig.json --removeComments"
+        )
         errors += 1
     else:
         print(f"OK: app.js ({js_mtime:.0f}) >= app.ts ({ts_mtime:.0f})")

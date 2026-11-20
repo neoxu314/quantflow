@@ -39,6 +39,16 @@ class TestBrickChartIndicator:
         assert "brick_chart" in result.columns
         assert len(result) == len(sample_df)
 
+    def test_undefined_range_does_not_poison_later_momentum(self, sample_df):
+        prefix = pd.DataFrame({"high": [9] * 4, "low": [9] * 4, "close": [9] * 4,
+                               "volume": [1000] * 4})
+        ind = BrickChartIndicator()
+        result = ind.get_buy_signals(ind.calculate(pd.concat([prefix, sample_df], ignore_index=True)))
+
+        assert result.brick_chart.iloc[:4].isna().all()
+        assert result.brick_chart.iloc[4:].notna().all()
+        assert not result.buy_signal.iloc[:6].any()
+
     def test_buy_signals(self, sample_df):
         ind = BrickChartIndicator()
         result = ind.calculate(sample_df)

@@ -1,13 +1,4 @@
-"""Web module tests for QuantFlow.
+"""API, worker and browser tests with disposable QuantFlow state.
 
-Three test layers:
-1. API tests (test_*_api.py): Unit tests using FastAPI TestClient + tmp_path
-2. Integration tests (test_integration.py): API→filesystem→API round-trip
-3. E2E browser tests (e2e/): Playwright browser automation
-
-Production safety:
-- API/Integration tests: Use tmp_path, never touch production files
-- E2E tests: Backup/restore mechanism for quantflow.yaml and indicators.yaml
-
-See AGENTS.md for detailed structure and running instructions.
+See TEST_MATRIX.md for the coverage map and how to run each layer.
 """

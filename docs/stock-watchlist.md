@@ -1,5 +1,18 @@
 # 股票监控清单
 
+实际运行使用 [watchlists 目录](../watchlists/)。名单随刷新和手工维护变化，以下表格为历史
+参考。按任务选择 `personal_focus_asia.yaml` 或 `personal_focus_us.yaml`，完整指数池
+使用对应的 YAML。股票代码包含交易市场后缀，示例见 [配置说明](../README.md#configuration)。
+
+从项目根目录执行以下命令会联网并更新对应的指数 YAML。已有手工编辑的指数名单请在刷新前留存。
+
+```bash
+python -m quantflow.data.fetch_indices     # S&P 500、Nasdaq 100、DJIA
+python -m quantflow.data.fetch_cn_indices  # 沪深 300、中证 500、创业板指
+```
+
+## 历史参考名单
+
 | 市场  | 代码     | 名称                |
 | --- | ------ | ----------------- |
 | A 股 | 000977 | 浪潮信息              |

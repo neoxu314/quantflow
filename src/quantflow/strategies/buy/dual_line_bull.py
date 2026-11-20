@@ -9,17 +9,10 @@ from quantflow.indicators.base import IndicatorBase
 
 
 class DailyBullishMidRangeBuy(BuyStrategy):
-    """
-    策略定义：日K-多头中部区间买入策略 (Daily Bullish Mid-Range Buy)
-    作者：[你的中文名]
+    """在日线多头区间筛选回调候选。
 
-    买入逻辑（需同时满足）：
-    1) 趋势判定：处于多头区间。
-       即：双线战法中，短期趋势线 > 多空线。
-    
-    2) 位置判定：收盘价处于双线通道内（含触碰）。
-       即：[多空线 ≤ 收盘价 ≤ 短期趋势线]。
-       意义：确认股价在多头通道内运行，既没破位，也未过度加速，是稳健的回调上车点。
+    短期趋势线需高于多空线，收盘价须位于两线之间，等于任一边界
+    也算命中。只要条件持续满足，每根日线都可触发。
     """
 
     @property
@@ -27,7 +20,7 @@ class DailyBullishMidRangeBuy(BuyStrategy):
         return "DailyBullishMidRange"
 
     def get_conditions(self) -> List[Condition]:
-        # Logic implemented in generate_signals due to complexity involving range check
+        # The range check is implemented in generate_signals().
         return []
 
     def get_required_indicators(self) -> List[IndicatorBase]:

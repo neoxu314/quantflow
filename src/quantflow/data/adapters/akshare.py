@@ -1,34 +1,9 @@
-"""AKShare data source adapter for sector data and HK stocks.
+"""AKShare adapter for sector information and HK daily prices.
 
-Classification Types:
-- EM (东方财富): 行业板块 + 概念板块 + 成分股API (⚠️ 当前网络不可用)
-- THS (同花顺): 行业板块 + 概念板块 (无成分股API)
-- SW (申万行业): 一级/二级/三级行业分类 + 成分股API (无概念板块) ✅ 推荐
-
-API Limitations:
-- EM: AKShare provides full API, but push2.eastmoney.com has network access restrictions
-- THS: Only list APIs available (no constituent APIs in AKShare)
-- SW: Only industry classification (no concept boards)
-
-Known Issues:
-- EM (东方财富): push2.eastmoney.com 存在地区网络访问限制，当前不可用
-- THS (同花顺): AKShare 无成分股API，仅能获取板块列表
-- 推荐使用 SW (申万) 进行完整板块数据分析
-
-Usage:
-    # 申万三级行业 ✅ 推荐
-    source = AKShareDataSource(classification="sw_l3")
-    industries = source.get_industry_list()
-    stocks = source.get_industry_constituents("857371.SI")  # 锂电池板块
-    
-    # 同花顺行业 (仅列表，无成分股)
-    source = AKShareDataSource(classification="ths")
-    industries = source.get_industry_list()
-    stocks = source.get_industry_constituents("881121")  # Returns []
-    
-    # 东方财富 (API存在，但可能因网络问题失败)
-    source = AKShareDataSource(classification="em")
-    industries = source.get_industry_list()  # 可能失败
+EM (东方财富) supports industry and concept lists and constituent lookups.
+THS (同花顺) supports industry and concept lists in this adapter. SW (申万)
+supports industry classifications at levels 1–3 and constituent lookups.
+Availability depends on access to the underlying provider.
 """
 
 import pandas as pd

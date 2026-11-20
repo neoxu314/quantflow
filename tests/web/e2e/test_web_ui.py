@@ -1,7 +1,7 @@
 """End-to-end Playwright tests for QuantFlow Web UI.
 
 Requires: pip install pytest-playwright
-Usage: playwright install chromium && pytest tests/web/e2e/test_web_ui.py -v
+Run with python -m pytest tests/web/e2e/test_web_ui.py --run-browser.
 
 The server and project files are isolated per test by conftest.py.
 """
@@ -22,8 +22,8 @@ def test_watchlist_page_loads(page: Page, e2e_url):
     page.wait_for_load_state("networkidle")
     assert page.title() == "QuantFlow Web"
     page.get_by_role("button", name="Watchlists").wait_for(state="visible")
-    page.get_by_role("button", name="Tasks").wait_for(state="visible")
-    page.get_by_role("button", name="Settings").wait_for(state="visible")
+    page.get_by_role("button", name="Tasks", exact=True).wait_for(state="visible")
+    page.get_by_role("button", name="Settings", exact=True).wait_for(state="visible")
     page.locator("#watchlist-list").wait_for(state="visible")
     page.locator("#search-input").wait_for(state="visible")
 
@@ -60,7 +60,7 @@ def test_new_watchlist(page: Page, e2e_url):
         dialog.accept(TEST_WATCHLIST_NAME)
 
     page.once("dialog", handle_dialog)
-    page.get_by_role("button", name="+ New").click()
+    page.get_by_role("button", name="+ New", exact=True).click()
     page.get_by_role("button", name=TEST_WATCHLIST_NAME).wait_for(
         state="visible", timeout=5000
     )
@@ -99,7 +99,7 @@ def test_new_watchlist_yaml_created(page: Page, e2e_url):
         dialog.accept(TEST_WATCHLIST_NAME)
 
     page.once("dialog", handle_dialog)
-    page.get_by_role("button", name="+ New").click()
+    page.get_by_role("button", name="+ New", exact=True).click()
 
     page.get_by_role("button", name=TEST_WATCHLIST_NAME).wait_for(
         state="visible", timeout=5000
@@ -123,7 +123,7 @@ def test_new_task_file_yaml_created(page: Page, e2e_url):
 
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Tasks").click()
+    page.get_by_role("button", name="Tasks", exact=True).click()
     page.locator("#task-file-list").get_by_role("button", name=TEST_TASK_FILE).wait_for(
         state="visible", timeout=5000
     )
@@ -137,7 +137,7 @@ def test_new_task_file_yaml_created(page: Page, e2e_url):
 def test_tasks_page_loads(page: Page, e2e_url):
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Tasks").click()
+    page.get_by_role("button", name="Tasks", exact=True).click()
     page.get_by_role("heading", name="Task Files", level=3).wait_for(
         state="visible"
     )
@@ -148,7 +148,7 @@ def test_tasks_page_loads(page: Page, e2e_url):
 def test_select_task_file_shows_tasks_table(page: Page, e2e_url):
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Tasks").click()
+    page.get_by_role("button", name="Tasks", exact=True).click()
     first_tf = page.locator("#task-file-list button").first
     first_tf.click()
     page.wait_for_selector("#task-table", timeout=5000)
@@ -162,7 +162,7 @@ def test_new_task_file_creation(page: Page, e2e_url):
     )
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Tasks").click()
+    page.get_by_role("button", name="Tasks", exact=True).click()
     page.locator("#task-file-list").get_by_role("button", name=TEST_TASK_FILE).wait_for(
         state="visible", timeout=5000
     )
@@ -171,7 +171,7 @@ def test_new_task_file_creation(page: Page, e2e_url):
 def test_settings_page_loads_all_sections(page: Page, e2e_url):
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     page.wait_for_selector("#settings-form", timeout=5000)
     for section in ("Data Sources", "Lookback Period", "YFinance Batch",
                     "Web Server", "Tushare Token", "Logging"):
@@ -181,7 +181,7 @@ def test_settings_page_loads_all_sections(page: Page, e2e_url):
 def test_settings_values_populated(page: Page, e2e_url):
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     cn_primary = page.locator("#cfg-cn-primary")
     cn_primary.wait_for(state="visible", timeout=5000)
     assert cn_primary.input_value() in ("baostock", "tushare")
@@ -220,7 +220,7 @@ def test_tab_navigation_includes_library(page: Page, e2e_url):
     page.wait_for_load_state("networkidle")
     page.get_by_role("button", name="Library").click()
     page.locator("#panel-library").wait_for(state="visible", timeout=5000)
-    page.get_by_role("button", name="Tasks").click()
+    page.get_by_role("button", name="Tasks", exact=True).click()
     page.locator("#task-file-list").wait_for(state="visible", timeout=5000)
     page.get_by_role("button", name="Library").click()
     page.locator("#panel-library").wait_for(state="visible", timeout=5000)
@@ -232,7 +232,7 @@ def test_settings_modify_and_save(page: Page, e2e_url):
 
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     page.wait_for_selector("#settings-form", timeout=5000)
 
     cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
@@ -264,7 +264,7 @@ def test_add_stock_with_market_selector(page: Page, e2e_url):
     page.wait_for_load_state("networkidle")
 
     page.once("dialog", handle_dialog)
-    page.get_by_role("button", name="+ New").click()
+    page.get_by_role("button", name="+ New", exact=True).click()
 
     page.get_by_role("button", name=wl_name).click(timeout=5000)
 
@@ -311,7 +311,7 @@ def test_add_stock_multiple_markets(page: Page, e2e_url):
     page.wait_for_load_state("networkidle")
 
     page.once("dialog", handle_dialog)
-    page.get_by_role("button", name="+ New").click()
+    page.get_by_role("button", name="+ New", exact=True).click()
     page.get_by_role("button", name=wl_name).click(timeout=5000)
 
     test_cases = [
@@ -357,7 +357,7 @@ def test_settings_survive_server_restart(page: Page, e2e_url, web_server):
 
     page.goto(e2e_url)
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     page.wait_for_selector("#settings-form", timeout=5000)
 
     buffer_field = page.locator("#cfg-lookback-buffer")
@@ -373,7 +373,7 @@ def test_settings_survive_server_restart(page: Page, e2e_url, web_server):
 
     page.reload()
     page.wait_for_load_state("networkidle")
-    page.get_by_role("button", name="Settings").click()
+    page.get_by_role("button", name="Settings", exact=True).click()
     page.wait_for_selector("#settings-form", timeout=5000)
 
     field = page.locator("#cfg-lookback-buffer")

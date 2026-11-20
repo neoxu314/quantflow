@@ -17,7 +17,7 @@ class TestServerErrorHandling:
         """When server returns 500, UI should show error toast."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -43,7 +43,7 @@ class TestNetworkDisconnectHandling:
         """When network fails during save, UI should show error."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -76,7 +76,7 @@ class TestInvalidInputValidation:
             dialog_accepted = True
 
         page.once("dialog", handle_dialog)
-        page.get_by_role("button", name="+ New").click()
+        page.get_by_role("button", name="+ New", exact=True).click()
         page.wait_for_timeout(1000)
 
         watchlist_btn = page.get_by_role("button", name="_test_e2e_wl")
@@ -107,13 +107,13 @@ class TestInvalidInputValidation:
             if preview_text:
                 assert "INVALID" in preview_text or preview_text.strip() == ""
 
-        page.locator("#btn-cancel-add-stock").click()
+        page.locator("#btn-cancel-add").click()
 
     def test_negative_value_validation(self, page: Page):
         """Negative values in numeric fields should be handled."""
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -153,7 +153,7 @@ class TestApiErrorResponses:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Tasks").click()
+        page.get_by_role("button", name="Tasks", exact=True).click()
         page.wait_for_selector("#task-file-list", timeout=5000)
 
         resp = httpx.post(f"{SERVER_URL}/api/task-files", json={"filename": TEST_TASK_FILE})

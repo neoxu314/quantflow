@@ -36,14 +36,9 @@ def _write_yaml(path: Path, data: dict) -> Path:
     return path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-
-# ─── Sanity: production config is parseable ────────────────────────────
-
-class TestProductionConfigSanity:
-    def test_quantflow_yaml_parsable(self):
-        path = PROJECT_ROOT / "config" / "quantflow.yaml"
+class TestProjectConfigSanity:
+    def test_quantflow_yaml_parsable(self, test_project):
+        path = test_project / "config" / "quantflow.yaml"
         assert path.exists(), f"config/quantflow.yaml not found at {path}"
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         assert isinstance(data, dict)

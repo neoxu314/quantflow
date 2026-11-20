@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict
 
 import yaml
 from fastapi import APIRouter, HTTPException
+
+from quantflow.artifacts import atomic_text
 
 # Router for API endpoints under /api
 router = APIRouter(prefix="/api", tags=["Config"])
@@ -16,6 +19,7 @@ router = APIRouter(prefix="/api", tags=["Config"])
 # Parents sequence from this file upwards leads to the repo root.
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[4]
 CONFIG_PATH: Path = PROJECT_ROOT / "config" / "quantflow.yaml"
+_config_write_lock = Lock()
 
 
 @router.get("/config")
@@ -31,10 +35,14 @@ def get_system_config() -> Dict[str, Any]:
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-    except Exception as exc:
-        return {"error": "Invalid config file", "detail": str(exc), "path": str(CONFIG_PATH)}
+    except (OSError, yaml.YAMLError):
+        return {"error": "Invalid config file", "path": str(CONFIG_PATH)}
 
-    # Build a stable, documented subset of the config payload
+    if not isinstance(data, dict) or not isinstance(data.get("tushare", {}), dict):
+        return {"error": "Invalid config file", "path": str(CONFIG_PATH)}
+    tushare = data.get("tushare", {})
+    token_configured = bool(tushare.pop("token", None))
+    # The token is write-only through the Web settings.
     return {
         "raw": data,
         "markets": data.get("data", {}).get("markets", {}),
@@ -43,7 +51,7 @@ def get_system_config() -> Dict[str, Any]:
         "yfinance": data.get("yfinance", {}),
         "yahooquery": data.get("yahooquery", {}),
         "web": data.get("web", {}),
-        "tushare": data.get("tushare", {"token": ""}),
+        "tushare": {**tushare, "tokenConfigured": token_configured},
         "logging": data.get("logging", {"console_level": "INFO", "file_enabled": True, "file_level": "DEBUG", "format": ""}),
         "filePath": _display_config_path(CONFIG_PATH, PROJECT_ROOT),
     }
@@ -56,10 +64,15 @@ def update_system_config(payload: Dict[str, Any]):
         raise HTTPException(status_code=404, detail="Config file not found")
 
     raw = payload.get("raw", {})
+    if not isinstance(raw, dict) or not isinstance(raw.get("tushare", {}), dict):
+        raise HTTPException(status_code=422, detail="Invalid config payload")
+    tushare = dict(raw.get("tushare", {}))
+    if "token" in tushare and tushare["token"] is not None and not isinstance(tushare["token"], str):
+        raise HTTPException(status_code=422, detail="Invalid Tushare token")
     config = {
         "version": raw.get("version", "0.1.0"),
         "data": raw.get("data", {}),
-        "tushare": raw.get("tushare", {"token": ""}),
+        "tushare": tushare,
         "logging": raw.get("logging", {
             "console_level": "INFO",
             "file_enabled": True,
@@ -73,11 +86,19 @@ def update_system_config(payload: Dict[str, Any]):
     }
 
     try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        with _config_write_lock:
+            if "token" not in tushare or tushare["token"] == "":
+                current = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+                tushare["token"] = current.get("tushare", {}).get("token", "")
+            elif tushare["token"] is None:
+                tushare["token"] = ""
+            atomic_text(
+                CONFIG_PATH, yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
+                register=False,
+            )
         return {"success": True, "message": "Config saved"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
+    except (OSError, yaml.YAMLError) as exc:
+        raise HTTPException(status_code=500, detail="Failed to save config") from exc
 
 
 @router.get("/strategies")

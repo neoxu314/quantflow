@@ -1,1036 +1,195 @@
-/**
- * Frontend unit tests for Runs UI logic.
- * @vitest-environment jsdom
- */
+/** @vitest-environment jsdom */
 
-import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
+import html from "../../../src/quantflow/web/static/index.html?raw";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-let lastApiCall: { url: string; init?: RequestInit } | null = null;
-const mockApi = vi.fn((url: string, init?: RequestInit) => {
-    lastApiCall = { url, init };
-    if (init?.method === "DELETE") return Promise.resolve({ ok: true });
-    return Promise.resolve({ runs: [] });
-});
+const scan = {
+    id: "scan-1",
+    name: "AAPL.US Scan",
+    run_type: "stock_scan",
+    status: "completed",
+    created_at: "2025-06-05T20:00:00Z",
+    config: { code: "AAPL.US", start_date: "2025-06-02", end_date: "2025-06-05" },
+};
 
-const mockToast = vi.fn();
+let runs: Array<typeof scan>;
+let routes: Map<string, unknown>;
+let fetchApi: ReturnType<typeof vi.fn>;
 
-vi.stubGlobal("api", mockApi);
-vi.stubGlobal("toast", mockToast);
-vi.stubGlobal("closeModal", vi.fn());
-vi.stubGlobal("openModal", vi.fn());
+function element<T extends HTMLElement = HTMLElement>(selector: string): T {
+    const node = document.querySelector<T>(selector);
+    if (!node) throw new Error(`Missing page element ${selector}`);
+    return node;
+}
+
+async function renderApp() {
+    await import("@app");
+    await vi.advanceTimersByTimeAsync(0);
+}
+
+function edit(selector: string, value: string) {
+    const field = element<HTMLInputElement>(selector);
+    field.value = value;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    return field;
+}
 
 beforeEach(() => {
-    lastApiCall = null;
-    mockApi.mockClear();
-    mockToast.mockClear();
-    document.body.innerHTML = "";
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-05T20:00:00Z"));
+    const page = new DOMParser().parseFromString(html, "text/html");
+    document.body.innerHTML = page.body.innerHTML;
+    runs = [];
+    routes = new Map<string, unknown>([
+        ["GET /api/strategies", { strategies: [{ id: "daily_bull_oversold", name: "Oversold" }] }],
+        ["GET /api/watchlists", []],
+        ["GET /api/task-files", []],
+        ["GET /api/tasks", { tasks: [] }],
+        ["GET /api/config", { raw: { web: { port: 8080 } } }],
+        ["GET /api/library/strategies", { strategies: [] }],
+        ["GET /api/library/indicators", { indicators: [] }],
+        ["GET /api/runs/scan-1", { run: scan }],
+        ["GET /api/runs/scan-1/logs?tail=500", { lines: ["Finished stock scan"] }],
+        ["GET /api/runs/scan-1/files", { files: [] }],
+        ["GET /api/runs/scan-1/indicator-data", { data: null }],
+    ]);
+    fetchApi = vi.fn(async (path: string, options?: RequestInit) => {
+        const route = `${options?.method ?? "GET"} ${path}`;
+        if (route === "GET /api/runs/") return Response.json({ runs });
+        if (!routes.has(route)) return Response.json({ detail: `Unexpected endpoint ${route}` }, { status: 404 });
+        const value = routes.get(route);
+        return value instanceof Response ? value : Response.json(value);
+    });
+    vi.stubGlobal("fetch", fetchApi);
+    vi.stubGlobal("confirm", vi.fn(() => true));
 });
 
 afterEach(() => {
-    document.body.innerHTML = "";
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    document.body.replaceChildren();
 });
 
-describe("renderRunsList", () => {
-    it("shows empty message when no runs", () => {
-        document.body.innerHTML = '<ul id="runs-list"></ul>';
-        const list = document.getElementById("runs-list")!;
-
-        const runs: any[] = [];
-        list.innerHTML = '<li class="text-gray-400 text-sm text-center py-8">No runs yet</li>';
-        expect(list.textContent).toBe("No runs yet");
+describe("Runs in the real application", () => {
+    it("renders the initial empty state", async () => {
+        await renderApp();
+        expect(element("#runs-list").textContent).toContain("No runs yet");
     });
 
-    it("renders each run with name, type, status, and delete button", () => {
-        document.body.innerHTML = '<ul id="runs-list"></ul>';
-
-        const runs = [
-            { id: "run-1", name: "NVDA.US Scan", run_type: "stock_scan", status: "completed", created_at: "2026-01-01T00:00:00Z" },
-            { id: "run-2", name: "Web Tech Monitor", run_type: "watchlist_run", status: "running", created_at: "2026-01-02T00:00:00Z" },
-        ];
-
-        const list = document.getElementById("runs-list")!;
-        list.innerHTML = runs.map(r => {
-            return `<li class="px-3 py-2 rounded cursor-pointer hover:bg-gray-100" data-run-id="${r.id}">` +
-                `<div class="flex items-center justify-between">` +
-                `<div class="flex-1 min-w-0"><div class="font-medium text-sm truncate">${r.name}</div>` +
-                `<div class="text-xs text-gray-500">${r.run_type} • ${r.status} • 1/1/2026</div></div>` +
-                `<button class="ml-2 text-gray-400 hover:text-red-500 p-1 rounded flex-shrink-0" onclick="event.stopPropagation(); deleteRun('${r.id}')" title="Delete run">×</button>` +
-                `</div></li>`;
-        }).join("");
-
-        expect(list.querySelectorAll("li[data-run-id]").length).toBe(2);
-        expect(list.querySelector(`[data-run-id="run-1"] .font-medium`)!.textContent).toBe("NVDA.US Scan");
-        expect(list.querySelector(`[data-run-id="run-2"] .text-xs`)!.textContent).toContain("watchlist_run");
-        expect(list.querySelector(`[data-run-id="run-2"] .text-xs`)!.textContent).toContain("running");
+    it("loads details, renders literal names and restores previous scan dates", async () => {
+        runs = [{ ...scan, name: "<em>AAPL.US Scan</em>" }];
+        await renderApp();
+        const item = element('[data-run-id="scan-1"]');
+        expect(item.textContent).toContain("<em>AAPL.US Scan</em>");
+        expect(item.querySelector("em")).toBeNull();
+        item.click();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(element("#runtab-config").textContent).toContain("completed");
+        const again = element<HTMLButtonElement>("#runtab-config button");
+        expect(again.textContent).toContain("Run Again");
+        // jsdom does not run the inline onclick attributes in the shipped HTML.
+        (window as Window & { runAgain: (id: string) => void }).runAgain("scan-1");
+        expect(element<HTMLInputElement>("#run-start-date").value).toBe("2025-06-02");
+        expect(element<HTMLInputElement>("#run-end-date").value).toBe("2025-06-05");
+        expect(element("#run-cli-preview").textContent).toContain("--code AAPL.US");
     });
 
-    it("includes delete button with correct onclick handler", () => {
-        document.body.innerHTML = '<ul id="runs-list"></ul>';
-        const list = document.getElementById("runs-list")!;
-
-        const run = { id: "abc-123", name: "Test", run_type: "stock_scan", status: "completed", created_at: "2026-01-01" };
-        list.innerHTML = `<li data-run-id="${run.id}">` +
-            `<button onclick="event.stopPropagation(); deleteRun('${run.id}')" title="Delete run">×</button>` +
-            `</li>`;
-
-        const btn = list.querySelector("button");
-        expect(btn).not.toBeNull();
-        expect(btn!.getAttribute("onclick")).toContain(`deleteRun('${run.id}')`);
-        expect(btn!.getAttribute("title")).toBe("Delete run");
-    });
-});
-
-describe("deleteRun frontend behavior", () => {
-    it("calls DELETE api endpoint with correct runId", async () => {
-        const runId = "test-run-id";
-
-        const mockRunsList = [{ id: runId, name: "Test Scan", run_type: "stock_scan", status: "completed", created_at: "2026-01-01" }];
-        await mockDelete(runId, mockRunsList);
-
-        expect(mockApi).toHaveBeenCalledWith(`/api/runs/${runId}`, { method: "DELETE" });
-    });
-
-    it("shows toast confirmation after delete", async () => {
-        const runId = "toast-test";
-        const mockRunsList = [{ id: runId, name: "T", run_type: "stock_scan", status: "completed", created_at: "2026-01-01" }];
-        await mockDelete(runId, mockRunsList);
-
-        expect(mockToast).toHaveBeenCalledWith("Run deleted");
-    });
-
-    it("shows error toast on delete failure", async () => {
-        mockApi.mockImplementationOnce(() => Promise.reject(new Error("server error")));
-
-        const runId = "fail-test";
-        (globalThis as any).state = { runsList: [{ id: runId, name: "T", run_type: "stock_scan", status: "completed", created_at: "2026-01-01" }], selectedRunId: null, selectedRun: null };
-        (globalThis as any).toast = mockToast;
-
-        try {
-            await mockDeleteImpl(runId);
-        } catch {}
-
-        expect(mockToast).toHaveBeenCalledWith("Delete failed: server error");
-    });
-});
-
-// Minimal test-safe implementations
-async function mockDelete(runId: string, runsList: any[]) {
-    const api = (globalThis as any).api;
-    const toast = (globalThis as any).toast;
-    const state: any = { runsList, selectedRunId: null, selectedRun: null };
-
-    try {
-        await api(`/api/runs/${runId}`, { method: "DELETE" });
-        state.runsList = state.runsList.filter((r: any) => r.id !== runId);
-        toast("Run deleted");
-    } catch (e: any) {
-        toast(`Delete failed: ${e.message}`);
-    }
-
-    expect(state.runsList.length).toBe(0);
-}
-
-async function mockDeleteImpl(runId: string) {
-    const api = (globalThis as any).api;
-    const toast = (globalThis as any).toast;
-    try {
-        await api(`/api/runs/${runId}`, { method: "DELETE" });
-        toast("Run deleted");
-    } catch (e: any) {
-        toast(`Delete failed: ${e.message}`);
-    }
-}
-
-describe("selectRunType date defaults", () => {
-    function setupDateInputs() {
-        document.body.innerHTML = `
-            <input id="run-start-date" type="date">
-            <input id="run-end-date" type="date">
-            <div id="run-config-stock_scan" class="hidden"></div>
-            <div id="run-config-watchlist_run" class="hidden"></div>
-            <div id="run-config-task_run" class="hidden"></div>
-            <div id="run-step-type"></div>
-            <div id="run-step-config" class="hidden"></div>
-            <div id="run-step-preview" class="hidden"></div>
-            <button id="btn-back-run" class="hidden"></button>
-            <button id="btn-check-run" class="hidden"></button>
-            <button id="btn-execute-run" class="hidden"></button>
-            <div id="run-cli-preview"></div>
-        `;
-        document.getElementById("run-strategy-checkboxes")?.remove();
-    }
-
-    function selectRunType(type: string) {
-        const prevSelected = (window as any).selectedRunType;
-        (window as any).selectedRunType = type;
-        document.getElementById("run-step-type")!.classList.add("hidden");
-        document.getElementById("run-step-config")!.classList.remove("hidden");
-        document.getElementById("run-step-preview")!.classList.remove("hidden");
-        document.getElementById("btn-back-run")!.classList.remove("hidden");
-        document.getElementById("btn-check-run")!.classList.remove("hidden");
-        document.getElementById("btn-execute-run")!.classList.remove("hidden");
-        ["stock_scan", "watchlist_run", "task_run"].forEach(t => {
-            document.getElementById(`run-config-${t}`)!.classList.add("hidden");
+    it("posts the values entered in the real scan form", async () => {
+        routes.set("POST /api/runs/", { ok: true });
+        await renderApp();
+        element("#btn-new-run").click();
+        element('[data-type="stock_scan"]').click();
+        expect(element<HTMLInputElement>("#run-start-date").value).toBe("2025-06-05");
+        edit("#run-stock-code", "MSFT.US");
+        edit("#run-start-date", "2025-06-02");
+        edit("#run-end-date", "2025-06-04");
+        expect(element("#run-cli-preview").textContent).toContain("--start 2025-06-02 --end 2025-06-04");
+        element("#btn-execute-run").click();
+        await vi.advanceTimersByTimeAsync(0);
+        const submitted = fetchApi.mock.calls.find(([url, options]) => url === "/api/runs/" && options.method === "POST");
+        expect(JSON.parse(submitted![1].body)).toMatchObject({
+            run_type: "stock_scan", code: "MSFT.US", start_date: "2025-06-02", end_date: "2025-06-04",
         });
-        document.getElementById(`run-config-${type}`)!.classList.remove("hidden");
-        if (type === "stock_scan") {
-            const today = new Date().toISOString().split("T")[0];
-            (document.getElementById("run-start-date") as HTMLInputElement).value = today;
-            (document.getElementById("run-end-date") as HTMLInputElement).value = today;
-        }
-    }
-
-    it("sets today's date for stock scan date inputs", () => {
-        setupDateInputs();
-        selectRunType("stock_scan");
-
-        const startVal = (document.getElementById("run-start-date") as HTMLInputElement).value;
-        const endVal = (document.getElementById("run-end-date") as HTMLInputElement).value;
-        const today = new Date().toISOString().split("T")[0];
-
-        expect(startVal).toBe(today);
-        expect(endVal).toBe(today);
+        expect(element("#modal-new-run").classList.contains("hidden")).toBe(true);
     });
 
-    it("leaves date inputs empty for watchlist_run", () => {
-        setupDateInputs();
-        selectRunType("watchlist_run");
-
-        const startVal = (document.getElementById("run-start-date") as HTMLInputElement).value;
-        const endVal = (document.getElementById("run-end-date") as HTMLInputElement).value;
-
-        expect(startVal).toBe("");
-        expect(endVal).toBe("");
+    it("keeps the run visible when the API rejects deletion", async () => {
+        runs = [scan];
+        routes.set("DELETE /api/runs/scan-1", Response.json({ detail: "busy" }, { status: 409 }));
+        await renderApp();
+        await (window as Window & { deleteRun: (id: string) => Promise<void> }).deleteRun("scan-1");
+        expect(fetchApi).toHaveBeenCalledWith("/api/runs/scan-1", expect.objectContaining({ method: "DELETE" }));
+        expect(element('[data-run-id="scan-1"]').textContent).toContain("AAPL.US Scan");
+        expect(element("#toast-message").textContent).toBe("Delete failed: busy");
     });
 
-    it("leaves date inputs empty for task_run", () => {
-        setupDateInputs();
-        selectRunType("task_run");
-
-        const startVal = (document.getElementById("run-start-date") as HTMLInputElement).value;
-        const endVal = (document.getElementById("run-end-date") as HTMLInputElement).value;
-
-        expect(startVal).toBe("");
-        expect(endVal).toBe("");
+    it("removes a run after confirmation and API success", async () => {
+        runs = [scan];
+        routes.set("DELETE /api/runs/scan-1", { ok: true });
+        await renderApp();
+        await (window as Window & { deleteRun: (id: string) => Promise<void> }).deleteRun("scan-1");
+        expect(fetchApi).toHaveBeenCalledWith("/api/runs/scan-1", expect.objectContaining({ method: "DELETE" }));
+        expect(document.querySelector('[data-run-id="scan-1"]')).toBeNull();
+        expect(element("#toast-message").textContent).toBe("Run deleted");
     });
 });
 
-describe("runAgain date restore", () => {
-    function setupRunAgainEnvironment() {
-        document.body.innerHTML = `
-            <input id="run-stock-code" type="text">
-            <input id="run-start-date" type="date">
-            <input id="run-end-date" type="date">
-            <div id="run-config-stock_scan" class="hidden"></div>
-            <div id="run-config-watchlist_run" class="hidden"></div>
-            <div id="run-config-task_run" class="hidden"></div>
-            <div id="run-step-type"></div>
-            <div id="run-step-config" class="hidden"></div>
-            <div id="run-step-preview" class="hidden"></div>
-            <button id="btn-back-run" class="hidden"></button>
-            <button id="btn-check-run" class="hidden"></button>
-            <button id="btn-execute-run" class="hidden"></button>
-            <div id="run-cli-preview"></div>
-        `;
-
-        (globalThis as any).selectedRunType = "";
-        (globalThis as any).state = { runsList: [], selectedRunId: null, selectedRun: null };
-    }
-
-    function selectRunType(type: string) {
-        (globalThis as any).selectedRunType = type;
-        document.getElementById("run-step-type")!.classList.add("hidden");
-        document.getElementById("run-step-config")!.classList.remove("hidden");
-        ["stock_scan", "watchlist_run", "task_run"].forEach(t => {
-            document.getElementById(`run-config-${t}`)!.classList.add("hidden");
-        });
-        document.getElementById(`run-config-${type}`)!.classList.remove("hidden");
-        if (type === "stock_scan") {
-            const today = new Date().toISOString().split("T")[0];
-            (document.getElementById("run-start-date") as HTMLInputElement).value = today;
-            (document.getElementById("run-end-date") as HTMLInputElement).value = today;
-        }
-    }
-
-    function runAgain(runId: string) {
-        const orig = ((globalThis as any).state?.runsList || []).find((r: any) => r.id === runId);
-        if (!orig) return;
-        resetRunModal();
-        selectRunType(orig.run_type);
-        if (orig.run_type === "stock_scan" && orig.config?.code) {
-            (document.getElementById("run-stock-code") as HTMLInputElement).value = orig.config.code;
-            if (orig.config?.start_date) {
-                (document.getElementById("run-start-date") as HTMLInputElement).value = orig.config.start_date;
-            }
-            if (orig.config?.end_date) {
-                (document.getElementById("run-end-date") as HTMLInputElement).value = orig.config.end_date;
-            }
-        }
-    }
-
-    function resetRunModal() {
-        (globalThis as any).selectedRunType = "";
-    }
-
-    it("restores saved start_date and end_date from original run config", () => {
-        setupRunAgainEnvironment();
-        const run = {
-            id: "run-1", name: "Test", run_type: "stock_scan", status: "completed",
-            created_at: "2026-01-01",
-            config: { code: "NVDA.US", start_date: "2026-03-01", end_date: "2026-03-15" },
-        };
-        (globalThis as any).state.runsList = [run];
-
-        runAgain("run-1");
-
-        expect((document.getElementById("run-start-date") as HTMLInputElement).value).toBe("2026-03-01");
-        expect((document.getElementById("run-end-date") as HTMLInputElement).value).toBe("2026-03-15");
-        expect((document.getElementById("run-stock-code") as HTMLInputElement).value).toBe("NVDA.US");
-    });
-
-    it("uses today's date when original run has no saved dates", () => {
-        setupRunAgainEnvironment();
-        const run = {
-            id: "run-2", name: "No Dates", run_type: "stock_scan", status: "completed",
-            created_at: "2026-01-01",
-            config: { code: "AAPL.US" },
-        };
-        (globalThis as any).state.runsList = [run];
-
-        runAgain("run-2");
-
-        const today = new Date().toISOString().split("T")[0];
-        expect((document.getElementById("run-start-date") as HTMLInputElement).value).toBe(today);
-        expect((document.getElementById("run-end-date") as HTMLInputElement).value).toBe(today);
-    });
-
-    it("does not restore dates for watchlist_run", () => {
-        setupRunAgainEnvironment();
-        const run = {
-            id: "run-3", name: "Watchlist", run_type: "watchlist_run", status: "completed",
-            created_at: "2026-01-01",
-            config: { watchlist: "test.yaml" },
-        };
-        (globalThis as any).state.runsList = [run];
-
-        (document.getElementById("run-start-date") as HTMLInputElement).value = "";
-        (document.getElementById("run-end-date") as HTMLInputElement).value = "";
-
-        runAgain("run-3");
-
-        expect((document.getElementById("run-start-date") as HTMLInputElement).value).toBe("");
-        expect((document.getElementById("run-end-date") as HTMLInputElement).value).toBe("");
-    });
+it("saves settings using the form and keeps the token field empty", async () => {
+    routes.set("GET /api/config", { raw: { web: { port: 8080 } }, tushare: { tokenConfigured: true } });
+    routes.set("PUT /api/config", { success: true });
+    await renderApp();
+    expect(element<HTMLInputElement>("#cfg-tushare-token").value).toBe("");
+    edit("#cfg-web-port", "8084");
+    element("#btn-save-settings").click();
+    await vi.advanceTimersByTimeAsync(0);
+    const saved = fetchApi.mock.calls.find(([url, options]) => url === "/api/config" && options.method === "PUT");
+    expect(JSON.parse(saved![1].body).raw.web.port).toBe(8084);
+    expect(JSON.parse(saved![1].body).raw.tushare?.token).toBeFalsy();
 });
 
-describe("mdToHtml", () => {
-    // Mirrors the mdToHtml function in app.ts
-    function mdToHtml(md: string): string {
-        let html = md
-            .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-4">$1</h3>')
-            .replace(/^## (.+)$/gm, '<h2 class="text-xl font-semibold mt-6">$1</h2>')
-            .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-8">$1</h1>')
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.+?)\*/g, "<em>$1</em>")
-            .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>');
-        html = html.replace(/((?:^- .*\n?)+)/gm, (m) => {
-            const items = m.trim().split("\n").map(l => l.replace(/^- /, ""));
-            return '<ul class="list-disc pl-5 mb-2 text-sm text-gray-700">'
-                + items.map(i => `<li>${i}</li>`).join("")
-                + "</ul>\n";
-        });
-        html = html.replace(/^---\s*$/gm, '<hr class="my-4 border-gray-300">');
-        html = html.replace(/((?:\|.+\|\n)+)/g, (match) => {
-            const rows = match.trim().split("\n").filter(r => !r.match(/^\|-+[-| ]+$/));
-            if (rows.length < 2) return match;
-            let t = '<table class="min-w-full divide-y divide-gray-200 text-sm mt-2 mb-4"><tbody>';
-            rows.forEach(row => {
-                const cells = row.split("|").filter(c => c.trim()).map(c => c.trim());
-                t += '<tr class="bg-white">';
-                cells.forEach(cell => { t += `<td class="px-4 py-2 border border-gray-200">${cell}</td>`; });
-                t += "</tr>";
-            });
-            return t + "</tbody></table>";
-        });
-        html = html.replace(/^(?!<\/?[a-zA-Z\/\d])((?!$).+)$/gm, '<p class="text-sm text-gray-700 mb-1">$1</p>');
-        return html;
-    }
+it("uses real SSE progress and refreshes the disk log on completion", async () => {
+    let stream: TestStream;
+    class TestStream extends EventTarget {
+        close = vi.fn();
 
-    it("converts h1 heading", () => {
-        const result = mdToHtml("# Title");
-        expect(result).toContain('<h1 class="text-2xl font-bold mt-8">Title</h1>');
-    });
-
-    it("converts h2 heading", () => {
-        const result = mdToHtml("## Section");
-        expect(result).toContain('<h2 class="text-xl font-semibold mt-6">Section</h2>');
-    });
-
-    it("converts h3 heading", () => {
-        const result = mdToHtml("### Subsection");
-        expect(result).toContain('<h3 class="text-lg font-semibold mt-4">Subsection</h3>');
-    });
-
-    it("converts bold text", () => {
-        const result = mdToHtml("this is **bold** text");
-        expect(result).toContain("<strong>bold</strong>");
-    });
-
-    it("converts italic text", () => {
-        const result = mdToHtml("this is *italic* text");
-        expect(result).toContain("<em>italic</em>");
-    });
-
-    it("converts inline code", () => {
-        const result = mdToHtml("use `code` here");
-        expect(result).toContain('<code class="bg-gray-100 px-1 rounded text-xs">code</code>');
-    });
-
-    it("converts a single list item", () => {
-        const result = mdToHtml("- item one");
-        expect(result).toContain("<li>item one</li>");
-        expect(result).toContain("<ul");
-        expect(result).toContain("</ul>");
-    });
-
-    it("converts multiple list items into one ul", () => {
-        const result = mdToHtml("- item one\n- item two\n- item three");
-        expect(result).toContain("<li>item one</li>");
-        expect(result).toContain("<li>item two</li>");
-        expect(result).toContain("<li>item three</li>");
-        const ulCount = (result.match(/<ul/g) || []).length;
-        expect(ulCount).toBe(1);
-    });
-
-    it("converts list items with bold text", () => {
-        const result = mdToHtml("- **bold item**");
-        expect(result).toContain("<li><strong>bold item</strong></li>");
-    });
-
-    it("converts horizontal rule", () => {
-        const result = mdToHtml("---");
-        expect(result).toContain('<hr class="my-4 border-gray-300">');
-    });
-
-    it("converts markdown table", () => {
-        const md = "| Code | Name |\n|---|---|\n| NVDA.US | Nvidia |\n| AAPL.US | Apple |\n";
-        const result = mdToHtml(md);
-        expect(result).toContain("<table");
-        expect(result).toContain("NVDA.US");
-        expect(result).toContain("Nvidia");
-        expect(result).toContain("AAPL.US");
-        expect(result).toContain("Apple");
-        expect(result).toContain("</table>");
-    });
-
-    it("wraps plain text lines in p tags", () => {
-        const result = mdToHtml("plain text");
-        expect(result).toContain('<p class="text-sm text-gray-700 mb-1">plain text</p>');
-    });
-
-    it("renders a complete report with all elements", () => {
-        const report = "# Daily Report\n" +
-            "**Date**: 2026-05-04\n" +
-            "\n" +
-            "## Statistics\n" +
-            "- **Buy Signals**: 3\n" +
-            "- **Sell Signals**: 1\n" +
-            "\n" +
-            "### Signal Details\n" +
-            "| Code | Type |\n" +
-            "|---|---|\n" +
-            "| NVDA.US | Buy |\n" +
-            "| AAPL.US | Sell |\n" +
-            "\n" +
-            "---\n" +
-            "\n" +
-            "## Data Availability\n" +
-            "- Stocks without data: 0";
-
-        const result = mdToHtml(report);
-        expect(result).toContain("Daily Report");
-        expect(result).toContain("Statistics");
-        expect(result).toContain("Buy Signals");
-        expect(result).toContain("Sell Signals");
-        expect(result).toContain("NVDA.US");
-        expect(result).toContain("Data Availability");
-        expect(result).toContain("Stocks without data");
-        expect(result).toContain("<hr");
-    });
-
-    it("produces no empty paragraph tags", () => {
-        const result = mdToHtml("# Title\n\nparagraph\n\n- item\n");
-        expect(result).not.toContain("<p></p>");
-        expect(result).not.toContain('<p class="text-sm text-gray-700 mb-1"></p>');
-    });
-
-    it("handles empty input", () => {
-        expect(mdToHtml("")).toBe("");
-    });
-
-    it("preserves non-HTML raw text that doesn't match markdown patterns", () => {
-        const result = mdToHtml("some raw text");
-        expect(result).toContain("some raw text");
-    });
-});
-
-describe("SSE status event handler", () => {
-    it("calls loadRuns when SSE sends non-running status", () => {
-        const calls: string[] = [];
-        const mockLoadRuns = () => calls.push("loadRuns");
-        const mockSelectRun = () => calls.push("selectRun");
-        const mockSSEClose = vi.fn();
-
-        let sseSource: any = { close: mockSSEClose };
-        const handle = () => {
-            const data = { status: "completed" };
-            if (data.status !== "running") {
-                if (sseSource) sseSource.close();
-                sseSource = null;
-                mockSelectRun();
-                mockLoadRuns();
-            }
-        };
-
-        handle();
-
-        expect(calls).toContain("selectRun");
-        expect(calls).toContain("loadRuns");
-        expect(mockSSEClose).toHaveBeenCalled();
-    });
-});
-
-describe("openFolder", () => {
-    it("calls POST api endpoint with correct runId", async () => {
-        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: true, path: "/tmp/output" }));
-        const runId = "test-run-id";
-
-        await mockOpenFolder(runId);
-
-        expect(mockApi).toHaveBeenCalledWith(`/api/runs/${runId}/open-folder`, { method: "POST" });
-    });
-
-    it("shows toast 'Folder opened' on success", async () => {
-        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: true, path: "/tmp/output" }));
-        const runId = "success-test";
-
-        await mockOpenFolder(runId);
-
-        expect(mockToast).toHaveBeenCalledWith("Folder opened");
-    });
-
-    it("shows error message on failure", async () => {
-        mockApi.mockImplementationOnce(() => Promise.resolve({ ok: false, message: "Folder does not exist" }));
-        const runId = "fail-test";
-
-        await mockOpenFolder(runId);
-
-        expect(mockToast).toHaveBeenCalledWith("Folder does not exist");
-    });
-
-    it("shows error toast on api exception", async () => {
-        mockApi.mockImplementationOnce(() => Promise.reject(new Error("network error")));
-        const runId = "exception-test";
-
-        await mockOpenFolder(runId);
-
-        expect(mockToast).toHaveBeenCalledWith("Error: network error");
-    });
-});
-
-async function mockOpenFolder(runId: string) {
-    const api = (globalThis as any).api;
-    const toast = (globalThis as any).toast;
-    try {
-        const res = await api(`/api/runs/${runId}/open-folder`, { method: "POST" });
-        if (res.ok) {
-            toast("Folder opened");
-        } else {
-            toast(res.message || "Failed to open folder");
-        }
-    } catch (e: any) {
-        toast(`Error: ${e.message}`);
-    }
-}
-
-describe("updateCliPreview event listeners", () => {
-    function setupEventListenerEnvironment() {
-        document.body.innerHTML = `
-            <input id="run-stock-code" type="text">
-            <input id="run-start-date" type="date">
-            <input id="run-end-date" type="date">
-            <input id="run-output-path" type="text">
-            <select id="run-watchlist-select"><option value="watchlists/test.yaml">Test WL</option></select>
-            <select id="run-task-config-select"><option value="config/tasks_test.yaml">Test Tasks</option></select>
-            <input id="run-daily-mode" type="checkbox">
-            <div id="run-strategy-checkboxes"></div>
-            <label><input type="checkbox" value="kdj" checked class="run-indicator"> KDJ</label>
-            <label><input type="checkbox" value="dual_line" checked class="run-indicator"> DualLine</label>
-            <label><input type="checkbox" value="macd" class="run-indicator"> MACD</label>
-            <div id="run-cli-preview"></div>
-            <div id="run-config-stock_scan"></div>
-            <div id="run-config-watchlist_run"></div>
-            <div id="run-config-task_run"></div>
-        `;
-        (globalThis as any).selectedRunType = "";
-    }
-
-    function populateStrategyCheckboxes() {
-        const stratDiv = document.getElementById("run-strategy-checkboxes")!;
-        stratDiv.innerHTML = `
-            <input type="checkbox" value="daily_bull_oversold" checked>
-            <input type="checkbox" value="kdj_dead_cross">
-        `;
-    }
-
-    function setupEventListeners() {
-        const codeInput = document.getElementById("run-stock-code");
-        const startDateInput = document.getElementById("run-start-date");
-        const endDateInput = document.getElementById("run-end-date");
-        const outputPathInput = document.getElementById("run-output-path");
-        const watchlistSelect = document.getElementById("run-watchlist-select");
-        const taskConfigSelect = document.getElementById("run-task-config-select");
-        const dailyModeCheckbox = document.getElementById("run-daily-mode");
-        
-        if (codeInput) codeInput.addEventListener("input", () => updateCliPreview());
-        if (startDateInput) startDateInput.addEventListener("input", () => updateCliPreview());
-        if (endDateInput) endDateInput.addEventListener("input", () => updateCliPreview());
-        if (outputPathInput) outputPathInput.addEventListener("input", () => updateCliPreview());
-        if (watchlistSelect) watchlistSelect.addEventListener("change", () => updateCliPreview());
-        if (taskConfigSelect) taskConfigSelect.addEventListener("change", () => updateCliPreview());
-        if (dailyModeCheckbox) dailyModeCheckbox.addEventListener("change", () => updateCliPreview());
-        
-        document.querySelectorAll(".run-indicator").forEach(el => {
-            el.addEventListener("change", () => updateCliPreview());
-        });
-        
-        // Event delegation for dynamically generated strategy checkboxes
-        document.getElementById("run-strategy-checkboxes")?.addEventListener("change", (e) => {
-            if (e.target instanceof HTMLInputElement) {
-                updateCliPreview();
-            }
-        });
-    }
-
-    function updateCliPreview() {
-        const preview = document.getElementById("run-cli-preview")!;
-        if (!preview) return;
-        const selectedRunType = (globalThis as any).selectedRunType;
-        if (selectedRunType === "stock_scan") {
-            const code = (document.getElementById("run-stock-code") as HTMLInputElement).value || "CODE";
-            const start = (document.getElementById("run-start-date") as HTMLInputElement).value;
-            const end = (document.getElementById("run-end-date") as HTMLInputElement).value;
-            const inds = Array.from(document.querySelectorAll(".run-indicator:checked"))
-                .map((el: Element) => (el as HTMLInputElement).value).join(",");
-            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
-            let cmd = `python -m quantflow.cli scan --code ${code} --indicator ${inds || "kdj,dual_line"}`;
-            if (start) cmd += ` --start ${start}`;
-            if (end) cmd += ` --end ${end}`;
-            if (output) cmd += ` --output ${output}`;
-            preview.textContent = cmd;
-        } else if (selectedRunType === "watchlist_run") {
-            const wl = (document.getElementById("run-watchlist-select") as HTMLSelectElement)?.value || "WATCHLIST";
-            const strategies = Array.from(document.querySelectorAll("#run-strategy-checkboxes input:checked"))
-                .map((el: Element) => (el as HTMLInputElement).value).join(",");
-            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
-            let cmd = `python -m quantflow.cli monitor --watchlist ${wl}`;
-            if (strategies) cmd += ` --strategies ${strategies}`;
-            if (output) cmd += ` --output ${output}`;
-            preview.textContent = cmd;
-        } else if (selectedRunType === "task_run") {
-            const tc = (document.getElementById("run-task-config-select") as HTMLSelectElement)?.value || "CONFIG";
-            const daily = (document.getElementById("run-daily-mode") as HTMLInputElement).checked;
-            const output = (document.getElementById("run-output-path") as HTMLInputElement).value;
-            let cmd = `python -m quantflow.cli tasks --config ${tc}`;
-            if (daily) cmd += ` --daily`;
-            if (output) cmd += ` --output ${output}`;
-            preview.textContent = cmd;
+        constructor(readonly endpoint: string) {
+            super();
+            stream = this;
         }
     }
+    vi.stubGlobal("EventSource", TestStream);
+    runs = [{ ...scan, status: "running" }];
+    routes.set("GET /api/runs/scan-1", { run: runs[0] });
+    const logEndpoint = "GET /api/runs/scan-1/logs?tail=500";
+    routes.set(logEndpoint, { exists: true, content: "Real file: scan started" });
+    await renderApp();
+    element('[data-run-id="scan-1"]').click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stream!.endpoint).toBe("/api/runs/scan-1/logs:sse");
 
-    it("has event listener on run-stock-code input", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "stock_scan";
-        
-        const codeInput = document.getElementById("run-stock-code") as HTMLInputElement;
-        expect(codeInput).not.toBeNull();
-        
-        setupEventListeners();
-        codeInput.value = "NVDA.US";
-        codeInput.dispatchEvent(new Event("input"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--code NVDA.US");
-    });
+    stream!.dispatchEvent(new MessageEvent("progress", {
+        data: JSON.stringify({ percentage: 50, current: 1, total: 2 }),
+    }));
+    expect(element("#run-progress-text").textContent).toBe("50% (1/2)");
+    expect(element("#run-progress-bar").style.width).toBe("50%");
+    expect(element("#run-log-container").textContent).toBe("Real file: scan started");
 
-    it("has event listener on run-start-date input", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "stock_scan";
-        
-        const startDateInput = document.getElementById("run-start-date") as HTMLInputElement;
-        expect(startDateInput).not.toBeNull();
-        
-        setupEventListeners();
-        startDateInput.value = "2026-05-01";
-        startDateInput.dispatchEvent(new Event("input"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--start 2026-05-01");
-    });
-
-    it("has event listener on run-end-date input", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "stock_scan";
-        
-        const endDateInput = document.getElementById("run-end-date") as HTMLInputElement;
-        expect(endDateInput).not.toBeNull();
-        
-        setupEventListeners();
-        endDateInput.value = "2026-05-05";
-        endDateInput.dispatchEvent(new Event("input"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--end 2026-05-05");
-    });
-
-    it("has event listener on run-output-path input", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "stock_scan";
-        
-        const outputPathInput = document.getElementById("run-output-path") as HTMLInputElement;
-        expect(outputPathInput).not.toBeNull();
-        
-        setupEventListeners();
-        outputPathInput.value = "/tmp/output";
-        outputPathInput.dispatchEvent(new Event("input"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--output /tmp/output");
-    });
-
-    it("has event listener on run-watchlist-select change", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "watchlist_run";
-        
-        const watchlistSelect = document.getElementById("run-watchlist-select") as HTMLSelectElement;
-        expect(watchlistSelect).not.toBeNull();
-        
-        setupEventListeners();
-        watchlistSelect.value = "watchlists/test.yaml";
-        watchlistSelect.dispatchEvent(new Event("change"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--watchlist watchlists/test.yaml");
-    });
-
-    it("uses event delegation for dynamically generated strategy checkboxes", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "watchlist_run";
-        
-        setupEventListeners();
-        
-        // Simulate dynamic generation (like populateRunFormFields does)
-        populateStrategyCheckboxes();
-        
-        const checkbox = document.querySelector("#run-strategy-checkboxes input[value='kdj_dead_cross']") as HTMLInputElement;
-        expect(checkbox).not.toBeNull();
-        
-        checkbox.checked = true;
-        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--strategies");
-        expect(preview).toContain("kdj_dead_cross");
-    });
-
-    it("updates CLI preview when first strategy checkbox is unchecked", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "watchlist_run";
-        
-        setupEventListeners();
-        populateStrategyCheckboxes();
-        
-        // First checkbox is checked by default, second is unchecked
-        const firstCheckbox = document.querySelector("#run-strategy-checkboxes input[value='daily_bull_oversold']") as HTMLInputElement;
-        const secondCheckbox = document.querySelector("#run-strategy-checkboxes input[value='kdj_dead_cross']") as HTMLInputElement;
-        
-        expect(firstCheckbox.checked).toBe(true);
-        expect(secondCheckbox.checked).toBe(false);
-        
-        // Trigger initial preview to establish baseline
-        updateCliPreview();
-        const initialPreview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(initialPreview).toContain("daily_bull_oversold");
-        expect(initialPreview).toContain("--strategies");
-        
-        // Now uncheck the first and check the second
-        firstCheckbox.checked = false;
-        secondCheckbox.checked = true;
-        secondCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--strategies");
-        expect(preview).toContain("kdj_dead_cross");
-        expect(preview).not.toContain("daily_bull_oversold");
-    });
-
-    it("includes multiple checked strategies in CLI preview", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "watchlist_run";
-        
-        setupEventListeners();
-        populateStrategyCheckboxes();
-        
-        // Check both checkboxes
-        const checkboxes = document.querySelectorAll("#run-strategy-checkboxes input") as NodeListOf<HTMLInputElement>;
-        checkboxes[0].checked = true;  // daily_bull_oversold (already checked)
-        checkboxes[1].checked = true;  // kdj_dead_cross
-        
-        // Trigger event from second checkbox (which was unchecked before)
-        checkboxes[1].dispatchEvent(new Event("change", { bubbles: true }));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--strategies");
-        // Both strategies should appear (order may vary)
-        expect(preview).toContain("daily_bull_oversold");
-        expect(preview).toContain("kdj_dead_cross");
-    });
-
-    it("has event listener on run-task-config-select change", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "task_run";
-        
-        const taskConfigSelect = document.getElementById("run-task-config-select") as HTMLSelectElement;
-        expect(taskConfigSelect).not.toBeNull();
-        
-        setupEventListeners();
-        taskConfigSelect.value = "config/tasks_test.yaml";
-        taskConfigSelect.dispatchEvent(new Event("change"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--config config/tasks_test.yaml");
-    });
-
-    it("has event listener on run-daily-mode change", () => {
-        setupEventListenerEnvironment();
-        (globalThis as any).selectedRunType = "task_run";
-        
-        const dailyModeCheckbox = document.getElementById("run-daily-mode") as HTMLInputElement;
-        expect(dailyModeCheckbox).not.toBeNull();
-        
-        setupEventListeners();
-        dailyModeCheckbox.checked = true;
-        dailyModeCheckbox.dispatchEvent(new Event("change"));
-        
-        const preview = document.getElementById("run-cli-preview")!.textContent!;
-        expect(preview).toContain("--daily");
-    });
+    runs = [scan];
+    routes.set("GET /api/runs/scan-1", { run: scan });
+    routes.set(logEndpoint, { exists: true, content: "Real file: scan completed" });
+    stream!.dispatchEvent(new MessageEvent("status", { data: JSON.stringify({ status: "completed" }) }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stream!.close).toHaveBeenCalledOnce();
+    expect(element("#runtab-config").textContent).toContain("completed");
+    expect(element("#run-log-container").textContent).toBe("Real file: scan completed");
 });
 
-describe("tag editing helpers", () => {
-    function parseTagInput(input: string): string[] {
-        return input.split(",").map(s => s.trim()).filter(Boolean);
-    }
-
-    function mergeTags(existing: string[], toAdd: string[]): string[] {
-        const set = new Set(existing);
-        for (const t of toAdd) {
-            if (!set.has(t)) set.add(t);
-        }
-        return Array.from(set);
-    }
-
-    function removeTagAt(tags: string[], idx: number): string[] {
-        const result = [...tags];
-        result.splice(idx, 1);
-        return result;
-    }
-
-    it("parseTagInput splits comma-separated tags and trims whitespace", () => {
-        expect(parseTagInput("AI, 数据中心, 稀土")).toEqual(["AI", "数据中心", "稀土"]);
-    });
-
-    it("parseTagInput handles empty input", () => {
-        expect(parseTagInput("")).toEqual([]);
-    });
-
-    it("parseTagInput handles single tag", () => {
-        expect(parseTagInput("Personal")).toEqual(["Personal"]);
-    });
-
-    it("parseTagInput trims whitespace around tags", () => {
-        expect(parseTagInput("  AI  ,  稀土  ")).toEqual(["AI", "稀土"]);
-    });
-
-    it("parseTagInput filters empty segments", () => {
-        expect(parseTagInput("AI,,稀土,")).toEqual(["AI", "稀土"]);
-    });
-
-    it("mergeTags adds new tags without duplicates", () => {
-        expect(mergeTags(["AI", "Personal"], ["稀土", "AI"])).toEqual(["AI", "Personal", "稀土"]);
-    });
-
-    it("mergeTags handles empty existing tags", () => {
-        expect(mergeTags([], ["AI"])).toEqual(["AI"]);
-    });
-
-    it("mergeTags handles empty toAdd", () => {
-        expect(mergeTags(["AI"], [])).toEqual(["AI"]);
-    });
-
-    it("mergeTags handles both empty", () => {
-        expect(mergeTags([], [])).toEqual([]);
-    });
-
-    it("removeTagAt removes tag at specified index", () => {
-        expect(removeTagAt(["AI", "Personal", "稀土"], 1)).toEqual(["AI", "稀土"]);
-    });
-
-    it("removeTagAt removes first tag", () => {
-        expect(removeTagAt(["AI", "Personal"], 0)).toEqual(["Personal"]);
-    });
-
-    it("removeTagAt removes last tag", () => {
-        expect(removeTagAt(["AI", "Personal"], 1)).toEqual(["AI"]);
-    });
-
-    it("removeTagAt on single-element array returns empty", () => {
-        expect(removeTagAt(["AI"], 0)).toEqual([]);
-    });
-});
-
-describe("inline editing DOM structure", () => {
-    beforeEach(() => {
-        document.body.innerHTML = `
-            <div id="save-indicator" class="hidden"></div>
-            <button id="btn-save-watchlist" class="hidden"></button>
-            <table><tbody id="stock-table"></tbody></table>
-        `;
-    });
-
-    function renderStockTableForTest(items: Array<{code: string; name?: string; tags: string[]}>) {
-        const tbody = document.getElementById("stock-table")!;
-        tbody.innerHTML = "";
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            const tr = document.createElement("tr");
-            tr.className = "hover:bg-gray-50";
-            const tags = (item.tags || []).map(t =>
-                `<span class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">${t}</span>`
-            ).join(" ");
-            tr.innerHTML = `
-                <td class="px-4 py-2 text-sm text-gray-900">${item.code}</td>
-                <td class="px-4 py-2 text-sm text-gray-600"><span class="editable-name cursor-pointer hover:bg-gray-100 px-1 rounded" data-idx="${i}" title="Click to edit">${item.name || "-"}</span></td>
-                <td class="px-4 py-2 text-sm text-gray-600"><div class="editable-tags cursor-pointer hover:bg-gray-100 px-1 rounded min-h-[20px]" data-idx="${i}" title="Click to edit tags">${tags || "-"}</div></td>
-                <td class="px-4 py-2 text-sm"><button data-idx="${i}" class="text-red-600 hover:text-red-800 delete-stock-btn">Delete</button></td>`;
-            tbody.appendChild(tr);
-        }
-    }
-
-    it("renders name cell with editable-name class and data-idx", () => {
-        renderStockTableForTest([{ code: "AAPL.US", name: "Apple", tags: ["tech"] }]);
-        const span = document.querySelector(".editable-name") as HTMLElement;
-        expect(span).not.toBeNull();
-        expect(span.dataset.idx).toBe("0");
-        expect(span.textContent).toBe("Apple");
-    });
-
-    it("renders dash for empty name", () => {
-        renderStockTableForTest([{ code: "AAPL.US", tags: [] }]);
-        const span = document.querySelector(".editable-name") as HTMLElement;
-        expect(span.textContent).toBe("-");
-    });
-
-    it("renders tags cell with editable-tags class and data-idx", () => {
-        renderStockTableForTest([{ code: "AAPL.US", tags: ["tech", "AI"] }]);
-        const div = document.querySelector(".editable-tags") as HTMLElement;
-        expect(div).not.toBeNull();
-        expect(div.dataset.idx).toBe("0");
-    });
-
-    it("renders dash for empty tags", () => {
-        renderStockTableForTest([{ code: "AAPL.US", tags: [] }]);
-        const div = document.querySelector(".editable-tags") as HTMLElement;
-        expect(div.textContent).toBe("-");
-    });
-
-    it("replaces name span with input on click simulation", () => {
-        const items = [{ code: "AAPL.US", name: "Apple", tags: [] }];
-        renderStockTableForTest(items);
-        const span = document.querySelector(".editable-name") as HTMLElement;
-
-        const input = document.createElement("input");
-        input.type = "text";
-        input.value = items[0].name || "";
-        input.className = "border border-blue-400 rounded px-1 py-0.5 text-sm w-full";
-        span.replaceWith(input);
-
-        const nameInput = document.querySelector("input[type='text']") as HTMLInputElement;
-        expect(nameInput).not.toBeNull();
-        expect(nameInput.value).toBe("Apple");
-    });
-
-    it("replaces tags div with edit mode on click simulation", () => {
-        const items = [{ code: "AAPL.US", name: "Apple", tags: ["tech"] }];
-        renderStockTableForTest(items);
-        const div = document.querySelector(".editable-tags") as HTMLElement;
-
-        div.classList.remove("cursor-pointer", "hover:bg-gray-100");
-        div.innerHTML = "";
-        const pillsDiv = document.createElement("div");
-        pillsDiv.className = "flex flex-wrap gap-1 mb-1";
-        const pill = document.createElement("span");
-        pill.className = "bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-0.5";
-        pill.innerHTML = 'tech<span class="tag-remove-btn cursor-pointer font-bold ml-0.5" data-tag-idx="0">&times;</span>';
-        pillsDiv.appendChild(pill);
-        const input = document.createElement("input");
-        input.type = "text";
-        input.placeholder = "Add tag, Enter to confirm";
-        input.className = "border border-blue-400 rounded px-1 py-0.5 text-xs w-full";
-        div.appendChild(pillsDiv);
-        div.appendChild(input);
-
-        expect(div.querySelector(".tag-remove-btn")).not.toBeNull();
-        expect(div.querySelector("input")).not.toBeNull();
-        expect(div.querySelector("input")!.placeholder).toBe("Add tag, Enter to confirm");
-    });
-
-    it("renders multiple stock rows with correct data-idx for each", () => {
-        const items = [
-            { code: "AAPL.US", name: "Apple", tags: ["tech"] },
-            { code: "NVDA.US", name: "Nvidia", tags: ["AI"] },
-            { code: "TSLA.US", name: "Tesla", tags: ["EV"] },
-        ];
-        renderStockTableForTest(items);
-        const nameSpans = document.querySelectorAll(".editable-name");
-        expect(nameSpans.length).toBe(3);
-        expect((nameSpans[0] as HTMLElement).dataset.idx).toBe("0");
-        expect((nameSpans[1] as HTMLElement).dataset.idx).toBe("1");
-        expect((nameSpans[2] as HTMLElement).dataset.idx).toBe("2");
-        const tagsDivs = document.querySelectorAll(".editable-tags");
-        expect(tagsDivs.length).toBe(3);
-        expect((tagsDivs[0] as HTMLElement).dataset.idx).toBe("0");
-        expect((tagsDivs[1] as HTMLElement).dataset.idx).toBe("1");
-        expect((tagsDivs[2] as HTMLElement).dataset.idx).toBe("2");
-    });
-
-    it("click on tags child element resolves idx from parent container via currentTarget", () => {
-        const items = [
-            { code: "AAPL.US", name: "Apple", tags: ["tech"] },
-            { code: "NVDA.US", name: "Nvidia", tags: ["AI", "芯片"] },
-        ];
-        renderStockTableForTest(items);
-        const secondTagsDiv = document.querySelectorAll(".editable-tags")[1] as HTMLElement;
-        expect(secondTagsDiv.dataset.idx).toBe("1");
-
-        const childSpan = secondTagsDiv.querySelector("span") as HTMLElement;
-        expect(childSpan).not.toBeNull();
-
-        const clickEvent = new MouseEvent("click", { bubbles: true });
-        Object.defineProperty(clickEvent, "currentTarget", { value: secondTagsDiv, enumerable: true });
-        Object.defineProperty(clickEvent, "target", { value: childSpan, enumerable: true });
-
-        const idx = parseInt((clickEvent.currentTarget as HTMLElement).dataset.idx || "0");
-        expect(idx).toBe(1);
-    });
+it("reports errors from opening the run folder", async () => {
+    routes.set("POST /api/runs/scan-1/open-folder", { ok: false, message: "Folder is missing" });
+    await renderApp();
+    await (window as Window & { openFolder: (id: string) => Promise<void> }).openFolder("scan-1");
+    expect(fetchApi).toHaveBeenCalledWith("/api/runs/scan-1/open-folder", expect.objectContaining({ method: "POST" }));
+    expect(element("#toast-message").textContent).toBe("Folder is missing");
 });

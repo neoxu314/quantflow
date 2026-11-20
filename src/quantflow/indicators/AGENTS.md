@@ -1,76 +1,17 @@
-# INDICATORS - QUANTFLOW
+# Indicators
 
-**Scope:** `src/quantflow/indicators/`
-
-## OVERVIEW
-
-Technical indicator framework: standard (KDJ/MACD/RSI/BOLL/VOL_MA) + custom (DualLine/BrickChart/Washout) + composition system.
-
-## STRUCTURE
-
-```
-indicators/
-├── base.py            # IndicatorBase abstract class
-├── standard/          # Built-in indicators
-│   ├── kdj.py         # Stochastic oscillator (N=9, M1=3, M2=3)
-│   ├── macd.py        # Moving Average Convergence Divergence
-│   ├── rsi.py         # Relative Strength Index (multi-period, e.g. RSI6/RSI12/RSI24)
-│   ├── boll.py        # Bollinger Bands
-│   └── vol_ma.py      # Volume Moving Average
-├── custom/            # Custom indicators
-│   ├── dual_line.py   # EMA + MA bull/bear zone detection
-│   ├── brick_chart.py # Price-based chart transformation
-│   └── washout_short_term.py # Multi-cycle position analysis for washout dips
-├── composer.py        # IndicatorComposer - chain multiple indicators
-└── __init__.py
-```
-
-## WHERE TO LOOK
-
-| Task | Location | Notes |
-|------|----------|-------|
-| Indicator interface | `base.py` | `IndicatorBase.calculate(df)`, `get_output_fields()` |
-| KDJ calculation | `standard/kdj.py` | Stochastic oscillator (n=9, m1=3, m2=3), Wilder EMA for RSI |
-| DualLine zones | `custom/dual_line.py` | Bull zone (EMA > MA), bear zone (EMA < MA) |
-| Indicator chaining | `composer.py` | `IndicatorComposer([ind1, ind2]).compose(df)` |
-
-## CONVENTIONS
-
-- **Pattern**: All indicators inherit `IndicatorBase(ABC)`
-- **Input**: `DataFrame` with OHLCV columns
-- **Output**: Augmented `DataFrame` with indicator value columns only
-- **Parameters**: Configurable via constructor, sensible defaults provided
-- **Lookback**: Every indicator MUST implement `lookback_bars` (minimum bars needed) and may override `required_period` ('d' or 'w')
-
-## ANTI-PATTERNS
-
-- Do NOT mix indicator logic with strategy logic — indicators calculate values, strategies decide signals
-- Do NOT hardcode column names — use `get_output_fields()` method
-- Do NOT modify input DataFrame in place — return new DataFrame
-- Do NOT omit `lookback_bars` property — it is abstract and required for correct data fetching
-
-## NOTES
-
-- **Brick Chart Convergence**: The Brick Chart indicator requires sufficient historical data (recommended >200 bars/1 year) to converge with TDX values. Short data windows will show numerical divergence due to SMA initialization, though trend signals remain accurate.
-- **Brick Chart Data Sensitivity**: Numerical values may differ slightly from TDX if the source data (BaoStock vs TDX prices) has minor discrepancies in adjusted prices, but the color/trend logic remains valid.
-- KDJ produces `K`, `D`, `J`, `RSV` columns; cross signals built in strategy layer
-- **Factory Pattern**: Indicators are created via IndicatorFactory.create() to allow config-driven parameters.
-- **DualLine Strict Mode**:
-  - DualLine uses 4 MA periods (14, 28, 57, 114).
-  - **Behavior**: Requires minimum ~114 bars of history to calculate `long_short_line`.
-  - **New Stocks**: If history < 114 days, returns `NaN` for the line. Strategies will naturally fail to generate signal (Safe).
-- Composer applies indicators sequentially, each can depend on previous results
-
-## TESTS
-
-| Category | Test File(s) | Test Count | Type |
-|----------|--------------|------------|------|
-| Base + Condition | `test_condition.py` | 16 | Unit (IndicatorBase abstract contract, Condition operator coverage, signal generation) |
-| Standard indicators | `test_indicators.py` + `test_standard_indicators.py` | 47 | Unit (name/params/lookback/fields/calculate for KDJ/MACD/RSI/BOLL/VOL_MA + edge cases) |
-| Custom indicators | `test_dual_line.py`, `test_brick_chart.py`, `test_washout_short_term.py` | 16 | Unit + TDX reference integration |
-| Factory | `test_indicator_factory.py` | 10 | Unit (config merging, caching, disabled indicators, real yaml load) |
-| Composer | `test_composer.py` | 5 + 3 (in `test_indicators.py`) | Unit (add/remove, data preservation, dependency validation) |
-| Integration (real data) | `test_integration.py` | 14 | Integration (2 stocks × 7 indicators vs TongDaXin reference values with tolerance) |
-
-- **RSI**: Supports multi-period via `periods=[6,12,24]` → outputs `RSI6`, `RSI12`, `RSI24`. Config: `config/indicators.yaml`.
-- Run: `pytest tests/indicators/ -m "not integration"` for unit, `-m integration` for network tests.
+- Implement `IndicatorBase` with `calculate()`, named output fields and `lookback_bars`.
+  Preserve the input frame. Indicators calculate values, while strategies decide signals.
+- Resolve instances through `IndicatorFactory` so YAML overrides, disabled indicators,
+  and execution snapshots apply consistently. Register exported indicator classes in
+  the standard or custom package for Library discovery.
+- DualLine combines short EMA smoothing and a mean of four moving averages. With its
+  default periods the long/short line needs 114 daily observations. Warm-up rows have
+  unavailable values and are excluded by strategy prerequisites.
+- BrickChart preserves undefined values and resumes when its inputs are valid. Seed history
+  and the price adjustment basis affect comparisons against TongDaXin. Verify convergence
+  using the same frozen source data and an explicit tolerance.
+- `IndicatorComposer` runs indicators sequentially over the augmented DataFrame.
+  Current scan and strategy execution accepts daily input periods.
+- See [standard indicator outputs](standard/AGENTS.md). Run
+  `python -m pytest tests/indicators` for offline cases.

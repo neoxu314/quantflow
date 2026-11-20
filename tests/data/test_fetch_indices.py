@@ -8,7 +8,7 @@ Tests:
 
 Run:
     pytest tests/data/test_fetch_indices.py -v
-    pytest tests/data/test_fetch_indices.py -m integration -v  # Mocked network
+    pytest tests/data/test_fetch_indices.py --live-market -m integration -v  # Currently marked integration, uses mocked HTTP
 """
 
 import pytest

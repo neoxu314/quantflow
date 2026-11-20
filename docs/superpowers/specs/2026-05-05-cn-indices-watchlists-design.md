@@ -1,5 +1,7 @@
 # Design: A-Share Index Constituents Watchlist Generation
 
+> **历史资料。** 以下内容保留文件名所示日期的方案和假设。当前入口、路径与约束见 [项目文档](../../../README.md) 和 [运行契约](../../reliability-and-data-contracts.md)。
+
 **Date:** 2026-05-05
 **Status:** Draft
 **Approach:** Minimal implementation (方案A)

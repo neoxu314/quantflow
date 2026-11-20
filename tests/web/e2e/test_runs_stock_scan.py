@@ -1,177 +1,47 @@
-"""E2E tests for Runs Panel - Stock Scan Workflow."""
-from __future__ import annotations
-import json
-import sqlite3
-import time
-from pathlib import Path
+"""A stock scan through the browser, the real worker and the saved report."""
 
-import httpx
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
-from .conftest import SERVER_URL
-
-DB_PATH = None
-TEST_STOCK_CODE = "NVDA.US"
-RUN_TIMEOUT_SEC = 120
+from .run_helpers import (
+    SCAN,
+    open_new_run,
+    open_run_tab,
+    open_runs,
+    select_run,
+    submit_run,
+    wait_run,
+)
 
 
-class TestRunsStockScanWorkflow:
+def test_stock_scan_full_lifecycle(page, client, e2e_url):
+    open_runs(page, e2e_url)
+    open_new_run(page, "stock_scan")
+    for field, key in (
+        ("stock-code", "code"),
+        ("start-date", "start_date"),
+        ("end-date", "end_date"),
+    ):
+        page.locator(f"#run-{field}").fill(SCAN[key])
+    expect(page.locator("#run-cli-preview")).to_contain_text("--start 2025-06-03 --end 2025-06-04")
+    run_id = submit_run(page, e2e_url)
+    assert wait_run(client, run_id)["signal_count"] == 2
 
-    def wait_for_run_completion(self, e2e_url: str, stock_code: str) -> dict | None:
-        deadline = time.time() + RUN_TIMEOUT_SEC
-        while time.time() < deadline:
-            try:
-                resp = httpx.get(f"{e2e_url}/api/runs/")
-                if resp.status_code == 200:
-                    for run in resp.json().get("runs", []):
-                        if run.get("config", {}).get("code") == stock_code:
-                            if run["status"] == "completed":
-                                return run
-                            if run["status"] == "failed":
-                                return run
-            except Exception:
-                pass
-            time.sleep(3)
-        return None
+    open_runs(page, e2e_url)
+    select_run(page, run_id, "completed")
+    report = open_run_tab(page, "report")
+    expect(report).to_contain_text("Total bars: 2")
+    expect(report.get_by_role("row").nth(1)).to_contain_text("2025-06-04")
+    expect(report.get_by_role("row").nth(1)).to_contain_text("139.5000")
+    files = open_run_tab(page, "files")
+    for name in ("AAPL.US_indicators.json", "AAPL.US_context.json", "AAPL.US_snapshot.json"):
+        expect(files.get_by_role("cell", name=name, exact=True)).to_be_visible()
 
-    def test_stock_scan_full_lifecycle(self, page: Page, e2e_url: str):
-        page.goto(SERVER_URL)
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
 
-        page.click("#btn-new-run")
-        page.wait_for_selector("#modal-new-run", state="visible")
-
-        page.click("button[data-type='stock_scan']")
-        page.wait_for_selector("#run-config-stock_scan", state="visible")
-
-        code_input = page.locator("#run-stock-code")
-        code_input.fill(TEST_STOCK_CODE)
-        page.wait_for_timeout(500)
-
-        page.click("#btn-execute-run")
-        page.wait_for_selector("#modal-new-run", state="hidden")
-
-        page.wait_for_function(
-            """(stockCode) => {
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {
-                    if (item.textContent.includes(stockCode)) return true;
-                }
-                return false;
-            }""",
-            arg=TEST_STOCK_CODE,
-            timeout=15000,
-        )
-
-        run = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
-        assert run is not None, "Run did not complete within timeout"
-        assert run["status"] == "completed", f"Run failed: {run.get('error')}"
-
-        page.reload()
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
-
-        page.wait_for_function(
-            """(stockCode) => {
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {
-                    if (item.textContent.includes(stockCode) && item.textContent.includes('completed')) {
-                        return true;
-                    }
-                }
-                return false;
-            }""",
-            arg=TEST_STOCK_CODE,
-            timeout=10000,
-        )
-
-        run_item = page.locator(
-            f"li[data-run-id]:has-text('{TEST_STOCK_CODE}')"
-        ).first
-        run_item.click()
-        page.wait_for_selector("#runs-detail", state="visible")
-        expect(page.locator("#runtab-config")).to_contain_text("completed")
-
-        page.click('[data-runtab="files"]')
-        expect(
-            page.locator("#runtab-files table tbody tr td").first
-        ).to_contain_text("indicators.json")
-
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            rows = conn.execute(
-                "SELECT status, report_path FROM run_history WHERE config LIKE ? ORDER BY created_at DESC LIMIT 1",
-                (f"%{TEST_STOCK_CODE}%",),
-            ).fetchall()
-
-        assert len(rows) > 0, "Run should exist in DB"
-        status, report_path = rows[0]
-        assert status == "completed", f"Expected completed, got {status}"
-        assert report_path is not None, "Report path should not be null"
-
-        report_file = Path(report_path)
-        assert report_file.exists(), f"Output file should exist: {report_file}"
-
-        with open(report_file) as f:
-            data = json.load(f)
-
-        assert isinstance(data, list), "Report should be a JSON list"
-        assert len(data) > 0, "Report data should not be empty"
-
-        first_row = data[0]
-        has_indicator = any(
-            k in ("K", "D", "J", "MACD", "short_trend_line") for k in first_row
-        )
-        assert has_indicator, "Data row must contain indicator columns (K/D/J/etc)"
-
-        page.on("dialog", lambda dialog: dialog.accept())
-        delete_btn = page.locator(
-            f'li[data-run-id]:has-text("{TEST_STOCK_CODE}"):has(button[title="Delete run"])'
-        ).locator('button[title="Delete run"]').first
-        delete_btn.click()
-
-        page.wait_for_function(
-            """(stockCode) => {
-                const items = document.querySelectorAll('li[data-run-id]');
-                for (const item of items) {
-                    if (item.textContent.includes(stockCode)) return false;
-                }
-                return true;
-            }""",
-            arg=TEST_STOCK_CODE,
-            timeout=10000,
-        )
-
-        with sqlite3.connect(str(DB_PATH)) as conn:
-            count = conn.execute(
-                "SELECT count(*) FROM run_history WHERE config LIKE ?",
-                (f"%{TEST_STOCK_CODE}%",),
-            ).fetchone()[0]
-
-        assert count == 0, "Run should be deleted from DB"
-        assert not report_file.exists(), "Output file should be deleted"
-
-    def test_new_run_modal_resets_on_open(self, page: Page):
-        page.goto(SERVER_URL)
-        page.wait_for_load_state("networkidle")
-        page.click('button[data-tab="runs"]')
-
-        page.click("#btn-new-run")
-        page.wait_for_selector("#modal-new-run", state="visible")
-
-        page.click("button[data-type='stock_scan']")
-        page.wait_for_selector("#run-config-stock_scan", state="visible")
-
-        page.click("#btn-cancel-run")
-        page.wait_for_selector("#modal-new-run", state="hidden")
-
-        page.click("#btn-new-run")
-        page.wait_for_selector("#modal-new-run", state="visible")
-        page.wait_for_selector("#run-step-type", state="visible")
-
-        config_stock = page.locator("#run-config-stock_scan")
-        expect(config_stock).to_be_hidden()
-        config_watchlist = page.locator("#run-config-watchlist_run")
-        expect(config_watchlist).to_be_hidden()
-        config_task = page.locator("#run-config-task_run")
-        expect(config_task).to_be_hidden()
+def test_new_run_reopens_at_type_selection(page, e2e_url):
+    open_runs(page, e2e_url)
+    open_new_run(page, "stock_scan")
+    page.locator("#run-stock-code").fill("AAPL.US")
+    page.locator("#btn-cancel-run").click()
+    page.locator("#btn-new-run").click()
+    expect(page.locator("#run-step-type")).to_be_visible()
+    expect(page.locator("#run-config-stock_scan")).to_be_hidden()

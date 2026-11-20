@@ -1,20 +1,7 @@
-"""CLI layer tests - parameter parsing, command routing, and structural validation.
+"""CLI parsing, aliases, output layout and stock-scan reference checks.
 
-Tests cover:
-1. Argument parsing (required params missing, format validation)
-2. Command routing (scan/stock_scan aliases)
-3. Indicator/strategy string parsing
-4. CLI output format validation
-5. Basic CLI execution (file generation, output structure)
-6. Integration tests with TongDaXin reference values (BYD & AAPL)
-
-TODO Tests (pending expected results):
-- watchlist_run with expected signal counts and matched strategies
-- task_run with expected orchestration results and combined reports
-
-Note: This file covers STEP 1 tests (structural validation) and STEP 2 tests (expected values).
-STEP 2 tests for stock_scan completed (BYD/AAPL validation).
-STEP 2 tests for watchlist_run/task_run pending (need real execution results).
+Fixed-data Watchlist Run and Task Run result assertions live in
+test_rebound_workflows.py. Live reference checks require --live-market.
 """
 from __future__ import annotations
 
@@ -97,33 +84,16 @@ class TestCLIArgumentParsing:
 class TestCLICommandRouting:
     """Test command routing via subprocess (integration tests for entry point)."""
 
-    @pytest.mark.integration
-    def test_scan_alias_executes_stock_scan(self):
-        """CLI 'scan' command should execute stock_scan successfully."""
+    @pytest.mark.parametrize("command", ["scan", "stock_scan"])
+    def test_scan_alias_dispatches_to_stock_scan(self, command):
         result = subprocess.run(
-            [sys.executable, "-m", "quantflow.cli", "scan", "--code", "NVDA.US"],
-            capture_output=True,
-            text=True,
-            timeout=30,
+            [sys.executable, "-m", "quantflow.cli", command, "--help"],
+            capture_output=True, text=True, timeout=10,
         )
-        assert result.returncode == 0
-        combined = result.stdout + result.stderr
-        assert "Scan Result for NVDA.US" in combined
+        assert result.returncode == 0, result.stderr
+        assert "--code" in result.stdout
+        assert "--indicator" in result.stdout
 
-    @pytest.mark.integration
-    def test_stock_scan_alias_executes_stock_scan(self):
-        """CLI 'stock_scan' command should execute successfully."""
-        result = subprocess.run(
-            [sys.executable, "-m", "quantflow.cli", "stock_scan", "--code", "NVDA.US"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert result.returncode == 0
-        combined = result.stdout + result.stderr
-        assert "Scan Result for NVDA.US" in combined
-
-    @pytest.mark.integration
     def test_unknown_command_prints_error(self):
         """Unknown command should print error message."""
         result = subprocess.run(
@@ -132,9 +102,9 @@ class TestCLICommandRouting:
             text=True,
             timeout=10,
         )
-        assert "Unknown command: unknown_command" in result.stdout
+        assert result.returncode == 2
+        assert "Usage:" in result.stdout
 
-    @pytest.mark.integration
     def test_no_command_prints_usage(self):
         """No command should print usage instructions."""
         result = subprocess.run(
@@ -144,7 +114,8 @@ class TestCLICommandRouting:
             timeout=10,
         )
         assert "Usage:" in result.stdout
-        assert "Commands:" in result.stdout
+        assert result.returncode == 2
+        assert "stock_scan|watchlist_run|task_run|web" in result.stdout
 
 
 class TestCLIIndicatorParsing:
@@ -195,63 +166,27 @@ class TestCLIStrategyParsing:
 class TestCLIExecutionIntegration:
     """Integration tests: CLI execution generates files and output."""
 
-    def test_stock_scan_generates_output(self, tmp_path):
-        """stock_scan CLI execution should generate indicator output."""
-        output_dir = tmp_path / "scan_output"
-        output_dir.mkdir()
-
+    def test_stock_scan_generates_owned_indicator_output(self, tmp_path):
         result = subprocess.run(
             [
-                sys.executable,
-                "-m",
-                "quantflow.cli",
-                "scan",
-                "--code",
-                "NVDA.US",
-                "--indicator",
-                "kdj",
-                "--start",
-                "2026-04-01",
-                "--end",
-                "2026-04-30",
+                sys.executable, "-m", "quantflow.cli", "scan", "--code", "NVDA.US",
+                "--indicator", "kdj", "--start", "2026-04-01", "--end", "2026-04-30",
+                "--output", str(tmp_path),
             ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(Path(__file__).parent.parent),
+            capture_output=True, text=True, timeout=60,
         )
-
-        assert result.returncode == 0
-        combined = result.stdout + result.stderr
-        assert "Scan Result for NVDA.US" in combined
-        assert "Data source:" in combined
-
-    def test_stock_scan_output_contains_indicator_columns(self, tmp_path):
-        """Indicator output should be calculated successfully."""
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "quantflow.cli",
-                "scan",
-                "--code",
-                "NVDA.US",
-                "--indicator",
-                "kdj",
-                "--start",
-                "2026-04-01",
-                "--end",
-                "2026-04-30",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(Path(__file__).parent.parent),
-        )
-
-        assert result.returncode == 0
-        combined = result.stdout + result.stderr
-        assert "Scan Result for NVDA.US" in combined
+        assert result.returncode == 0, result.stderr
+        run, = (tmp_path / "runs").iterdir()
+        manifest = json.loads((run / "manifest.json").read_text())
+        assert manifest["status"] == "completed"
+        assert "NVDA.US_indicators.json" in manifest["artifacts"]
+        rows = json.loads((run / "NVDA.US_indicators.json").read_text())
+        assert rows
+        assert {"K", "D", "J"} <= rows[-1].keys()
+        context = json.loads((run / "NVDA.US_context.json").read_text())
+        assert context["source"]
+        assert context["bars"] == len(rows)
+        assert rows[-1]["date"][:10] == "2026-04-30"
 
     def test_watchlist_run_generates_report(self, tmp_path):
         """watchlist_run should generate Markdown report."""
@@ -279,15 +214,13 @@ class TestCLIExecutionIntegration:
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(Path(__file__).parent.parent),
         )
 
-        assert result.returncode == 0
-        combined = result.stdout + result.stderr
-        assert "Execution complete" in combined
-
-        json_files = list(output_dir.glob("*_results.json"))
-        assert len(json_files) > 0, "Should generate JSON results file"
+        assert result.returncode == 0, result.stderr
+        run, = (output_dir / "runs").iterdir()
+        assert (run / "cli-TestWL.md").is_file()
+        assert isinstance(json.loads((run / "cli-TestWL.json").read_text()), list)
+        assert json.loads((run / "Run_Summary.json").read_text())["status"] == "completed"
 
     def test_task_run_generates_combined_results(self, tmp_path):
         """task_run should generate Combined_Results.json."""
@@ -327,11 +260,11 @@ class TestCLIExecutionIntegration:
             cwd=str(tmp_path),
         )
 
-        combined_json = output_dir / "Combined_Results.json"
-        assert combined_json.exists(), "Should generate Combined_Results.json"
-
-        data = json.loads(combined_json.read_text())
-        assert isinstance(data, list)
+        assert result.returncode == 0, result.stderr
+        run, = (output_dir / "runs").iterdir()
+        assert isinstance(json.loads((run / "Combined_Results.json").read_text()), list)
+        assert (run / "Daily_Report.md").is_file()
+        assert json.loads((run / "Run_Summary.json").read_text())["status"] == "completed"
 
 
 class TestCLILogFile:
@@ -455,14 +388,11 @@ class TestCLIStockScanWithExpectedValues:
             capture_output=True,
             text=True,
             timeout=120,
-            cwd=str(Path(__file__).parent.parent),
         )
 
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
-        combined = result.stdout + result.stderr
-        assert "Indicator data saved" in combined
-
-        json_file = tmp_path / "002594.SZ_indicators.json"
+        run, = (tmp_path / "runs").iterdir()
+        json_file = run / "002594.SZ_indicators.json"
         assert json_file.exists(), "JSON file should be generated"
 
         data = json.loads(json_file.read_text())
@@ -501,95 +431,6 @@ class TestCLIStockScanWithExpectedValues:
         print(f"   D={target_row['D']:.2f} (ref={ref_D}, error={abs(target_row['D']-ref_D)/ref_D*100:.2f}%)")
         print(f"   J={target_row['J']:.2f} (ref={ref_J}, error={abs(target_row['J']-ref_J)/ref_J*100:.2f}%)")
 
-    def test_cli_stock_scan_aapl_weekly_kdj(self, tmp_path):
-        """Verify AAPL weekly KDJ values match TongDaXin reference.
-
-        Reference from test_integration.py (weekly data):
-            KDJ: {"K": 47.629, "D": 37.966, "J": 66.957}
-
-        Note: CLI currently only supports daily data. This test documents
-        the limitation and will be updated when weekly support is added.
-        """
-        pass
-
-
-@pytest.mark.integration
-@pytest.mark.skip(reason="Pending expected signal counts and strategy matches from real execution")
-class TestCLIWatchlistRunWithExpectedValues:
-    """Integration tests for watchlist_run with expected results.
-
-    TODO: Add expected results from real execution:
-    - Signal counts (buy_signals, sell_signals)
-    - Matched stock codes
-    - Strategy IDs and names
-    - Output JSON structure validation
-
-    Suggested test data sources:
-    - Use execution/test_executor.py mock data patterns
-    - Or run real watchlist_run once to capture reference results
-    """
-
-    def test_cli_watchlist_run_us_djia_expected_signals(self, tmp_path):
-        """Verify watchlist_run for US DJIA produces expected signals.
-
-        Expected results needed:
-        - watchlist file: watchlists/us_djia.yaml
-        - strategy: daily_bull_oversold
-        - expected buy_signals count
-        - expected matched strategies list
-        """
-        # Placeholder - will be implemented with expected data
-        pass
-
-    def test_cli_watchlist_run_multiple_strategies_expected(self, tmp_path):
-        """Verify watchlist_run with multiple strategies.
-
-        Expected results needed:
-        - strategies: daily_bull_oversold + daily_bull_mid_range
-        - expected total signal count
-        - expected per-strategy breakdown
-        """
-        # Placeholder - will be implemented with expected data
-        pass
-
-
-@pytest.mark.integration
-@pytest.mark.skip(reason="Pending expected orchestration results from real task execution")
-class TestCLITaskRunWithExpectedValues:
-    """Integration tests for task_run with expected results.
-
-    TODO: Add expected results from real orchestration:
-    - Total signal count across all tasks
-    - Per-task signal breakdown
-    - Combined_Results.json structure
-    - Markdown report validation
-
-    Suggested test data sources:
-    - Use orchestration/test_orchestrator.py mock data patterns
-    - Or run real task_run once to capture reference results
-    """
-
-    def test_cli_task_run_single_task_expected_results(self, tmp_path):
-        """Verify task_run for single task produces expected results.
-
-        Expected results needed:
-        - task config: single task with known watchlist
-        - expected Combined_Results.json length
-        - expected Daily_Report.md structure
-        """
-        # Placeholder - will be implemented with expected data
-        pass
-
-    def test_cli_task_run_multiple_tasks_expected_total(self, tmp_path):
-        """Verify task_run for multiple tasks produces expected total signals.
-
-        Expected results needed:
-        - task config: multiple tasks (e.g., US + Asia)
-        - expected total signal count
-        - expected per-task output directories
-        """
-        # Placeholder - will be implemented with expected data
-        pass
 
 def _stub_scan(cfg, output):
     from quantflow.artifacts import atomic_json

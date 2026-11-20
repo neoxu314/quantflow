@@ -5,15 +5,12 @@ import shutil
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 import httpx
 import pytest
-import yaml
 
-from quantflow.config.loader import ConfigLoader
+from tests.support.project import home_environment, prepare_project
 
-SOURCE_ROOT = Path(__file__).resolve().parents[3]
 TEST_WATCHLIST_NAME = "_test_e2e_wl"
 TEST_TASK_FILE = "tasks_e2e_test.yaml"
 
@@ -29,14 +26,17 @@ from pathlib import Path
 
 import uvicorn
 
-home = Path(sys.argv[1])
-Path.home = classmethod(lambda cls: home)
 from quantflow.web.server import create_app
+
+if sys.argv[2] == "replay":
+    from replay_market import install_replay
+
+    install_replay(Path.cwd())
 
 app = create_app()
 with socket.socket() as sock:
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("127.0.0.1", int(sys.argv[2])))
+    sock.bind(("127.0.0.1", int(sys.argv[1])))
     Path("server.port").write_text(str(sock.getsockname()[1]))
     uvicorn.Server(uvicorn.Config(app)).run(sockets=[sock])
 """
@@ -45,11 +45,12 @@ with socket.socket() as sock:
 class TestServer:
     __test__ = False
 
-    def __init__(self, root):
+    def __init__(self, root, *, replay=True):
         self.root = root
         self.home = root / "home"
         self.port = 0
         self.process = None
+        self.replay = replay
 
     @property
     def url(self):
@@ -58,13 +59,23 @@ class TestServer:
     def start(self):
         port_file = self.root / "server.port"
         port_file.unlink(missing_ok=True)
-        env = dict(os.environ, PYTHONPATH=str(self.root / "src"))
-        env.pop("TUSHARE_TOKEN", None)
+        pythonpath = os.pathsep.join((str(self.root / "src"), os.environ["PYTHONPATH"]))
+        env = dict(os.environ, PYTHONPATH=pythonpath, **home_environment(self.home))
         log_path = self.root / "server.log"
         with log_path.open("ab") as log:
             self.process = subprocess.Popen(
-                [sys.executable, "-c", _SERVER, str(self.home), str(self.port)],
-                cwd=self.root, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                [
+                    sys.executable,
+                    "-c",
+                    _SERVER,
+                    str(self.port),
+                    "replay" if self.replay else "live",
+                ],
+                cwd=self.root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
             )
 
         deadline = time.monotonic() + 20
@@ -95,35 +106,14 @@ class TestServer:
         self.start()
 
 
-def _write_fixture(path, values):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(values, sort_keys=False), encoding="utf-8")
-
-
 @pytest.fixture
-def web_server(tmp_path, request, monkeypatch):
+def web_server(tmp_path, request, monkeypatch, test_project):
     root = tmp_path / "project"
     shutil.copytree(
-        SOURCE_ROOT / "src" / "quantflow", root / "src" / "quantflow",
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        test_project / "src", root / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
     )
-    config = ConfigLoader()._get_defaults()
-    config.update({
-        "web": {"host": "127.0.0.1", "port": 8080},
-        "lookback": {"calendar_multiplier": 2, "buffer_days": 30},
-        "tushare": {"token": ""},
-        "yfinance": {"batch": {"chunk_size": 35, "sleep_min": 0, "sleep_max": 0}},
-    })
-    _write_fixture(root / "config" / "quantflow.yaml", config)
-    shutil.copyfile(SOURCE_ROOT / "config" / "indicators.yaml", root / "config" / "indicators.yaml")
-    _write_fixture(root / "watchlists" / "djia.yaml", {
-        "name": "DJIA", "items": [{"code": "AAPL.US", "name": "Apple"}],
-    })
-    _write_fixture(root / "config" / "tasks_test.yaml", {"tasks": [{
-        "name": "djia", "watchlist": "watchlists/djia.yaml",
-        "strategies": ["daily_bull_mid_range", "daily_bull_oversold"],
-    }]})
-    server = TestServer(root)
+    prepare_project(root, test_project)
+    server = TestServer(root, replay=request.node.get_closest_marker("integration") is None)
     try:
         server.start()
         state = server.home / ".quantflow"
@@ -147,3 +137,24 @@ def web_server(tmp_path, request, monkeypatch):
 @pytest.fixture(autouse=True)
 def e2e_url(web_server):
     return web_server.url
+
+
+@pytest.fixture
+def page(page):
+    # The application toggles this class for panels and dialogs. Keep browser
+    # behavior deterministic when the external Tailwind script is unavailable.
+    page.route(
+        "https://cdn.tailwindcss.com/**",
+        lambda route: route.fulfill(
+            content_type="application/javascript",
+            body="document.head.append(Object.assign(document.createElement('style'), "
+            "{textContent: '.hidden {display:none!important}'}));",
+        ),
+    )
+    return page
+
+
+@pytest.fixture
+def client(e2e_url):
+    with httpx.Client(base_url=e2e_url, timeout=4, trust_env=False) as connection:
+        yield connection

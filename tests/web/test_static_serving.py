@@ -17,13 +17,15 @@ def test_static_index_html_served():
 
 
 def test_static_js_served():
-    """GET /app.js returns compiled JS."""
+    """The browser can load the entry point and its utility module."""
     from quantflow.web.server import create_app
 
     app = create_app()
     with TestClient(app) as client:
-        resp = client.get("/app.js")
-        assert resp.status_code == 200
+        for asset in ("/app.js", "/utils.js"):
+            resp = client.get(asset)
+            assert resp.status_code == 200
+            assert "javascript" in resp.headers["content-type"]
 
 
 def test_unknown_api_route_returns_404():

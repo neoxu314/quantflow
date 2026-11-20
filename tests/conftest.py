@@ -1,89 +1,127 @@
-"""pytest configuration for all tests.
+"""Run tests against detached code and disposable configuration and state."""
 
-CRITICAL SAFETY: Protects production data files.
-
-Hook: pytest_sessionfinish - verifies no production files modified.
-"""
-import pytest
+import os
+import sys
 from pathlib import Path
-import hashlib
+from shutil import copytree, ignore_patterns
+from tempfile import TemporaryDirectory
+
+import pytest
+from platformdirs import user_cache_dir
+
+from tests.support.network_guard import NETWORK_LOG, install
+from tests.support.project import home_environment, prepare_project
+
+ROOT = Path(__file__).resolve().parents[1]
+SUPPORT = ROOT / "tests" / "support"
+NETWORK_EVENTS = pytest.StashKey[Path]()
+NETWORK_OFFSET = pytest.StashKey[int]()
+TEST_PROJECT = pytest.StashKey[Path]()
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-# Production paths to protect (CRITICAL: NEVER modify these in tests!)
-PRODUCTION_PATHS = [
-    "watchlists/*.yaml",
-    "config/tasks*.yaml",
-    "config/quantflow.yaml",
-    "config/indicators.yaml",
-]
+def pytest_addoption(parser):
+    group = parser.getgroup("QuantFlow")
+    group.addoption("--live-market", action="store_true", help="Enable live provider tests.")
+    group.addoption("--run-browser", action="store_true", help="Enable Web E2E tests.")
 
 
-def _compute_file_hash(file_path: Path) -> str:
-    """Compute SHA256 hash of file content."""
-    if not file_path.exists():
+def pytest_configure(config):
+    temp = TemporaryDirectory(prefix="quantflow-tests-")
+    env = pytest.MonkeyPatch()
+    config.add_cleanup(temp.cleanup)
+    config.add_cleanup(env.undo)
+
+    root = Path(temp.name).resolve()
+    home = root / "home"
+    project = root / "project"
+    source = project / "src"
+    # Import defaults from the detached package as well.
+    copytree(
+        ROOT / "src" / "quantflow",
+        source / "quantflow",
+        ignore=ignore_patterns("__pycache__", "*.pyc"),
+    )
+    if any(name == "quantflow" or name.startswith("quantflow.") for name in sys.modules):
+        raise pytest.UsageError("Start pytest in a fresh Python process to isolate QuantFlow.")
+    env.syspath_prepend(str(source))
+    env.setenv("PYTHONPATH", os.pathsep.join((str(SUPPORT), str(source))))
+    if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
+        env.setenv("PLAYWRIGHT_BROWSERS_PATH", user_cache_dir("ms-playwright", appauthor=False))
+    for name, value in home_environment(home).items():
+        env.setenv(name, value)
+    for name in ("NO_PROXY", "no_proxy"):
+        env.setenv(name, "localhost,127.0.0.1,::1", prepend=",")
+    if not config.getoption("--live-market"):
+        env.delenv("TUSHARE_TOKEN", raising=False)
+
+    event_log = root / "blocked-network.log"
+    env.setenv(NETWORK_LOG, str(event_log))
+    install(env.setattr)
+    config.stash[NETWORK_EVENTS] = event_log
+    config.stash[TEST_PROJECT] = project
+    prepare_project(project, ROOT)
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    selected, deselected = [], []
+    for item in items:
+        browser = item.path.is_relative_to(ROOT / "tests" / "web" / "e2e")
+        if browser:
+            item.add_marker(pytest.mark.browser)
+        if (
+            browser and not config.getoption("--run-browser") and not config.option.collectonly
+        ) or (
+            item.get_closest_marker("integration")
+            and not config.getoption("--live-market")
+            and not config.option.collectonly
+        ):
+            deselected.append(item)
+        else:
+            selected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
+
+
+@pytest.fixture(scope="session")
+def test_project(pytestconfig):
+    return pytestconfig.stash[TEST_PROJECT]
+
+
+@pytest.fixture(autouse=True)
+def isolated_test_environment(test_project, request, monkeypatch):
+    monkeypatch.chdir(test_project)
+    if request.node.get_closest_marker("integration"):
+        monkeypatch.delenv(NETWORK_LOG)
+    else:
+        monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+
+
+def _blocked_hosts(config):
+    path = config.stash.get(NETWORK_EVENTS, None)
+    if path is None or not path.exists():
         return ""
-    content = file_path.read_bytes()
-    return hashlib.sha256(content).hexdigest()
+    with path.open(encoding="utf-8") as events:
+        events.seek(config.stash.get(NETWORK_OFFSET, 0))
+        hosts = events.read().splitlines()
+        config.stash[NETWORK_OFFSET] = events.tell()
+    return ", ".join(sorted(set(hosts)))
 
 
-def _snapshot_production_files() -> dict:
-    """Create hash snapshot of all production files."""
-    snapshot = {}
-    for pattern in PRODUCTION_PATHS:
-        for file_path in PROJECT_ROOT.glob(pattern):
-            # Skip backup files, test files, and hidden files
-            if ".bak" in file_path.name:
-                continue
-            if "_test_" in file_path.name or "_e2e_" in file_path.name:
-                continue
-            if file_path.name.startswith("."):
-                continue
-            snapshot[str(file_path.relative_to(PROJECT_ROOT))] = _compute_file_hash(file_path)
-    return snapshot
-
-
-def pytest_sessionstart(session):
-    """Called after Session object has been created.
-    
-    CRITICAL SAFETY: Take snapshot of production files before any tests run.
-    """
-    session.quantflow_production_snapshot = _snapshot_production_files()
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if hosts := _blocked_hosts(item.config):
+        message = f"Offline test attempted outbound network access: {hosts}"
+        report.longrepr = f"{report.longrepr}\n{message}" if report.longrepr else message
+        report.outcome = "failed"
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Called after whole test run finished.
-    
-    CRITICAL SAFETY: Verify no production files were modified during test session.
-    If modified, fail the session and list the changed files.
-    """
-    original = getattr(session, "quantflow_production_snapshot", None)
-    if original is None:
-        return
-
-    current = _snapshot_production_files()
-    modified_files = [
-        path for path in sorted(original.keys() | current.keys())
-        if original.get(path) != current.get(path)
-    ]
-
-    # If production files were modified, print CRITICAL warning
-    if modified_files:
-        msg = "\n\n" + "=" * 80
-        msg += "\n🔴 CRITICAL SAFETY VIOLATION DETECTED!\n"
-        msg += "=" * 80
-        msg += "\n\nProduction files were modified during test session:\n"
-        for f in modified_files:
-            msg += f"  - {f}\n"
-        msg += "\nTests must NEVER modify production data files.\n"
-        msg += "Use tmp_path fixture instead.\n\n"
-        msg += "\n" + "=" * 80 + "\n\n"
-        
-        # Print to stderr (pytest captures stdout)
-        import sys
-        sys.stderr.write(msg)
-        sys.stderr.flush()
-        
-        # Force test session to fail
-        session.exitstatus = 1
+    if hosts := _blocked_hosts(session.config):
+        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        if reporter:
+            reporter.write_line(f"Offline test session attempted outbound network access: {hosts}")
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED

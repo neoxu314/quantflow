@@ -15,7 +15,7 @@ import pandas as pd
 
 from quantflow.artifacts import ArtifactWriteError, atomic_json, safe_name
 from quantflow.config.loader import ConfigLoader
-from quantflow.control import check_cancelled
+from quantflow.control import ExecutionCancelled, check_cancelled
 from quantflow.data import StockCode
 from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 from quantflow.data.trading_calendar import CALENDARS, completed_session
@@ -38,9 +38,13 @@ class ProgressEvent:
     code: str
     message: str
     level: str
+    task: str | None = None
 
 
 class Executor:
+    # Persist analyzed work before downloading the next group in a large run.
+    BATCH_SIZE = 50
+
     def __init__(self, config=None):
         self.config = config or ConfigLoader()
         self.factory = self.config.create_data_factory()
@@ -242,35 +246,39 @@ class Executor:
                 results.outcomes.append(StockOutcome(code.standard, "error", error=str(exc)))
                 completed += 1
                 emit("stock_done", code.standard, str(exc), "error")
-        batch, offset = {}, 0
         batch_total = sum(map(len, batch_groups.values()))
 
-        def fetch_progress(index, _count, code):
-            check_cancelled()
-            if on_progress:
-                current = offset + index
-                on_progress(
-                    ProgressEvent(
-                        "fetch", current, batch_total, str(code),
-                        f"Fetching {current}/{batch_total}", "info",
-                    )
-                )
+        def batches():
+            offset = 0
+            for (start, session), group in batch_groups.items():
+                for first in range(0, len(group), self.BATCH_SIZE):
+                    pairs = group[first:first + self.BATCH_SIZE]
+                    codes = [code for _, code, _, _ in pairs]
 
-        for (start, session), group in batch_groups.items():
-            try:
-                batch.update(
-                    self.factory.fetch_batch_ohlcv(
-                        [code for _, code, _, _ in group], start, session,
-                        adjust=adjust, progress_cb=fetch_progress, require_end_session=True,
-                        min_history_bars=min_history_bars,
-                    )
-                )
-            except Exception as exc:
-                logger.exception("Batch download failed")
-                batch.update({code.standard: (None, str(exc)) for _, code, _, _ in group})
-            offset += len(group)
-        batch_items = [entry for group in batch_groups.values() for entry in group]
-        for is_batch, pairs in ((True, batch_items), (False, sequential)):
+                    def fetch_progress(index, _count, code):
+                        check_cancelled()
+                        current = offset + index
+                        if on_progress:
+                            on_progress(ProgressEvent(
+                                "fetch", current, batch_total, str(code),
+                                f"Downloaded {current}/{batch_total}", "info", job.name,
+                            ))
+
+                    try:
+                        batch = self.factory.fetch_batch_ohlcv(
+                            codes, start, session, adjust=adjust, progress_cb=fetch_progress,
+                            require_end_session=True, min_history_bars=min_history_bars,
+                        )
+                    except ExecutionCancelled:
+                        raise
+                    except Exception as exc:
+                        logger.exception("Batch download failed")
+                        batch = {code.standard: (None, str(exc)) for code in codes}
+                    offset += len(pairs)
+                    yield batch, pairs
+            yield None, sequential
+
+        for batch, pairs in batches():
             for item, code, start, session in pairs:
                 emit("stock_start", code.standard, f"Analyzing {code.standard}")
                 calendar_warning = sessions[CALENDARS[code.exchange]][1].calendar_warning
@@ -279,7 +287,7 @@ class Executor:
                 )
                 result = None
                 try:
-                    if is_batch:
+                    if batch is not None:
                         df, source = batch.get(code.standard, (pd.DataFrame(), None))
                         if df is None:
                             raise RuntimeError(source)

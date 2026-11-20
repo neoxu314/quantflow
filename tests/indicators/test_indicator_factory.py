@@ -88,12 +88,10 @@ class TestIndicatorFactory:
         assert ind.m1 == 5
         assert ind.n == 8
 
-    def test_create_indicators_from_real_config(self):
+    def test_create_indicators_from_project_config(self, test_project):
         # Integration test: create all indicators from real config/indicators.yaml.
         # This does NOT patch _load_config - it loads the real file.
-        from pathlib import Path
-        root = Path(__file__).resolve().parents[2]
-        real_config = root / "config" / "indicators.yaml"
+        real_config = test_project / "config" / "indicators.yaml"
         assert real_config.exists(), f"Config file not found: {real_config}"
 
         # Reset factory cache so it reads the real file

@@ -1,7 +1,6 @@
-"""Tests for real data fetching from data sources.
+"""Offline adapter contract tests and opt-in live provider checks.
 
-Uses real stock data to verify data source adapters work correctly.
-These tests require network access and valid API tokens.
+Live checks use market data. Tushare also requires a valid token.
 
 Test data reference:
 A股:
@@ -15,11 +14,7 @@ A股:
 韩国股票:
 - 000660 (SK海力士): 2026-04-21, open=1175000, close=1247000, volume=7.49M
 
-Run integration tests:
-    pytest tests/data/test_data_fetch.py -m integration -v
-    
-Skip integration tests:
-    pytest tests/data/test_data_fetch.py -m "not integration" -v
+Run live checks with python -m pytest tests/data/test_data_fetch.py --live-market -m integration.
 """
 
 import pytest
@@ -1046,20 +1041,20 @@ def test_run_instructions():
     =====================================================================
     
     1. Run all tests (including integration):
-       pytest tests/data/test_data_fetch.py -v
+       python -m pytest tests/data/test_data_fetch.py --live-market -v
     
     2. Run only unit tests (skip integration):
-       pytest tests/data/test_data_fetch.py -m "not integration" -v
+       python -m pytest tests/data/test_data_fetch.py -v
     
     3. Run only integration tests:
-       pytest tests/data/test_data_fetch.py -m integration -v
+       python -m pytest tests/data/test_data_fetch.py --live-market -m integration -v
     
     4. Run with Tushare tests (set token first):
        export TUSHARE_TOKEN="your_token"
-       pytest tests/data/test_data_fetch.py -m integration -v
+       python -m pytest tests/data/test_data_fetch.py --live-market -m integration -v
     
     5. Run specific test:
-       pytest tests/data/test_data_fetch.py::TestBaoStockFetch::test_fetch_byd_data -v
+       python -m pytest tests/data/test_data_fetch.py::TestBaoStockFetch::test_fetch_byd_data --live-market -v
     
     =====================================================================
     """

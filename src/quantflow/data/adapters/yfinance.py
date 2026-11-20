@@ -1,24 +1,8 @@
-"""YFinance data source adapter for global markets.
+"""YFinance price and fundamental adapter for US, HK, JP and KR.
 
-Supported markets:
-- US: No suffix (e.g., AAPL)
-- HK: .HK suffix (e.g., 09660.HK)
-- KR: .KS suffix (e.g., 000660.KS for SK Hynix)
-- JP: .T suffix (e.g., 8035.T for Tokyo Electron)
-
-Market suffix mapping handled via MARKET_SUFFIX dictionary:
-- KR → .KS (Korean stocks)
-- JP → .T (Japanese stocks)
-- HK → .HK (Hong Kong stocks)
-
-SSL Note (macOS):
-  System Python 3.9 uses LibreSSL 2.8.3, which is incompatible with urllib3 v2.
-  This causes intermittent yfinance errors (TypeError, OperationalError) in batch downloads.
-  Fix: use Homebrew Python (linked with OpenSSL) in a venv:
-    brew install python@3.12
-    /opt/homebrew/bin/python3.12 -m venv .venv
-    source .venv/bin/activate
-    pip install -e .
+Translates standard project codes to Yahoo symbols and supports qfq and
+unadjusted prices. Batch requests use configurable download chunks and bounded
+recovery. The adapter records failures for fallback at the data factory.
 """
 
 import logging
@@ -204,11 +188,10 @@ class YFinanceDataSource(DataSourceBase):
 
     @staticmethod
     def _suppress_yfinance_logs():
-        """Suppress yfinance internal ERROR logs during download.
+        """Quiet the provider logger during a batch download.
 
-        yfinance emits misleading errors (e.g. 'possibly delisted', 'OperationalError')
-        that are noise — data is still returned successfully in the DataFrame.
-        Temporarily elevate yfinance logger to CRITICAL to suppress them.
+        The caller still checks the returned data and records failed symbols.
+        Return the previous logger level so the caller can restore it.
         """
         import logging
         yf_logger = logging.getLogger("yfinance")
@@ -448,17 +431,11 @@ class YFinanceDataSource(DataSourceBase):
             batch = yf_symbols[i:i + chunk_size]
             chunk_num = (i // chunk_size) + 1
 
-            # Report progress after each chunk so the Web UI bar advances
-            # during a long batch download instead of jumping at the end.
-            if progress_cb is not None:
-                try:
-                    progress_cb(min(i + chunk_size, total), total, batch[0])
-                except Exception:
-                    pass
-
             t0 = time.time()
             chunk_result, was_rate_limited = self._download_chunk(
                 batch, start_date, end_date, interval)
+            if progress_cb is not None:
+                progress_cb(min(i + chunk_size, total), total, batch[-1])
             elapsed = time.time() - t0
             success_count = len(chunk_result)
             fail_count = len(batch) - success_count

@@ -25,11 +25,8 @@ class SSEManager:
         with self._lock:
             self._subs[run_id].append(q)
             last = self._last_progress.get(run_id)
-        if last is not None:
-            q.put_nowait({
-                "run_id": run_id, "event": "progress",
-                "data": dict(last), "timestamp": datetime.now().isoformat(),
-            })
+            if last is not None:
+                q.put_nowait(self._event(run_id, "progress", dict(last)))
         return q
 
     def unsubscribe(self, run_id: str, queue: Queue) -> None:
@@ -41,49 +38,48 @@ class SSEManager:
                 if not self._subs[run_id]:
                     del self._subs[run_id]
 
-    def publish(self, run_id: str, event_type: str,
-                data: dict[str, Any]) -> None:
-        message = {
-            "run_id": run_id, "event": event_type,
-            "data": data, "timestamp": datetime.now().isoformat(),
-        }
+    @staticmethod
+    def _event(run_id, event_type, data):
+        return {"run_id": run_id, "event": event_type,
+                "data": data, "timestamp": datetime.now().isoformat()}
+
+    def _broadcast_locked(self, run_id, event_type, data):
+        message = self._event(run_id, event_type, data)
+        for queue in self._subs.get(run_id, []):
+            queue.put_nowait(message)
+
+    def publish(self, run_id: str, event_type: str, data: dict[str, Any]) -> None:
         with self._lock:
-            queues = list(self._subs.get(run_id, []))
-        for q in queues:
-            try:
-                q.put_nowait(message)
-            except Exception:
-                pass
+            self._broadcast_locked(run_id, event_type, data)
 
     def publish_log(self, run_id: str, message: str, level: str = "info"):
         self.publish(run_id, "log", {"level": level, "message": message})
 
-    def publish_progress(self, run_id: str, current: int, total: int):
-        # Progress must never go backwards. With batch data sources the
-        # adapter reports per-ticker progress during the (slow) download
-        # (e.g. 1..101), then the executor re-emits stock_start/done with
-        # task-local indices after the batch returns. Without this guard the
-        # bar would jump back to a small value right after reaching the end.
+    def progress(self, run_id: str):
         with self._lock:
-            prev = self._last_progress.get(run_id)
-            if prev is not None:
-                prev_pct = prev.get("percentage", 0)
-                pct = round(current / total * 100) if total > 0 else 0
-                if pct < prev_pct:
-                    return
-                # Same percentage but a lower raw count: keep the better one.
-                if pct == prev_pct and current < prev.get("current", 0):
+            last = self._last_progress.get(run_id)
+            return dict(last) if last is not None else None
+
+    def publish_progress(self, run_id: str, current: int, total: int, *,
+                         phase="analysis", task=None):
+        with self._lock:
+            prev = self._last_progress.get(run_id) or {}
+            if (prev.get("phase"), prev.get("task")) == (phase, task):
+                if current < prev["current"]:
                     return
             pct = round(current / total * 100) if total > 0 else 0
-            data = {"current": current, "total": total, "percentage": pct}
-            self._last_progress[run_id] = dict(data)
-        self.publish(run_id, "progress", data)
+            data = {
+                "current": current, "total": total, "percentage": pct,
+                "phase": phase, "task": task, "sequence": prev.get("sequence", 0) + 1,
+            }
+            self._last_progress[run_id] = data
+            self._broadcast_locked(run_id, "progress", data)
 
     def publish_status(self, run_id: str, status: str, **extra):
-        if status in ("completed", "partial", "failed", "cancelled", "interrupted"):
-            with self._lock:
+        with self._lock:
+            if status in ("completed", "partial", "failed", "cancelled", "interrupted"):
                 self._last_progress.pop(run_id, None)
-        self.publish(run_id, "status", {"status": status, **extra})
+            self._broadcast_locked(run_id, "status", {"status": status, **extra})
 
     def disconnect_all(self, run_id: str) -> None:
         with self._lock:

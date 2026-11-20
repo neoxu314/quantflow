@@ -1,5 +1,7 @@
 # YFinance Batch Fetch Implementation Plan
 
+> **历史计划。** 此处记录初期 YFinance 批量拉取设计。实际主备源、批次和失败恢复见 [运行契约](../../docs/reliability-and-data-contracts.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace per-stock sequential yfinance API calls with `yf.download()` batch fetching, reducing network requests from N to 1 per task run.

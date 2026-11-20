@@ -1,31 +1,21 @@
-"""Per-run execution checkpoints for resumable runs.
+"""Per-run checkpoint metadata and results for watchlist and task runs.
 
-A checkpoint is a small JSON document stored outside the user's output
-directory (``~/.quantflow/checkpoints/{run_id}.json``).  It records which
-work units (watchlist/task stocks) have already been processed and their
-results, so an interrupted run can continue from where it stopped instead
-of re-downloading and re-computing everything.
-
-Design notes
-------------
-* Results from the data layer are **not** re-fetched on resume: only the
-  final per-stock ``ExecutionResultItem`` values are cached.  This keeps the
-  checkpoint small and avoids stale-ohlcv problems.
-* Each write is atomic (temp file + ``os.replace``) so a hard kill (closed
-  laptop lid / power loss) can never leave a half-written checkpoint.
-* Checkpoints are keyed by run id.  Resuming creates a *new* run record and
-  copies the checkpoint forward, preserving the original run in history.
+The JSON file in `~/.quantflow/checkpoints/` records analyzed stocks, their
+results and frozen execution context. Validated OHLCV inputs live separately
+in the run directory. Resume verifies the plan, execution identity and inputs,
+then copies completed work into a new run and fetches unfinished stocks at the
+original cutoff. The checkpoint itself is saved with the shared atomic writer.
 """
 from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+
+from quantflow.artifacts import atomic_json
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +48,7 @@ class Checkpoint:
             "created_at": _utcnow(),
             "updated_at": _utcnow(),
             "config": {},
-            "context": {},          # frozen date window / days_back per task
+            "context": {},          # run plan, cutoff and per-task execution context
             "work": {},             # task_key -> {"done": {code: stats}}
             "results": {},          # task_key -> [result dict, ...]
         }
@@ -111,21 +101,7 @@ class Checkpoint:
     def save(self) -> None:
         with self._lock:
             self._data["updated_at"] = _utcnow()
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(
-                prefix=".checkpoint-", suffix=".tmp", dir=str(self.path.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(self._data, f, ensure_ascii=False, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmp, self.path)
-            finally:
-                if os.path.exists(tmp):
-                    try:
-                        os.unlink(tmp)
-                    except OSError:
-                        pass
+            atomic_json(self.path, self._data, register=False)
 
     def delete(self) -> bool:
         with self._lock:

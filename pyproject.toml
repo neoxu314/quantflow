@@ -28,6 +28,12 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.8",
+    "httpx>=0.28,<1",
+    "curl-cffi>=0.7,<1",
+    "pytest-playwright>=0.10,<1",
+    "platformdirs>=4,<5",
+    "setuptools>=61",
+    "wheel",
 ]
 viz = [
     "matplotlib>=3.7.0",
@@ -37,16 +43,28 @@ viz = [
 [project.scripts]
 quantflow-scan = "quantflow.cli:scan"
 quantflow-monitor = "quantflow.cli:monitor"
+quantflow-tasks = "quantflow.cli:task_run"
+quantflow-web = "quantflow.cli:web"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"quantflow.web" = ["static/*.html", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
-    "integration: marks tests as integration tests (require network/API access)",
+    "integration: live external provider tests, enabled with --live-market",
+    "browser: Web system or browser tests, enabled with --run-browser",
 ]
+
+[tool.coverage.run]
+source_pkgs = ["quantflow"]
+
+[tool.coverage.paths]
+quantflow = ["src/quantflow", "*/quantflow-tests-*/project/src/quantflow"]
 
 [tool.ruff]
 line-length = 100

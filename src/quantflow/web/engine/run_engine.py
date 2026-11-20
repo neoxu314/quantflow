@@ -192,11 +192,11 @@ class RunEngine:
         def callback(event):
             if flag.is_set:
                 raise ExecutionCancelled()
-            if event.type == "fetch":
-                self._sse.publish_log(run_id, event.message)
-            else:
-                self._sse.publish_progress(run_id, event.current, event.total)
-                self._sse.publish_log(run_id, event.message, event.level)
+            phase = "download" if event.type == "fetch" else "analysis"
+            self._sse.publish_progress(
+                run_id, event.current, event.total, phase=phase, task=event.task,
+            )
+            self._sse.publish_log(run_id, event.message, event.level)
 
         return callback
 

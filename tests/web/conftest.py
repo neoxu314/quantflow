@@ -37,42 +37,17 @@ def web_config_yaml_path(tmp_path: pathlib.Path) -> str:
 
 
 @pytest.fixture
-def config_client(tmp_path):
-    """
-    Isolated config API client with a temporary CONFIG_PATH.
-
-    Creates a valid quantflow.yaml in tmp_path, patches the module's
-    CONFIG_PATH and PROJECT_ROOT, and yields a TestClient. On teardown,
-    the temporary files are cleaned up — production config is never touched.
-    """
-    import yaml
-    from quantflow.web.api import config as config_module
+def config_client(tmp_path, test_project):
+    """Give configuration API tests their own writable fixture."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    # Create a fresh config dir + valid quantflow.yaml copy
+    from quantflow.web.api import config as config_module
+
     config_dir = tmp_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    project_root = pathlib.Path(__file__).resolve().parents[2]
-    real_config = project_root / "config" / "quantflow.yaml"
-
-    if real_config.exists():
-        shutil.copy2(real_config, config_dir / "quantflow.yaml")
-    else:
-        # Minimal valid config for tests
-        (config_dir / "quantflow.yaml").write_text(
-            yaml.dump({
-                "data": {"markets": {}, "defaults": {"adjust": "qfq"}},
-                "logging": {"console_level": "INFO", "file_enabled": True, "file_level": "DEBUG"},
-                "lookback": {"calendar_multiplier": 2, "buffer_days": 30},
-                "yfinance": {"batch": {"chunk_size": 50}},
-                "web": {"port": 8080, "host": "127.0.0.1"},
-            }, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
-
+    config_dir.mkdir()
     test_config_path = config_dir / "quantflow.yaml"
+    shutil.copyfile(test_project / "config" / "quantflow.yaml", test_config_path)
 
     # Patch module-level constants
     original_config_path = config_module.CONFIG_PATH

@@ -6,7 +6,22 @@ import {
     setNestedValue,
     formatStockCode,
     isActiveRunStatus,
+    mdToHtml,
 } from "@utils";
+
+it("renders report markup while preserving raw tags and entities as text", () => {
+    const html = mdToHtml("## Coverage & quality\n**A < B**\n<sample> &lt;");
+    expect(html).toContain('>Coverage &amp; quality</h2>');
+    expect(html).toContain("<strong>A &lt; B</strong>");
+    expect(html).toContain("&lt;sample&gt; &amp;lt;");
+    expect(html).not.toContain("<sample>");
+});
+
+it("renders both report bullet styles", () => {
+    const html = mdToHtml("* First\n- Second");
+    expect(html).toContain('<li class="ml-4 list-disc">First</li>');
+    expect(html).toContain('<li class="ml-4 list-disc">Second</li>');
+});
 
 describe("MARKET_SUFFIX", () => {
     it("has correct suffix for US market", () => {

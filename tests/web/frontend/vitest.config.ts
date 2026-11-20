@@ -9,8 +9,10 @@ export default defineConfig({
         globals: true,
         environment: "node",
     },
+    server: { fs: { allow: [projectRoot] } },
     resolve: {
         alias: {
+            "@app": path.resolve(projectRoot, "src/quantflow/web/static/app.ts"),
             "@utils": path.resolve(projectRoot, "src/quantflow/web/static/utils.ts"),
         },
     },

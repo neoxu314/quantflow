@@ -11,8 +11,8 @@ echo "项目目录: $(pwd)"
 source .venv/bin/activate
 
 # --- 前端编译检查 -----------------------------------------------------------
-# utils.js 被 .gitignore 排除，clone 后不存在；且 app.ts 改动后需重新编译 app.js。
-# 若缺失或过期，自动用 tsc 重新编译，避免"按钮点不动"的问题。
+# 浏览器加载已提交的 app.js 和 utils.js。若文件缺失或 TypeScript 更新，
+# 此处尝试用本机 tsc 重新编译。可重复的构建和校验命令见 README。
 STATIC_DIR="src/quantflow/web/static"
 if ! command -v tsc >/dev/null 2>&1; then
     echo "⚠️  未找到 tsc，跳过前端编译检查（若按钮失效请安装: npm i -g typescript）"

@@ -1,141 +1,57 @@
-"""Tests for _serialize_df NaN handling in run_engine."""
+"""Verify strict JSON emitted by the production artifact writer."""
+
 import json
-import math
+
+import numpy as np
 import pandas as pd
+import pytest
+
+from quantflow.artifacts import ArtifactWriteError, atomic_json, create_run_directory
 
 
-class TestSerializeNaN:
-    """Verify NaN values in indicator DataFrames serialize to valid JSON."""
+def read_strict_json(path):
+    def invalid_constant(value):
+        pytest.fail(f"Invalid JSON constant in {path.name}: {value}")
 
-    def _serialize_df(self, df):
-        """Copy of _serialize_df logic from run_engine._exec_stock_scan."""
-        out = []
-        for row in df.to_dict(orient="records"):
-            clean = {}
-            for k, v in row.items():
-                if hasattr(v, "isoformat"):
-                    clean[k] = v.isoformat()
-                elif hasattr(v, "item"):
-                    try:
-                        val = v.item()
-                        if isinstance(val, float) and math.isnan(val):
-                            val = None
-                        clean[k] = val
-                    except Exception:
-                        clean[k] = str(v)
-                elif isinstance(v, float):
-                    import math as _math
-                    clean[k] = None if _math.isnan(v) else v
-                else:
-                    clean[k] = v
-            out.append(clean)
-        return out
+    return json.loads(path.read_text(), parse_constant=invalid_constant)
 
-    def test_nan_converted_to_none(self):
-        """NaN values become None, not 'NaN'."""
-        df = pd.DataFrame({"close": [100.0], "J": [float("nan")]})
-        data = self._serialize_df(df)
-        assert data[0]["J"] is None
 
-    def test_serialized_json_is_valid(self):
-        """Output can be json.loads without error."""
-        df = pd.DataFrame({"close": [100.0], "K": [float("nan")]})
-        data = self._serialize_df(df)
-        result = json.dumps(data)
-        parsed = json.loads(result)
-        assert parsed[0]["K"] is None
+def test_artifact_round_trip_preserves_values_and_replaces_nonfinite_numbers(tmp_path):
+    path = create_run_directory(tmp_path, "scan") / "indicators.json"
+    atomic_json(
+        path,
+        [
+            {
+                "date": pd.Timestamp("2025-06-04"),
+                "close": np.float64(139.5),
+                "count": np.int64(3),
+                "active": np.bool_(True),
+                "zero": 0,
+                "comment": "复核",
+                "warmup": [float("nan"), np.float64("inf"), float("-inf")],
+            }
+        ],
+    )
 
-    def test_multiple_rows_with_nan(self):
-        """NaN handled across all rows."""
-        df = pd.DataFrame({
-            "close": [100.0, 200.0],
-            "K": [50.0, float("nan")],
-            "D": [float("nan"), 40.0],
-        })
-        data = self._serialize_df(df)
-        assert data[0]["D"] is None
-        assert data[0]["K"] == 50.0
-        assert data[1]["K"] is None
-        assert data[1]["D"] == 40.0
+    records = read_strict_json(path)
+    assert records == [
+        {
+            "date": "2025-06-04T00:00:00",
+            "close": 139.5,
+            "count": 3,
+            "active": True,
+            "zero": 0,
+            "comment": "复核",
+            "warmup": [None, None, None],
+        }
+    ]
+    assert records[0]["active"] is True
+    assert "indicators.json" in read_strict_json(path.parent / "manifest.json")["artifacts"]
 
-    def test_boolean_values_preserved(self):
-        """Boolean columns (is_bull_zone) stay boolean."""
-        df = pd.DataFrame({
-            "close": [100.0],
-            "is_bull_zone": [True],
-        })
-        data = self._serialize_df(df)
-        assert data[0]["is_bull_zone"] is True
 
-    def test_normal_values_unchanged(self):
-        """Non-NaN float values stay as numbers."""
-        df = pd.DataFrame({
-            "close": [100.0],
-            "K": [53.4],
-            "D": [49.2],
-            "J": [58.0],
-        })
-        data = self._serialize_df(df)
-        assert data[0]["K"] == 53.4
-        assert data[0]["D"] == 49.2
-        assert data[0]["J"] == 58.0
-
-    def test_full_roundtrip(self):
-        """DataFrame → serialize → json.dumps → json.loads preserves data."""
-        df = pd.DataFrame({
-            "close": [100.0, 200.0],
-            "K": [53.4, float("nan")],
-            "is_bull_zone": [True, False],
-        })
-        serialized = self._serialize_df(df)
-        result = json.loads(json.dumps(serialized))
-        assert len(result) == 2
-        assert result[0]["close"] == 100.0
-        assert result[0]["K"] == 53.4
-        assert result[0]["is_bull_zone"] is True
-        assert result[1]["close"] == 200.0
-        assert result[1]["K"] is None
-        assert result[1]["is_bull_zone"] is False
-
-    def test_datetime_serialization(self):
-        """datetime objects get isoformat."""
-        from datetime import datetime
-        df = pd.DataFrame({
-            "close": [100.0],
-            "date": [pd.Timestamp("2025-01-15")],
-        })
-        data = self._serialize_df(df)
-        assert isinstance(data[0]["date"], str)
-        assert "2025-01-15" in data[0]["date"]
-
-    def test_integer_values_preserved(self):
-        """Integer columns stay as integers."""
-        df = pd.DataFrame({
-            "volume": [1000000],
-            "close": [100.0],
-        })
-        data = self._serialize_df(df)
-        assert data[0]["volume"] == 1000000
-
-    def test_string_values_preserved(self):
-        """String columns stay as strings."""
-        df = pd.DataFrame({
-            "code": ["NVDA.US"],
-            "close": [100.0],
-        })
-        data = self._serialize_df(df)
-        assert data[0]["code"] == "NVDA.US"
-
-    def test_empty_dataframe(self):
-        """Empty DataFrame returns empty list."""
-        df = pd.DataFrame(columns=["close"])
-        data = self._serialize_df(df)
-        assert data == []
-
-    def test_inf_values(self):
-        """inf values are serialized (not NaN)."""
-        import math
-        df = pd.DataFrame({"close": [float("inf"), float("-inf")]})
-        data = self._serialize_df(df)
-        assert math.isinf(data[0]["close"])
-
+def test_unserializable_update_keeps_the_existing_artifact(tmp_path):
+    path = tmp_path / "indicators.json"
+    atomic_json(path, [])
+    with pytest.raises(ArtifactWriteError, match="Cannot serialize"):
+        atomic_json(path, [object()])
+    assert read_strict_json(path) == []

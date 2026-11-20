@@ -1,30 +1,9 @@
-"""YahooQuery data source adapter for global markets.
+"""YahooQuery daily price and fundamental adapter for US, HK, JP and KR.
 
-Uses yahooquery library with sequential per-ticker fetches for reliability.
-Unlike yfinance (which uses Yahoo's batch download API), yahooquery fetches
-each ticker individually. The library's asynchronous=True batch mode is
-unreliable (HTTP 404 / KeyError for >4 tickers), so this adapter uses
-asynchronous=False with retries per ticker.
-
-Why not yahooquery async batch mode:
-  YahooQuery's asynchronous=True uses requests-futures for concurrent requests,
-  but Yahoo's API returns HTTP 404 when too many concurrent requests hit it.
-  The library's _historical_data_to_dataframe() then crashes with KeyError
-  because it doesn't handle the error response dict gracefully.
-
-  Our approach: fetch tickers sequentially with retries, which is slower but
-  reliable (~90% per attempt, ~99% with 3 retries).
-
-Supported markets:
-- US: No suffix (e.g., AAPL)
-- HK: .HK suffix (e.g., 0700.HK)
-- KR: .KS suffix (e.g., 000660.KS)
-- JP: .T suffix (e.g., 8035.T)
-
-Adjust (复权):
-  - qfq (前复权): Uses adjclose column with adj_ohlc=True to adjust OHLC.
-  - hfq (后复权): Not directly supported; returns unadjusted data.
-  - none: Raw unadjusted data with adj_ohlc=False.
+Fetches batch requests as synchronous per-symbol history calls with bounded
+retries. A history conversion guard handles upstream error payloads without
+treating them as valid candles. Uses Yahoo-adjusted OHLC for qfq and raw prices
+for none. Requests for hfq are rejected.
 """
 
 import logging
@@ -35,7 +14,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from quantflow.data.base import DataSourceBase, FundamentalData, StockCode
-from quantflow.control import check_cancelled, cancellable_sleep
+from quantflow.control import ExecutionCancelled, check_cancelled, cancellable_sleep
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -207,6 +186,7 @@ class YahooQueryDataSource(DataSourceBase):
         adjust: Optional[str] = None,
         progress_cb=None,
     ) -> Dict[str, pd.DataFrame]:
+        self.batch_errors = {}
         self._validate_request(period, adjust or "qfq")
         if not codes:
             return {}
@@ -237,16 +217,17 @@ class YahooQueryDataSource(DataSourceBase):
 
         t0 = time.time()
         for idx, yq_sym in enumerate(yq_symbols, 1):
-            # Report progress while fetching (not only after the whole batch
-            # returns) so the Web UI progress bar advances in real time.
+            try:
+                df = self._fetch_single_with_retry(
+                    Ticker, yq_sym, start_date, end_date, interval, adj_ohlc,
+                )
+            except ExecutionCancelled:
+                raise
+            except Exception as exc:
+                self.batch_errors[symbol_to_code[yq_sym]] = f"{type(exc).__name__}: {exc}"
+                df = None
             if progress_cb is not None:
-                try:
-                    progress_cb(idx, total, yq_sym)
-                except Exception:
-                    pass
-            df = self._fetch_single_with_retry(
-                Ticker, yq_sym, start_date, end_date, interval, adj_ohlc,
-            )
+                progress_cb(idx, total, yq_sym)
             if df is not None and not df.empty:
                 code = symbol_to_code[yq_sym]
                 all_results[code] = df
@@ -275,6 +256,7 @@ class YahooQueryDataSource(DataSourceBase):
         interval: str,
         adj_ohlc: bool,
     ) -> Optional[pd.DataFrame]:
+        last_error = None
         for attempt in range(1, self._MAX_RETRIES + 1):
             try:
                 check_cancelled()
@@ -289,19 +271,20 @@ class YahooQueryDataSource(DataSourceBase):
                 check_cancelled()
                 if raw is not None and not raw.empty:
                     return self._normalize_single(raw, adj_ohlc)
-            except KeyError:
+            except ExecutionCancelled:
+                raise
+            except Exception as exc:
+                last_error = exc
                 logger.debug(
-                    f"  {yq_sym} KeyError on attempt {attempt}/{self._MAX_RETRIES}"
-                )
-            except Exception as e:
-                logger.debug(
-                    f"  {yq_sym} {type(e).__name__} on attempt "
-                    f"{attempt}/{self._MAX_RETRIES}: {e}"
+                    f"  {yq_sym} {type(exc).__name__} on attempt "
+                    f"{attempt}/{self._MAX_RETRIES}: {exc}"
                 )
 
             if attempt < self._MAX_RETRIES:
                 cancellable_sleep(self._RETRY_DELAY)
 
+        if last_error is not None:
+            raise last_error
         return None
 
     def _normalize_single(self, raw_df: pd.DataFrame, adj_ohlc: bool) -> pd.DataFrame:

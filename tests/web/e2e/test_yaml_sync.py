@@ -43,8 +43,12 @@ class TestWatchlistYamlSync:
         page.locator("#add-stock-market").select_option(label="🇺🇸 US (美国)")
         page.locator("#add-stock-code").fill("MSFT")
         page.locator("#add-stock-name").fill("Microsoft Corp")
-        page.get_by_role("button", name="Add").click()
-        page.wait_for_timeout(1000)
+        page.get_by_role("button", name="Add", exact=True).click()
+        expect(page.locator("#stock-table")).to_contain_text("MSFT.US")
+        assert yaml.safe_load(wl_path.read_text()) == original
+        with page.expect_response(lambda r: r.request.method == "PUT" and r.url.endswith(wl_path.name)) as saved:
+            page.locator("#btn-save-watchlist").click()
+        assert saved.value.ok
 
         with open(wl_path, "r", encoding="utf-8") as f:
             updated = yaml.safe_load(f)
@@ -69,23 +73,21 @@ class TestWatchlistYamlSync:
         
         with open(wl_path, "r", encoding="utf-8") as f:
             original = yaml.safe_load(f)
-        original_count = len(original.get("items", []))
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
         page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
         page.wait_for_selector("#stock-table", timeout=5000)
 
-        delete_btn = page.locator("#stock-table .delete-stock-btn").first
-        if delete_btn.is_visible():
-            delete_btn.click()
-            page.wait_for_timeout(1000)
-
-        with open(wl_path, "r", encoding="utf-8") as f:
-            updated = yaml.safe_load(f)
-        updated_count = len(updated.get("items", []))
-
-        assert updated_count < original_count
+        row = page.locator("#stock-table").get_by_role("row").filter(has_text="AAPL.US")
+        row.get_by_role("button", name="Delete", exact=True).click()
+        expect(row).to_have_count(0)
+        assert yaml.safe_load(wl_path.read_text()) == original
+        with page.expect_response(lambda r: r.request.method == "PUT" and r.url.endswith(wl_path.name)) as saved:
+            page.locator("#btn-save-watchlist").click()
+        assert saved.value.ok
+        updated = yaml.safe_load(wl_path.read_text())
+        assert [item["code"] for item in updated["items"]] == ["GOOG.US"]
 
     def test_watchlist_yaml_unicode_correct(self, page: Page):
         """Chinese characters in watchlist name/items should save correctly."""
@@ -168,17 +170,11 @@ class TestWatchlistInlineNameEditing:
 
         name_span = page.locator(".editable-name").first
         name_span.click()
-        page.wait_for_timeout(300)
-
-        name_input = page.locator("#stock-table input[type='text']").first
-        expect(name_input).to_be_visible()
-        name_input.clear()
+        name_input = page.locator("#stock-table input[type='text']")
         name_input.fill("Changed Name")
         name_input.press("Escape")
-        page.wait_for_timeout(300)
-
-        save_btn = page.locator("#btn-save-watchlist")
-        assert not save_btn.is_visible()
+        expect(name_span).to_have_text("Microsoft")
+        expect(page.locator("#btn-save-watchlist")).to_be_hidden()
 
         wl_path = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
         with open(wl_path, "r", encoding="utf-8") as f:
@@ -424,30 +420,21 @@ class TestTaskYamlSync:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Tasks").click()
+        page.get_by_role("button", name="Tasks", exact=True).click()
         page.wait_for_selector("#task-file-list", timeout=5000)
-        page.get_by_text(TEST_TASK_FILE).click()
+        page.locator("#task-file-list").get_by_role("button", name=TEST_TASK_FILE).click()
         page.wait_for_selector("#task-table", timeout=5000)
 
-        edit_btn = page.locator(".task-edit-btn").first
-        if edit_btn.is_visible():
-            edit_btn.click()
-            page.locator("#modal-task").wait_for(state="visible", timeout=5000)
-            
-            output_field = page.locator("#task-output")
-            output_field.fill("./output/edited")
-            
-            save_btn = page.locator("#modal-task .save-btn")
-            if save_btn.is_visible():
-                save_btn.click()
-            page.wait_for_timeout(1000)
-
-        with open(task_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-
-        task = next((t for t in data.get("tasks", []) if t["name"] == "test_edit_task"), None)
-        if task:
-            assert task.get("output") == "./output/edited"
+        page.locator("#task-table").get_by_role("button", name="Edit", exact=True).click()
+        page.locator("#task-name").fill("edited_task")
+        with page.expect_response(lambda r: "/api/tasks/" in r.url and r.request.method == "PUT") as saved:
+            page.locator("#btn-save-task").click()
+        assert saved.value.ok
+        expect(page.locator("#task-table")).to_contain_text("edited_task")
+        data = yaml.safe_load(task_path.read_text())
+        assert [task["name"] for task in data["tasks"]] == ["edited_task"]
+        assert data["tasks"][0]["watchlist"] == "watchlists/djia.yaml"
+        assert data["tasks"][0]["strategies"] == ["daily_bull_oversold"]
 
     def test_task_delete_yaml_sync(self, page: Page):
         """Delete task via UI, verify YAML file updated."""
@@ -466,27 +453,20 @@ class TestTaskYamlSync:
 
         task_path = PROJECT_ROOT / "config" / TEST_TASK_FILE
         
-        with open(task_path, "r", encoding="utf-8") as f:
-            original = yaml.safe_load(f)
-        original_count = len(original.get("tasks", []))
-
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Tasks").click()
+        page.get_by_role("button", name="Tasks", exact=True).click()
         page.wait_for_selector("#task-file-list", timeout=5000)
-        page.get_by_text(TEST_TASK_FILE).click()
+        page.locator("#task-file-list").get_by_role("button", name=TEST_TASK_FILE).click()
         page.wait_for_selector("#task-table", timeout=5000)
 
-        delete_btn = page.locator(".task-delete-btn").first
-        if delete_btn.is_visible():
-            delete_btn.click()
-            page.wait_for_timeout(1000)
-
-        with open(task_path, "r", encoding="utf-8") as f:
-            updated = yaml.safe_load(f)
-        updated_count = len(updated.get("tasks", []))
-
-        assert updated_count < original_count
+        row = page.locator("#task-table").get_by_role("row").filter(has_text="task_to_delete")
+        page.once("dialog", lambda dialog: dialog.accept())
+        with page.expect_response(lambda r: "/api/tasks/" in r.url and r.request.method == "DELETE") as deleted:
+            row.get_by_role("button", name="Delete", exact=True).click()
+        assert deleted.value.ok
+        expect(row).to_have_count(0)
+        assert yaml.safe_load(task_path.read_text())["tasks"] == []
 
 
 class TestIndicatorParamsYamlSync:
@@ -564,23 +544,23 @@ class TestSettingsYamlSync:
     """Settings edits should correctly sync to YAML file."""
 
     def test_settings_yaml_list_values_preserved(self, page: Page):
-        """YAML list values (like yfinance batch params) should remain lists after save."""
+        """Saving a numeric setting preserves unrelated list-valued configuration."""
         cfg_path = PROJECT_ROOT / "config" / "quantflow.yaml"
+        original = yaml.safe_load(cfg_path.read_text())
+        original["data"]["watchlist_tags"] = ["短线", "观察"]
+        cfg_path.write_text(yaml.safe_dump(original, allow_unicode=True, sort_keys=False))
 
         page.goto(SERVER_URL)
-        page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
-        page.wait_for_selector("#settings-form", timeout=5000)
-
-        chunk_size_field = page.locator("#cfg-yfinance-chunk-size")
-        chunk_size_field.fill("75")
-        page.locator("#btn-save-settings").click()
-        page.wait_for_timeout(1000)
-
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-
-        assert data.get("yfinance", {}).get("batch", {}).get("chunk_size") == 75
+        page.get_by_role("button", name="Settings", exact=True).click()
+        chunk_size = page.locator("#cfg-yf-chunk")
+        expect(chunk_size).to_have_value(str(original["yfinance"]["batch"]["chunk_size"]))
+        chunk_size.fill("75")
+        with page.expect_response(lambda r: r.url.endswith("/api/config") and r.request.method == "PUT") as saved:
+            page.locator("#btn-save-settings").click()
+        assert saved.value.ok
+        data = yaml.safe_load(cfg_path.read_text())
+        assert data["yfinance"]["batch"]["chunk_size"] == 75
+        assert data["data"]["watchlist_tags"] == ["短线", "观察"]
 
     def test_settings_yaml_unicode_correct(self, page: Page):
         """YAML should handle unicode correctly after settings save."""
@@ -588,7 +568,7 @@ class TestSettingsYamlSync:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")
@@ -611,7 +591,7 @@ class TestSettingsYamlSync:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         port_field = page.locator("#cfg-web-port")
@@ -633,7 +613,7 @@ class TestSettingsYamlSync:
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
-        page.get_by_role("button", name="Settings").click()
+        page.get_by_role("button", name="Settings", exact=True).click()
         page.wait_for_selector("#settings-form", timeout=5000)
 
         buffer_field = page.locator("#cfg-lookback-buffer")

@@ -1,180 +1,44 @@
-# QUANTFLOW PROJECT KNOWLEDGE
+# QuantFlow development guide
 
-**Generated:** 2026-04-25 / Updated: 2026-05-18
-**Scope:** `quantflow/` - Main quant analysis system
+The installed package lives in `src/quantflow/`. See the [README](README.md) for usage,
+[architecture](docs/架构.md) for the module map, and
+[reliability and data contracts](docs/reliability-and-data-contracts.md) for behavior
+shared across CLI, Web and storage.
 
-## OVERVIEW
+## Working in the repository
 
-Layered Python package: data fetching → indicator calculation → strategy signals → orchestration → execution.
+- Install with `python -m pip install -e .` on Python 3.10 or newer. Install test dependencies
+  from `requirements-test.txt`. On macOS use an OpenSSL-linked Python in a virtual environment.
+- Declare dependencies and packaging changes in `pyproject.toml`. Preserve the `py.typed`
+  marker. Ruff settings live in `pyproject.toml`.
+- Use `sort_keys=False` and `default_flow_style=False` for emitted configuration YAML.
+- Use `DataSourceFactory` for market routing, `StockCode` for normalized codes, and the
+  configured adjustment mode. Keep provider symbols at the adapter boundary.
+- Use `IndicatorFactory` and shared lookback calculation. Keep each strategy's required
+  indicators explicit and evaluate strategies independently.
+- Frontend source is `src/quantflow/web/static/{app,utils}.ts`. Rebuild the tracked
+  JavaScript when emitted code changes. The [README](README.md#testing) has the commands.
 
-## STRUCTURE
+## Runtime invariants
 
-```
-quantflow/
-├── src/quantflow/
-│   ├── data/            # Multi-source data layer
-│   ├── indicators/      # Technical indicators
-│   │   ├── factory.py      # IndicatorFactory - config-based instantiation
-│   ├── strategies/      # Buy/sell strategies
-│   ├── execution/       # Execution layer (formerly monitoring)
-│   ├── orchestration/   # Task orchestration layer
-│   ├── config/          # YAML loader + lookback config + logging setup
-│   │   ├── loader.py       # ConfigLoader - token, yfinance, logging settings
-│   │   ├── lookback.py     # compute_days_back() - shared lookback logic
-│   │   └── logging.py      # setup_logging() - dual handler (console + file)
-│   ├── backtest/        # Reserved - stub (__init__.py only)
-│   ├── risk/            # Reserved - stub (__init__.py only)
-│   ├── web/             # Web UI server (FastAPI + frontend)
-│   ├── reports/         # Markdown report generation
-│   └── cli.py           # Entry: `python -m quantflow.cli` (stock_scan, watchlist_run, task_run, web)
-├── config/tasks_*.yaml  # Orchestration task configs (tasks_asia_mac.yaml, tasks_us_mac.yaml, etc.)
-├── config/indicators.yaml  # Indicator parameter defaults
-├── watchlists/             # Stock watchlists (including pre-built A-share indices)
-│   ├── hushen_300.yaml        # CSI 300 constituents (280 stocks)
-│   ├── zhongzheng_500.yaml    # CSI 500 constituents (425 stocks)
-│   └── chuangyeban.yaml       # ChiNext index constituents (100 stocks)
-├── scripts/              # Build verification utilities
-...
-```
+- Put artifacts under `<base>/[date/]runs/<run_id>/`. Register owned outputs in the manifest.
+  Delete only manifest-owned, unchanged files after the worker exits. Preserve user additions,
+  user edits, symlinks and legacy shared outputs.
+- Distinguish analyzed no-signal from missing, stale, insufficient or erroneous data.
+  Propagate failures to persist required output, and keep the queue slot until the active
+  worker stops.
+- Freeze run configuration, strategy parameters and completed trading days. Resume validates
+  the run plan and execution identity, including a hash of Python source bytes, and requires
+  valid snapshots for completed stocks.
+- Data windows are inclusive, daily execution uses complete trading sessions, and adapters
+  normalize volume to shares. Keep adjustment, provider, dates and value units traceable.
 
-## WHERE TO LOOK
+## Verification
 
-| Task | Location | Notes |
-|------|----------|-------|
-| Run scan | `cli.py` | `stock_scan` (alias: `scan`), supports `--output` for JSON results (default: `output/cli_scans/`) |
-| Run watchlist | `cli.py` | `watchlist_run` (alias: `monitor`), supports `--strategies` and `--days-back` |
-| Run task file | `cli.py` | `task_run` (alias: `tasks`) |
-| Update A-share indices | `data/fetch_cn_indices.py` | `python -m quantflow.data.fetch_cn_indices` - fetches CSI 300, CSI 500, ChiNext constituents |
-| Output logic | See below | CLI vs Web UI default paths differ; see OUTPUT LOGIC section |
-| Lookback calc | `config/lookback.py` | Shared `compute_days_back()`, used by CLI + Web + Orchestrator |
-| Config loading | `config/loader.py` | `ConfigLoader.get_tushare_token()`, `get_yfinance_config()`, `get_yahooquery_config()` |
-| Logging setup | `config/logging.py` | `setup_logging(output_dir, run_label)` - dual handler (console + file), reads `logging:` config from YAML |
-| Get logging config | `config/loader.py` | `ConfigLoader.get_logging_config()` - returns logging section from YAML |
-| Sector cache | `data/sector_cache.py` | `SectorCache.refresh_all()` |
-| Indicator composition | `indicators/composer.py` | Chain multiple indicators |
-| Composite strategies | `strategies/composite.py` | `mode="any"` or `"all"` |
-| Indicator creation | `indicators/factory.py` | `IndicatorFactory.create("KDJ")` merges config with defaults |
-| Indicator discovery | `web/api/library.py` | `get_library_indicators()` discovers indicators from standard/custom packages |
-| Indicator params | `config/indicators.yaml` | Per-indicator parameter overrides |
-| Web UI - library | `web/api/library.py` | Strategy + indicator catalog API |
-| Web UI - library tab | `web/static/app.ts` | Library panel rendering + param editor |
-| Task orchestration | `orchestration/app.py` | Parses `tasks_*.yaml` |
-| Web UI - watchlists | `web/api/watchlists.py` | CRUD + search + inline edit (name/tags) + inline delete |
-| Web UI - tasks | `web/api/tasks.py` | Multi-file task CRUD |
-| Web UI - task-files | `web/api/tasks.py` | List/create/delete task config files |
-| Web UI - config | `web/api/config.py` | GET (read) + PUT (write) system config |
-| Web UI - settings | `web/static/app.ts` | Settings form logic, token toggle/copy |
-| Execution engine | `execution/executor.py` | Partitions stocks into batch (non-A-share: US/HK/JP/KR via YahooQuery/YFinance) and sequential (A-share via BaoStock/Tushare); loads config via `ConfigLoader` |
-| Alerts | `execution/alerts/base.py` | Abstract `AlertChannel` (reserved, not actively used) |
-| Report generation | `reports/markdown.py` | Per-task + combined Markdown reports |
-| Runs API | `web/api/runs.py` | Run history CRUD, preflight check, SSE logs, indicator data, files, open-folder |
-| Runs engine | `web/engine/run_engine.py` | stock_scan (indicator output), watchlist_run, task_run |
-| Run history | `web/engine/run_history.py` | SQLite persistence for execution history |
+`python -m pytest` runs the offline Python suite against isolated project and home directories.
+Opt into browser checks with `--run-browser` and live-provider checks with
+`--live-market -m integration`. Frontend Vitest cases run from `tests/web/frontend/`.
 
-## CONVENTIONS
-
-- **Build**: `pip install -e .`, setuptools with `src/` layout. **macOS users must use Homebrew Python + venv** (system Python uses LibreSSL which causes yfinance errors — see SSL note below)
-- **SSL/LibreSSL**: macOS system Python 3.9 ships with LibreSSL 2.8.3, incompatible with urllib3 v2. This causes `TypeError("'NoneType' object is not subscriptable")` and `OperationalError('unable to open database file')` in yfinance batch downloads. **Fix**: use Homebrew Python (linked with OpenSSL) in a venv:
-  ```bash
-  brew install python@3.12
-  /opt/homebrew/bin/python3.12 -m venv .venv
-  source .venv/bin/activate  # or: .venv/bin/python -m quantflow.cli web
-  pip install -e .
-  ```
-- **Linting**: ruff, line-length 100, py310 target, rules: E,F,I,N,W
-- **Tests**: pytest, `testpaths=["tests"]`, `@pytest.mark.integration` for network tests
-  - Data layer: 153 unit + 10 integration (sector cache, fetch_indices, fetch_cn_indices) = 163 tests
-  - Indicator layer: 105 unit + 1 integration (TDX reference values) = 106 tests
-  - Config layer: 31 unit = 31 tests
-  - Orchestration layer: 42 unit = 42 tests
-  - Execution layer: 52 unit = 52 tests
-  - Reports layer: 18 unit = 18 tests
-  - Strategies layer: 51 unit = 51 tests
-  - CLI layer: 24 unit + 6 skipped (pending expected values) = 30 tests
-  - Web layer: 313 tests (212 API/integration + 101 E2E) + 113 frontend TypeScript tests
-  - Run: `pytest tests/` or `pytest tests/ -m "not integration"` to skip network tests
-  - Total: ~815 Python tests (313 web + 其他层) + ~113 frontend tests
-  - See `tests/web/TEST_MATRIX.md` for Execution → API test coverage details
-  - CLI reference values: BYD (002594.SZ) 2026-04-01 KDJ validation vs TongDaXin (error <0.02%)
-  - CLI TODO tests: watchlist_run/task_run expected signal counts (marked @pytest.mark.skip in test_cli.py)
-- **CLI entry**: `python -m quantflow.cli`, also `quantflow-scan` / `quantflow-monitor` scripts
-- **Type hints**: `py.typed` marker present, ruff linting enforces
-- **Lookback**: `config/lookback.py` provides shared `compute_days_back()` used by CLI + Web + Orchestrator. Data fetch days = `max(lookback_bars) * calendar_multiplier + buffer_days`
-- **Run logging**: `config/logging.py` provides `setup_logging(output_dir, run_label)` — configures root logger with StreamHandler (console_level) + FileHandler (file_level). All run types (CLI + Web) call this at start. Log files go to `output_dir/logs/{run_label}_{timestamp}.log`. Config: `logging:` section in `quantflow.yaml` (console_level, file_enabled, file_level, format). `setup_logging()` **removes prior quantflow handlers** before adding new ones (long-running Web server must not leak logs across runs). The resolved path is persisted to `run_history.log_path`; the Web Progress tab reads that file directly via `GET /api/runs/{id}/logs` (not the SSE summary events).
-- **Run states**: `queued | running | cancelling | completed | partial | failed | cancelled | interrupted`. `interrupted` marks runs left active by a dead process (e.g. laptop lid closed); `RunHistory.reconcile_stale_runs()` is called once in `create_app()` at server startup to flip stale `running`/`queued` rows to `interrupted`.
-- **Checkpoint / resume**: `execution/checkpoint.py::Checkpoint` stores per-stock completion + results at `~/.quantflow/checkpoints/<run-id>.json` (atomic writes). `Executor.execute(job, checkpoint=..., task_key=...)` skips done stocks; `Orchestrator` passes a per-task checkpoint. `POST /api/runs/{id}/resume` only allows `watchlist_run`/`task_run` in `failed|cancelled|interrupted`, creates a new run, and copies the checkpoint. Raw OHLCV is **not** cached — the fetch date window is frozen in the checkpoint instead.
-- **YFinance batch**: Auto-chunked (35 tickers/chunk, jitter sleep 10–20s) via `fetch_batch_ohlcv()` to avoid Yahoo rate limits
-- **YAML**: Use `sort_keys=False` and `default_flow_style=False` when emitting YAML configuration
-
-## ANTI-PATTERNS
-
-- Do NOT add dependencies without updating `pyproject.toml`
-- Do NOT bypass `DataSourceFactory` - it handles primary/fallback logic
-- Do NOT hardcode `adjustflag` - use config defaults (`qfq`)
-- Do NOT mix BaoStock format (`sh.600000`) with standard format (`600000.SH`)
-
-## OUTPUT LOGIC
-
-- See `docs/reliability-and-data-contracts.md` for the authoritative contract.
-- CLI and Web output paths are bases. Actual artifacts live in `<base>/runs/<run_id>/`; daily mode adds a date BEFORE `runs/`.
-- `manifest.json` records run ownership and artifact hashes. Never infer ownership by loading current task/watchlist YAML.
-- Delete only manifest-owned unchanged files; preserve user additions, modified outputs, symlinks and legacy shared outputs without manifests.
-- Active workers must stop before deletion. Cancellation stays `cancelling` until the worker acknowledges it and hands off the queue slot.
-- Statuses include `partial` and `cancelling`. No-data/stale/insufficient/error are distinct from analyzed no_signal.
-- `ScanResults` is list-compatible and carries outcomes/summary. Required artifact writes propagate errors.
-- Executor builds indicators from strategy dependencies under `IndicatorFactory.snapshot()`, evaluating strategies independently.
-- Raw daily inputs, source, adjustment, dates, parameters and execution fingerprints are persisted. Only analyzed stocks are checkpointed done.
-- Data date ranges are inclusive internally. Adapters translate provider boundaries. Volume is shares, market values are currency base units.
-- Calendar failures are explicit; never silently fall back to weekday assumptions. Non-daily strategies are currently unsupported by execution.
-
-## COMMANDS
-
-```bash
-# Install (macOS: use Homebrew Python + venv, see SSL note above)
-brew install python@3.12
-/opt/homebrew/bin/python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-
-# Install dev deps
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/
-pytest tests/ -m "not integration"  # skip network tests
-pytest tests/ --cov=quantflow        # coverage
-
-# Frontend unit tests (Vitest)
-cd tests/web/frontend && npm install  # install deps
-cd tests/web/frontend && npm test     # run tests
-
-# Lint
-ruff check src/
-
-# Start Web UI
-python -m quantflow.cli web
-```
-
-## WEB UI
-- **Path**: `src/quantflow/web/`
-- **Endpoints**: 
-  - `/api/watchlists/...` (CRUD + inline edit name/tags)
-  - `/api/tasks/...` (CRUD, multi-file)
-  - `/api/task-files/...` (list/create/delete)
-  - `/api/config` (GET + PUT system config)
-  - `/api/strategies` (read-only)
-  - `/api/library/*` (library catalog: strategies + indicators + param updates)
-  - `/api/runs/` (GET list, POST create, DELETE, SSE logs, indicator data, files, cancel, queue, open-folder)
-  - `/api/presets/` (GET, POST, PUT, DELETE, run from preset)
-  - `/api/browse/` (directory browsing for file picker, mkdir)
-- **Static files**: `src/quantflow/web/static/` (TypeScript compiled to `.js`)
-- **Frontend tests**: `tests/web/frontend/` (Vitest unit tests for pure functions in `utils.ts`)
-- **Config**: `config/quantflow.yaml` → `web: { port, host }`, `tushare: { token }`, `lookback: { ... }`, `yfinance: { batch: { ... } }`
-
-## NOTES
-
-- `backtest/` and `risk/` are reserved, currently empty stubs
-- Sector data: SW (申万) works fully, THS has list-only API, EM blocked by network
-- Tushare requires token: env `TUSHARE_TOKEN`, `.env` file, or `config/quantflow.yaml`
-- YFinance has rate limits (60/min, 360/hr, 8000/day) + anti-scraping; uses `curl_cffi` for TLS fingerprint; batch auto-chunks via `yfinance.batch` config (jitter sleep)
-- YahooQuery async concurrent mode triggers Yahoo anti-scraping (HTTP 404) for >4 concurrent tickers; now uses `asynchronous=False` sequential per-ticker fetch with retry (`_MAX_RETRIES=5`); monkey-patches `_historical_data_to_dataframe` for error dict handling; less reliable than yfinance for batch data, serves as primary with yfinance fallback
+Choose the layer that proves the behavior. Use fixed bars for expected signals, backend tests
+for validation and persistence, and browser tests for cross-layer flows. See the
+[Web test matrix](tests/web/TEST_MATRIX.md) and [CLI result tests](tests/CLI_TODO_TESTS.md).

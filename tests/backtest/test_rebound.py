@@ -35,3 +35,59 @@ def test_unknown_first_day_does_not_silently_become_a_fill():
     assert _eligible(bars.iloc[3], "SZ", "buy") is None
     blocked = pd.Series({"open": 100, "volume": 100, "buy_allowed": False})
     assert _eligible(blocked, "SZ", "buy") is False
+
+
+def test_evaluate_uses_exact_entries_and_exit_prices_from_frozen_bars():
+    from quantflow.backtest.rebound import evaluate
+    from tests.support.replay_market import bars as market_bars
+
+    data = market_bars(StockCode("AAPL", "US"))
+    periods = {"complete": ("2025-06-03", "2025-07-01"), "short": ("2025-06-03", "2025-06-10")}
+    result = evaluate(data, periods, fee_bps=2, slippage_bps=5)
+    studies = {(row["period"], row["scenario"], row["horizon"]): row for row in result["results"]}
+    first = studies["complete", "first_oversold", 5]
+    five, = first["events"]
+    ten, = studies["complete", "first_oversold", 10]["events"]
+    assert five["signal"] == ten["signal"] == "2025-06-04"
+    assert five["entry"] == ten["entry"] == "2025-06-05"
+    assert five["exit_target"] == "2025-06-11"
+    assert ten["exit_target"] == "2025-06-18"
+    assert five["net_return"] == pytest.approx(143.0 * .9993 / (138.4 * 1.0007) - 1)
+    assert ten["net_return"] == pytest.approx(144.0 * .9993 / (138.4 * 1.0007) - 1)
+    recovery, = studies["complete", "recovery_confirmed", 10]["events"]
+    assert (recovery["signal"], recovery["entry"], recovery["exit_target"]) == (
+        "2025-06-10", "2025-06-11", "2025-06-25",
+    )
+    assert studies["short", "first_oversold", 5]["status_counts"] == {"right_censored": 1}
+    for window in (5, 10):
+        daily = studies["complete", "each_oversold_day", window]["events"]
+        assert [e["signal"] for e in daily] == [
+            "2025-06-04", "2025-06-05", "2025-06-06", "2025-06-09",
+        ]
+        assert [e["status"] for e in daily] == ["complete", *(["overlap_skipped"] * 3)]
+    assert evaluate(data.loc[data.date <= "2025-07-01"], periods)["results"] == result["results"]
+
+
+def test_backtest_cli_records_snapshot_provenance_and_periods(tmp_path):
+    import hashlib
+    import json
+    import subprocess
+    import sys
+
+    from tests.support.replay_market import bars as market_bars
+
+    source = tmp_path / "history.csv"
+    target = tmp_path / "results.json"
+    market_bars(StockCode("AAPL", "US")).to_csv(source, index=False)
+    subprocess.run(
+        [sys.executable, "-m", "quantflow.backtest.rebound", "--input", str(source),
+         "--output", str(target), "--start", "2025-05-01", "--holdout-start", "2025-06-01",
+         "--end", "2025-07-01"], check=True, capture_output=True, timeout=15,
+    )
+    result = json.loads(target.read_text())
+    assert result["input_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert result["symbols"] == ["AAPL.US"]
+    first = next(r for r in result["results"] if
+                 (r["period"], r["scenario"], r["horizon"]) == ("holdout", "first_oversold", 10))
+    assert first["signals"] == first["complete"] == 1
+    assert first["events"][0]["signal"] == "2025-06-04"

@@ -214,7 +214,7 @@ def resume_run(run_id: str):
     new_id = engine._history.create_run(
         f"{original.name} (resume)", original.run_type, config,
         preset_id=original.preset_id)
-    # Copy the original checkpoint forward so completed items are skipped.
+    # Copy the checkpoint so the new run can validate and reuse completed items.
     if not Checkpoint.copy_to(run_id, new_id):
         engine._history.delete_run(new_id)
         raise HTTPException(status_code=400, detail="Cannot copy checkpoint")
@@ -410,8 +410,11 @@ def _auto_name(run_type: str, config: dict) -> str:
 
 
 def _with_log_path(run) -> dict:
-    """Serialize a run, exposing the real on-disk log path to the Web UI."""
-    return {**_to_dict(run), "log_path": getattr(run, "log_path", None)}
+    """Attach the log file path and the active run progress snapshot."""
+    data = {**_to_dict(run), "log_path": getattr(run, "log_path", None)}
+    if run.status in ("running", "cancelling"):
+        data["progress"] = _get_engine()._sse.progress(run.id)
+    return data
 
 
 def _to_dict(run):

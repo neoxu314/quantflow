@@ -5,7 +5,7 @@ Fetches real OHLCV data via BaoStock (A-share) and YFinance (US),
 calculates indicators, and validates output within tolerance.
 
 Run:
-    pytest tests/indicators/test_integration.py -m integration -v
+    python -m pytest tests/indicators/test_integration.py --live-market -m integration -v
 """
 
 import pytest

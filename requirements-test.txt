@@ -1,0 +1,13 @@
+# Direct test and build tool versions used with Python 3.12.
+-e .[dev]
+pytest==9.2.0
+pytest-cov==7.1.0
+coverage==7.17.3; python_version >= "3.11"
+ruff==0.17.5
+httpx==0.28.1
+curl-cffi==0.17.0
+pytest-playwright==0.10.0
+playwright==1.65.2
+platformdirs==4.14.5
+setuptools==84.2.1
+wheel==0.48.0

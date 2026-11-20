@@ -44,6 +44,7 @@ def sample_df_with_indicators():
 # KDJGoldenCrossBuy tests removed: strategy deleted from codebase
 
 
+@pytest.mark.integration
 class TestStrategyIntegration:
     """
     Integration tests for strategies using real market data.
@@ -572,6 +573,22 @@ class TestCompositeStrategy:
         ])
         assert comp.signal_type == "mixed"
 
+    @pytest.mark.parametrize("mode", ["all", "any"])
+    def test_nested_composite_keeps_direction_votes_separate(self, mode):
+        from unittest.mock import Mock
+
+        buyer = Mock(signal_type="buy")
+        buyer.generate_signals.side_effect = lambda df: df.assign(buy_signal=[True, False])
+        seller = Mock(signal_type="sell")
+        seller.generate_signals.side_effect = lambda df: df.assign(sell_signal=[False, True])
+        mixed = CompositeStrategy([buyer, seller], mode=mode)
+        result = CompositeStrategy([buyer, mixed], mode=mode).generate_signals(
+            pd.DataFrame({"buy_signal": [True, True], "sell_signal": [True, True]})
+        )
+
+        assert result.buy_signal.tolist() == [True, False]
+        assert result.sell_signal.tolist() == [False, True]
+
     def test_all_mode_requires_all_triggers(self):
         length = 100
         df = pd.DataFrame({
@@ -654,3 +671,15 @@ class TestCompositeStrategy:
         assert len(conds) == 1
         assert conds[0].field == "K"
         assert conds[0].operator == "cross_down"
+
+
+def test_oversold_strict_threshold_and_inclusive_support():
+    frame = pd.DataFrame({
+        "J": [19.9, 20.0, 19.9, 19.9, np.nan],
+        "short_trend_line": [11.0, 11.0, 10.0, 11.0, 11.0],
+        "long_short_line": [10.0] * 5,
+        "close": [10.0, 10.0, 10.0, 9.99, 10.0],
+    })
+    result = DailyBullishOversoldBuy().generate_signals(frame)
+    assert result.buy_signal.tolist() == [True, False, False, False, False]
+    assert result.signal_reason.tolist() == ["Oversold J=19.9 in bull channel", "", "", "", ""]
