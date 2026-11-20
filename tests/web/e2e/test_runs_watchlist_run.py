@@ -6,39 +6,25 @@ import time
 from pathlib import Path
 
 import httpx
-import pytest
 import yaml
 from playwright.sync_api import Page, expect
 
-from .conftest import PROJECT_ROOT, SERVER_URL, TEST_WATCHLIST_NAME
+from .conftest import SERVER_URL, TEST_WATCHLIST_NAME
 
-DB_PATH = Path.home() / ".quantflow" / "runs.db"
+DB_PATH = None
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 120
-WATCHLIST_YAML = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+WATCHLIST_YAML = None
 
 
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                if run.get("run_type") == "watchlist_run":
-                    httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
-
-
-def setup_test_watchlist(base_url):
+def setup_test_watchlist(e2e_url):
     payload = {
         "name": TEST_WATCHLIST_NAME,
         "description": "E2E test watchlist",
         "items": [{"code": TEST_STOCK_CODE, "name": "Nvidia", "tags": []}],
     }
     resp = httpx.put(
-        f"{base_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+        f"{e2e_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
         json=payload,
         timeout=30,
     )
@@ -50,11 +36,11 @@ def setup_test_watchlist(base_url):
 
 class TestRunsWatchlistRunWorkflow:
 
-    def wait_for_run_completion(self, base_url: str, run_type: str) -> dict | None:
+    def wait_for_run_completion(self, e2e_url: str, run_type: str) -> dict | None:
         deadline = time.time() + RUN_TIMEOUT_SEC
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("run_type") == run_type:
@@ -67,8 +53,8 @@ class TestRunsWatchlistRunWorkflow:
             time.sleep(3)
         return None
 
-    def test_watchlist_run_full_lifecycle(self, page: Page, base_url: str):
-        setup_test_watchlist(base_url)
+    def test_watchlist_run_full_lifecycle(self, page: Page, e2e_url: str):
+        setup_test_watchlist(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -106,7 +92,7 @@ class TestRunsWatchlistRunWorkflow:
             timeout=15000,
         )
 
-        run = self.wait_for_run_completion(base_url, "watchlist_run")
+        run = self.wait_for_run_completion(e2e_url, "watchlist_run")
         assert run is not None, "Run did not complete within timeout"
         assert run["status"] == "completed", f"Run failed: {run.get('error')}"
 
@@ -189,8 +175,8 @@ class TestRunsWatchlistRunWorkflow:
 
         assert count == 0, "Run should be deleted from DB"
 
-    def test_run_type_cannot_modify_after_select(self, page: Page, base_url: str):
-        setup_test_watchlist(base_url)
+    def test_run_type_cannot_modify_after_select(self, page: Page, e2e_url: str):
+        setup_test_watchlist(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")

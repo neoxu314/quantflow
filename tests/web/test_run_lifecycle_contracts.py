@@ -171,3 +171,107 @@ def test_owned_report_has_no_legacy_warning(env):
     finish_manifest(output,'completed')
     engine._history.update_status(rid,'completed',report_path=str(p),output_path=str(output))
     assert client.get(f'/api/runs/{rid}/report').json()['legacy_warning'] is None
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_worker_publishes_terminal_status_after_manifest(env, monkeypatch, fail):
+    engine, client, root, wl = env
+    run_id = create(engine, root, wl)
+    next_id = create(engine, root, wl)
+    monkeypatch.setattr(
+        "quantflow.execution.executor.Executor.execute",
+        lambda *args, **kwargs: ScanResults([], [StockOutcome("AAPL.US", "no_signal")]),
+    )
+    statuses = []
+    monkeypatch.setattr(engine._sse, "publish_status", lambda _, status: statuses.append(status))
+
+    def finalize(output, status):
+        assert engine._history.get_run(run_id).status == "running"
+        assert statuses == ["running"]
+        assert engine._queue.active == run_id
+        if fail:
+            raise OSError("disk full")
+        finish_manifest(output, status)
+
+    finalize_manifest = Mock(side_effect=finalize)
+    monkeypatch.setattr("quantflow.web.engine.run_engine.finish_manifest", finalize_manifest)
+    engine._execute_run(run_id)
+
+    finalize_manifest.assert_called_once()
+    run = engine._history.get_run(run_id)
+    assert run.status == ("failed" if fail else "completed")
+    assert statuses == ["running", run.status]
+    if fail:
+        assert "Manifest finalization failed: disk full" in run.error
+    else:
+        manifest = json.loads((Path(run.output_path) / "manifest.json").read_text())
+        assert manifest["status"] == "completed"
+    engine.start_processing.assert_called_once_with(next_id)
+
+
+@pytest.mark.parametrize("mode", ["timeout", "rate_limit"])
+def test_cancel_during_provider_io_or_backoff(env, monkeypatch, mode):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    import requests
+    from yfinance import exceptions
+
+    from quantflow.data.adapters import yfinance as adapter
+
+    engine, client, root, wl = env
+    active = create(engine, root, wl)
+    next_id = create(engine, root, wl)
+    waiting, release = threading.Event(), threading.Event()
+    actual_sleep = adapter.cancellable_sleep
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if mode == "timeout":
+                waiting.set()
+                release.wait(5)
+                return
+            self.send_response(429)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as provider:
+        http_thread = threading.Thread(target=provider.serve_forever)
+        http_thread.start()
+        worker = threading.Thread(target=engine._execute_run, args=(active,))
+        try:
+            def download(**_kwargs):
+                response = requests.get(
+                    f"http://127.0.0.1:{provider.server_port}/", timeout=1
+                )
+                if response.status_code == 429:
+                    raise exceptions.YFRateLimitError()
+                response.raise_for_status()
+
+            def backoff(seconds):
+                waiting.set()
+                actual_sleep(seconds)
+
+            feed = adapter.YFinanceDataSource(retry_base_delay=30)
+
+            def execute(*_args, **_kwargs):
+                feed._download_chunk(["AAPL"], "2026-11-16", "2026-11-20", "1d")
+                pytest.fail("Cancellation should exit the download")
+
+            monkeypatch.setattr("yfinance.download", download)
+            monkeypatch.setattr(adapter, "cancellable_sleep", backoff)
+            monkeypatch.setattr("quantflow.execution.executor.Executor.execute", execute)
+            worker.start()
+            assert waiting.wait(3)
+            assert client.post(f"/api/runs/{active}/cancel").json()["status"] == "cancelling"
+            worker.join(3)
+            assert not worker.is_alive()
+            assert engine._history.get_run(active).status == "cancelled"
+            engine.start_processing.assert_called_once_with(next_id)
+        finally:
+            release.set()
+            provider.shutdown()
+            http_thread.join()
+            if worker.ident is not None:
+                worker.join(3)

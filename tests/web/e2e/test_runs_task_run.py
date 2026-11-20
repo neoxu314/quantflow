@@ -7,40 +7,26 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-import pytest
 import yaml
 from playwright.sync_api import Page, expect
 
-from .conftest import PROJECT_ROOT, SERVER_URL, TEST_TASK_FILE, TEST_WATCHLIST_NAME
+from .conftest import SERVER_URL, TEST_TASK_FILE, TEST_WATCHLIST_NAME
 
-DB_PATH = Path.home() / ".quantflow" / "runs.db"
+DB_PATH = None
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 180
-TASK_CONFIG_PATH = PROJECT_ROOT / "config" / TEST_TASK_FILE
-WATCHLIST_YAML = PROJECT_ROOT / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml"
+TASK_CONFIG_PATH = None
+WATCHLIST_YAML = None
 
 
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                if run.get("run_type") == "task_run":
-                    httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
-
-
-def setup_test_task_config(base_url):
+def setup_test_task_config(e2e_url):
     wl_payload = {
         "name": TEST_WATCHLIST_NAME,
         "description": "E2E test watchlist for task_run",
         "items": [{"code": TEST_STOCK_CODE, "name": "Nvidia", "tags": []}],
     }
     resp = httpx.put(
-        f"{base_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
+        f"{e2e_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
         json=wl_payload,
         timeout=30,
     )
@@ -48,14 +34,14 @@ def setup_test_task_config(base_url):
     assert WATCHLIST_YAML.exists()
 
     tf_resp = httpx.post(
-        f"{base_url}/api/task-files",
+        f"{e2e_url}/api/task-files",
         json={"filename": TEST_TASK_FILE},
         timeout=30,
     )
     assert tf_resp.status_code in (201, 409)
 
     task_resp = httpx.post(
-        f"{base_url}/api/tasks?filename={TEST_TASK_FILE}",
+        f"{e2e_url}/api/tasks?filename={TEST_TASK_FILE}",
         json={
             "name": "e2e_task_test",
             "watchlist": f"watchlists/{TEST_WATCHLIST_NAME}.yaml",
@@ -72,11 +58,11 @@ def setup_test_task_config(base_url):
 
 class TestRunsTaskRunWorkflow:
 
-    def wait_for_run_completion(self, base_url: str, run_type: str) -> dict | None:
+    def wait_for_run_completion(self, e2e_url: str, run_type: str) -> dict | None:
         deadline = time.time() + RUN_TIMEOUT_SEC
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("run_type") == run_type:
@@ -89,8 +75,8 @@ class TestRunsTaskRunWorkflow:
             time.sleep(3)
         return None
 
-    def test_task_run_full_lifecycle(self, page: Page, base_url: str):
-        setup_test_task_config(base_url)
+    def test_task_run_full_lifecycle(self, page: Page, e2e_url: str):
+        setup_test_task_config(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -133,7 +119,7 @@ class TestRunsTaskRunWorkflow:
             timeout=15000,
         )
 
-        run = self.wait_for_run_completion(base_url, "task_run")
+        run = self.wait_for_run_completion(e2e_url, "task_run")
         assert run is not None, "Run did not complete within timeout"
         assert run["status"] == "completed", f"Run failed: {run.get('error')}"
 
@@ -228,8 +214,8 @@ class TestRunsTaskRunWorkflow:
 
         assert count == 0, "Run should be deleted from DB"
 
-    def test_task_run_with_daily_mode(self, page: Page, base_url: str):
-        setup_test_task_config(base_url)
+    def test_task_run_with_daily_mode(self, page: Page, e2e_url: str):
+        setup_test_task_config(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -253,14 +239,14 @@ class TestRunsTaskRunWorkflow:
         page.click("#btn-execute-run")
         page.wait_for_selector("#modal-new-run", state="hidden", timeout=10000)
 
-        run = self.wait_for_run_completion(base_url, "task_run")
+        run = self.wait_for_run_completion(e2e_url, "task_run")
         assert run is not None, "Run did not complete within timeout"
         assert run["status"] == "completed", f"Run failed: {run.get('error')}"
 
         assert run.get("config", {}).get("daily") is True
 
-    def test_run_modal_resets_on_open(self, page: Page, base_url: str):
-        setup_test_task_config(base_url)
+    def test_run_modal_resets_on_open(self, page: Page, e2e_url: str):
+        setup_test_task_config(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -286,8 +272,8 @@ class TestRunsTaskRunWorkflow:
         for section_id in section_ids:
             expect(page.locator(f"#{section_id}")).to_be_hidden()
 
-    def test_progress_tab_shows_live_log(self, page: Page, base_url: str):
-        setup_test_task_config(base_url)
+    def test_progress_tab_shows_live_log(self, page: Page, e2e_url: str):
+        setup_test_task_config(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -341,8 +327,8 @@ class TestRunsTaskRunWorkflow:
         )
         assert len(log_text) > 0, "Progress tab should show log text during execution"
 
-    def test_files_tab_isolated_per_run(self, page: Page, base_url: str):
-        setup_test_task_config(base_url)
+    def test_files_tab_isolated_per_run(self, page: Page, e2e_url: str):
+        setup_test_task_config(e2e_url)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -358,7 +344,7 @@ class TestRunsTaskRunWorkflow:
         page.click("#btn-execute-run")
         page.wait_for_selector("#modal-new-run", state="hidden", timeout=10000)
 
-        run = self.wait_for_run_completion(base_url, "task_run")
+        run = self.wait_for_run_completion(e2e_url, "task_run")
         assert run is not None
         assert run["status"] == "completed"
 
@@ -391,9 +377,9 @@ class TestRunsTaskRunWorkflow:
             assert any(expected in name for name in file_names), \
                 f"Expected {expected} in files, got: {file_names}"
 
-    def test_task_run_daily_mode_files_validation(self, page: Page, base_url: str):
+    def test_task_run_daily_mode_files_validation(self, page: Page, e2e_url: str):
         """Daily mode: files tab should show files from YYYY-MM-DD subdirectory."""
-        setup_test_task_config(base_url)
+        setup_test_task_config(e2e_url)
         
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -415,7 +401,7 @@ class TestRunsTaskRunWorkflow:
         page.click("#btn-execute-run")
         page.wait_for_selector("#modal-new-run", state="hidden", timeout=10000)
         
-        run = self.wait_for_run_completion(base_url, "task_run")
+        run = self.wait_for_run_completion(e2e_url, "task_run")
         assert run is not None
         assert run["status"] == "completed"
         

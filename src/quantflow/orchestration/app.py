@@ -66,6 +66,7 @@ class Orchestrator:
             base /= self.date_str
         self.output_dir = create_run_directory(base) if self.isolated else base.resolve()
         tasks, errors, combined = [], [], ScanResults()
+        unreadable_watchlists = 0
         try:
             if self.isolated:
                 logfile = setup_logging(self.output_dir, "task_run")
@@ -82,6 +83,7 @@ class Orchestrator:
                     loaded[cfg.name] = Watchlist.load(str(path))
                 except Exception as exc:
                     errors.append({"task": cfg.name, "error": str(exc)})
+                    unreadable_watchlists += 1
             total = sum(len(w.items) for w in loaded.values())
             for cfg in self.tasks:
                 check_cancelled()
@@ -146,7 +148,11 @@ class Orchestrator:
             summary.update(
                 tasks_requested=len(self.tasks), tasks_completed=len(tasks), task_errors=errors
             )
-            if errors and not summary["total"]:
+            if unreadable_watchlists:
+                summary["enumerated_coverage"] = summary["coverage"] if summary["total"] else None
+                summary["coverage"] = None
+                summary["unreadable_watchlists"] = unreadable_watchlists
+            elif errors and not summary["total"]:
                 summary["coverage"] = 0.0
             self.last_summary = summary
             storage = Storage()

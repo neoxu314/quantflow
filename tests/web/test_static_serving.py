@@ -1,5 +1,5 @@
 """Server-level tests: static file serving, mount points, error handling."""
-from unittest.mock import patch
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -51,3 +51,23 @@ def test_config_api_write_path_traversal_blocked(config_client):
     # The file should have been written (the API doesn't validate key names),
     # but it writes to the expected config path, not to an arbitrary location
     assert config_path.exists()
+
+
+def test_second_startup_cannot_reconcile_another_servers_runs():
+    from quantflow.web.engine import RunHistory
+    from quantflow.web.server import create_app
+
+    history = RunHistory()
+    with TestClient(create_app()) as first:
+        run_id = history.create_run("active scan", "stock_scan", {})
+        history.update_status(run_id, "running")
+        with pytest.raises(RuntimeError, match="QuantFlow Web is already running"), TestClient(
+            create_app()
+        ):
+            pass
+        response = first.get(f"/api/runs/{run_id}")
+        assert response.json()["run"]["status"] == "running"
+
+    with TestClient(create_app()) as restarted:
+        response = restarted.get(f"/api/runs/{run_id}")
+        assert response.json()["run"]["status"] == "interrupted"

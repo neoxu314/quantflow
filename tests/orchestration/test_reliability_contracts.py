@@ -22,7 +22,15 @@ def test_failed_task_is_visible_alongside_successful_task(tmp_path,monkeypatch):
     assert app.last_summary['tasks_requested']==2
     assert app.last_summary['tasks_completed']==1
     assert app.last_summary['task_errors'][0]['task']=='broken'
-    assert 'broken' in Path(app.report_path).read_text()
+    assert app.last_summary['coverage'] is None
+    assert app.last_summary['unreadable_watchlists'] == 1
+    assert app.last_summary['enumerated_coverage'] == 1.0
+    summary = json.loads((app.output_dir / "Run_Summary.json").read_text())
+    assert summary["coverage"] is None
+    report = Path(app.report_path).read_text()
+    assert "broken" in report
+    assert "**Coverage**: unknown" in report
+    assert "**Coverage of enumerated stocks**: 100.0%" in report
 
 
 def test_all_failed_tasks_never_become_completed_or_full_coverage(tmp_path):
@@ -30,7 +38,8 @@ def test_all_failed_tasks_never_become_completed_or_full_coverage(tmp_path):
                      output_override=str(tmp_path))
     assert app.run()==0
     assert app.last_summary['status']=='failed'
-    assert app.last_summary['coverage']==0
+    assert app.last_summary['coverage'] is None
+    assert app.last_summary['enumerated_coverage'] is None
     assert json.loads((app.output_dir/'manifest.json').read_text())['status']=='failed'
 
 

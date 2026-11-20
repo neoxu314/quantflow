@@ -3,40 +3,26 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from pathlib import Path
 
 import httpx
-import pytest
 from playwright.sync_api import Page, expect
 
-from .conftest import PROJECT_ROOT, SERVER_URL
+from .conftest import SERVER_URL
 
-DB_PATH = Path.home() / ".quantflow" / "runs.db"
+DB_PATH = None
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 120
-
-
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
 
 
 class TestRunsCancelWorkflow:
 
     def wait_for_run_status(
-        self, base_url: str, stock_code: str, target_status: str, timeout: int = 60
+        self, e2e_url: str, stock_code: str, target_status: str, timeout: int = 60
     ) -> dict | None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("config", {}).get("code") == stock_code:
@@ -48,12 +34,12 @@ class TestRunsCancelWorkflow:
         return None
 
     def wait_for_run_appearance(
-        self, base_url: str, stock_code: str, timeout: int = 15
+        self, e2e_url: str, stock_code: str, timeout: int = 15
     ) -> dict | None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("config", {}).get("code") == stock_code:
@@ -63,9 +49,9 @@ class TestRunsCancelWorkflow:
             time.sleep(1)
         return None
 
-    def test_cancel_active_run(self, page: Page, base_url: str):
+    def test_cancel_active_run(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -78,15 +64,15 @@ class TestRunsCancelWorkflow:
         assert run_data["ok"] is True
         run_id = run_data["run_id"]
 
-        appeared = self.wait_for_run_appearance(base_url, TEST_STOCK_CODE)
+        appeared = self.wait_for_run_appearance(e2e_url, TEST_STOCK_CODE)
         assert appeared is not None
 
-        cancel_resp = httpx.post(f"{base_url}/api/runs/{run_id}/cancel", timeout=30)
+        cancel_resp = httpx.post(f"{e2e_url}/api/runs/{run_id}/cancel", timeout=30)
         assert cancel_resp.status_code == 200
         assert cancel_resp.json()["ok"] is True
 
         cancelled = self.wait_for_run_status(
-            base_url, TEST_STOCK_CODE, "cancelled", timeout=30
+            e2e_url, TEST_STOCK_CODE, "cancelled", timeout=30
         )
         assert cancelled is not None, "Run should be cancelled"
         assert cancelled["status"] == "cancelled"
@@ -124,9 +110,9 @@ class TestRunsCancelWorkflow:
         assert len(rows) > 0
         assert rows[0][0] == "cancelled"
 
-    def test_cancel_queued_run(self, page: Page, base_url: str):
+    def test_cancel_queued_run(self, page: Page, e2e_url: str):
         resp1 = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -139,7 +125,7 @@ class TestRunsCancelWorkflow:
 
         queued_code = "AAPL.US"
         resp2 = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": queued_code,
@@ -155,7 +141,7 @@ class TestRunsCancelWorkflow:
         page.click('button[data-tab="runs"]')
 
         cancel_resp = httpx.post(
-            f"{base_url}/api/runs/{queued_run_id}/cancel", timeout=30
+            f"{e2e_url}/api/runs/{queued_run_id}/cancel", timeout=30
         )
         assert cancel_resp.status_code == 200
         assert cancel_resp.json()["ok"] is True
@@ -180,9 +166,9 @@ class TestRunsCancelWorkflow:
         assert len(rows) > 0
         assert rows[0][0] == "cancelled"
 
-    def test_delete_cancelled_run(self, page: Page, base_url: str):
+    def test_delete_cancelled_run(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -193,10 +179,10 @@ class TestRunsCancelWorkflow:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        self.wait_for_run_appearance(base_url, TEST_STOCK_CODE)
+        self.wait_for_run_appearance(e2e_url, TEST_STOCK_CODE)
 
-        httpx.post(f"{base_url}/api/runs/{run_id}/cancel", timeout=30)
-        self.wait_for_run_status(base_url, TEST_STOCK_CODE, "cancelled", timeout=30)
+        httpx.post(f"{e2e_url}/api/runs/{run_id}/cancel", timeout=30)
+        self.wait_for_run_status(e2e_url, TEST_STOCK_CODE, "cancelled", timeout=30)
 
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
@@ -241,9 +227,9 @@ class TestRunsCancelWorkflow:
             ).fetchone()[0]
         assert count == 0, "Cancelled run should be deleted from DB"
 
-    def test_cancel_button_appears_for_running(self, page: Page, base_url: str):
+    def test_cancel_button_appears_for_running(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,

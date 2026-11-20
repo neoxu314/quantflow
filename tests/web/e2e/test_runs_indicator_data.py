@@ -5,36 +5,23 @@ import json
 import time
 
 import httpx
-import pytest
 from playwright.sync_api import Page, expect
 
-from .conftest import PROJECT_ROOT, SERVER_URL
+from .conftest import SERVER_URL
 
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 120
 
 
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
-
-
 class TestRunsIndicatorData:
 
     def wait_for_run_completion(
-        self, base_url: str, stock_code: str, timeout: int = RUN_TIMEOUT_SEC
+        self, e2e_url: str, stock_code: str, timeout: int = RUN_TIMEOUT_SEC
     ) -> dict | None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("config", {}).get("code") == stock_code:
@@ -45,9 +32,9 @@ class TestRunsIndicatorData:
             time.sleep(3)
         return None
 
-    def test_indicator_data_endpoint_returns_valid_json(self, page: Page, base_url: str):
+    def test_indicator_data_endpoint_returns_valid_json(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -58,12 +45,12 @@ class TestRunsIndicatorData:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        completed = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        completed = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert completed is not None, "Run did not complete"
         assert completed["status"] == "completed"
 
         data_resp = httpx.get(
-            f"{base_url}/api/runs/{run_id}/indicator-data", timeout=30
+            f"{e2e_url}/api/runs/{run_id}/indicator-data", timeout=30
         )
         assert data_resp.status_code == 200
         data = data_resp.json()
@@ -80,9 +67,9 @@ class TestRunsIndicatorData:
         assert data["code"] == TEST_STOCK_CODE
         assert data["bar_count"] == len(data["data"])
 
-    def test_indicator_data_no_nan_values(self, page: Page, base_url: str):
+    def test_indicator_data_no_nan_values(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -93,11 +80,11 @@ class TestRunsIndicatorData:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        completed = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        completed = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert completed is not None
 
         data_resp = httpx.get(
-            f"{base_url}/api/runs/{run_id}/indicator-data", timeout=30
+            f"{e2e_url}/api/runs/{run_id}/indicator-data", timeout=30
         )
         assert data_resp.status_code == 200
         data = data_resp.json()
@@ -114,9 +101,9 @@ class TestRunsIndicatorData:
                     assert not math.isnan(val), f"NaN found in {key}"
                     assert not math.isinf(val), f"Infinity found in {key}"
 
-    def test_indicator_data_bar_count_matches(self, page: Page, base_url: str):
+    def test_indicator_data_bar_count_matches(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -127,11 +114,11 @@ class TestRunsIndicatorData:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        completed = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        completed = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert completed is not None
 
         data_resp = httpx.get(
-            f"{base_url}/api/runs/{run_id}/indicator-data", timeout=30
+            f"{e2e_url}/api/runs/{run_id}/indicator-data", timeout=30
         )
         assert data_resp.status_code == 200
         data = data_resp.json()
@@ -140,9 +127,9 @@ class TestRunsIndicatorData:
             f"bar_count ({data['bar_count']}) should match data length ({len(data['data'])})"
         )
 
-    def test_files_endpoint_returns_expected_files(self, page: Page, base_url: str):
+    def test_files_endpoint_returns_expected_files(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -153,11 +140,11 @@ class TestRunsIndicatorData:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        completed = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        completed = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert completed is not None
 
         files_resp = httpx.get(
-            f"{base_url}/api/runs/{run_id}/files", timeout=30
+            f"{e2e_url}/api/runs/{run_id}/files", timeout=30
         )
         assert files_resp.status_code == 200
         files = files_resp.json()["files"]
@@ -197,9 +184,9 @@ class TestRunsIndicatorData:
             page.locator("#runtab-files table tbody tr td").first
         ).to_contain_text("indicators.json")
 
-    def test_indicator_data_for_non_stock_scan_returns_null(self, page: Page, base_url: str):
+    def test_indicator_data_for_non_stock_scan_returns_null(self, page: Page, e2e_url: str):
         resp = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -210,19 +197,19 @@ class TestRunsIndicatorData:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        completed = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        completed = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert completed is not None
 
         data_resp = httpx.get(
-            f"{base_url}/api/runs/{run_id}/indicator-data", timeout=30
+            f"{e2e_url}/api/runs/{run_id}/indicator-data", timeout=30
         )
         assert data_resp.status_code == 200
         data = data_resp.json()
         assert data["data"] is not None
         assert data["code"] == TEST_STOCK_CODE
 
-    def test_indicator_data_for_nonexistent_run_returns_404(self, base_url: str):
+    def test_indicator_data_for_nonexistent_run_returns_404(self, e2e_url: str):
         resp = httpx.get(
-            f"{base_url}/api/runs/fake-run-id-123/indicator-data", timeout=10
+            f"{e2e_url}/api/runs/fake-run-id-123/indicator-data", timeout=10
         )
         assert resp.status_code == 404

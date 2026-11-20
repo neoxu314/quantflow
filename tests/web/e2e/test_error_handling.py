@@ -5,9 +5,7 @@ Tests verify proper error handling when:
 - Network disconnects during save operation  
 - User provides invalid input (frontend validation)
 """
-import pytest
 from playwright.sync_api import Page
-from unittest.mock import patch, MagicMock
 
 from tests.web.e2e.conftest import SERVER_URL
 
@@ -95,7 +93,7 @@ class TestInvalidInputValidation:
         page.wait_for_selector("#panel-watchlists", timeout=10000)
         page.wait_for_timeout(2000)  # Extra wait for UI stabilization
         
-        page.get_by_role("button", name=TEST_WATCHLIST_NAME).click()
+        page.locator("#watchlist-list").get_by_role("button", name="DJIA").click()
         page.wait_for_selector("#stock-table", timeout=10000)
 
         page.get_by_role("button", name="+ Add Stock").click()

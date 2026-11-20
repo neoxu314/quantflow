@@ -40,9 +40,27 @@ class RunEngine:
         self._state_lock = threading.RLock()
         self._workers = set()
         self._outputs = {}
+        self._worker_thread = None
+        self._stopping = False
 
     def start_processing(self, run_id):
-        threading.Thread(target=self._execute_run, args=(run_id,), daemon=True).start()
+        with self._state_lock:
+            if self._stopping:
+                return
+            self._worker_thread = threading.Thread(
+                target=self._execute_run, args=(run_id,), daemon=True
+            )
+            self._worker_thread.start()
+
+    def stop_processing(self):
+        """Keep ownership of the database until the active worker has stopped."""
+        with self._state_lock:
+            self._stopping = True
+            for flag in self._cancellations.values():
+                flag.cancel()
+            worker = self._worker_thread
+        if worker is not None:
+            worker.join()
 
     def enqueue(self, run_id):
         from quantflow.web.engine.run_queue import QueueFullError
@@ -69,7 +87,7 @@ class RunEngine:
 
     def _execute_run(self, run_id):
         with self._state_lock:
-            if run_id in self._workers:
+            if self._stopping or run_id in self._workers:
                 return
             run = self._history.get_run(run_id)
             if run is None or run.status not in ("queued", "cancelling"):
@@ -80,11 +98,15 @@ class RunEngine:
                 flag.cancel()
             self._cancellations[run_id] = flag
         output = None
+        status, fields = "failed", {}
         try:
             with cancellation_scope(flag):
-                self._history.update_status(
-                    run_id, "running", started_at=datetime.now(timezone.utc).isoformat()
-                )
+                with self._state_lock:
+                    check_cancelled()
+                    self._history.update_status(
+                        run_id, "running", started_at=datetime.now(timezone.utc).isoformat()
+                    )
+                    self._sse.publish_status(run_id, "running")
                 defaults = {
                     "stock_scan": "./output/manual_scans",
                     "watchlist_run": "./output/manual_watchlist",
@@ -95,44 +117,54 @@ class RunEngine:
                     base = PROJECT_ROOT / base
                 if run.config.get("daily"):
                     base /= datetime.now().strftime("%Y-%m-%d")
-                # Original user configuration remains unchanged in RunHistory.
                 output = create_run_directory(base, run_id, config=run.config)
                 self._outputs[run_id] = output
-                self._history.update_status(run_id, "running", output_path=str(output))
+                fields["output_path"] = str(output)
                 log = setup_logging(output, f"{run.run_type}_{run_id}")
                 if log:
                     register_artifact(log)
-                    self._history.update_status(run_id, "running", log_path=str(log))
-                self._sse.publish_status(run_id, "running")
+                    fields["log_path"] = str(log)
+                with self._state_lock:
+                    # Use the current status so paths remain visible during cancellation.
+                    current = self._history.get_run(run_id)
+                    self._history.update_status(run_id, current.status, **fields)
                 checkpoint = None
                 if run.run_type in ("watchlist_run", "task_run"):
                     from quantflow.execution.checkpoint import Checkpoint
 
-                    # The resume API already copied its checkpoint exactly once.
                     checkpoint = Checkpoint.load_or_create(run_id, dict(run.config))
                 self._checkpoints[run_id] = checkpoint
                 check_cancelled()
                 if run.run_type == "stock_scan":
-                    self._exec_stock_scan(run_id, run, flag)
+                    status, result = self._exec_stock_scan(run_id, run, flag)
                 elif run.run_type == "watchlist_run":
-                    self._exec_watchlist_run(run_id, run, flag, checkpoint)
+                    status, result = self._exec_watchlist_run(run_id, run, flag, checkpoint)
                 elif run.run_type == "task_run":
-                    self._exec_task_run(run_id, run, flag, checkpoint)
+                    status, result = self._exec_task_run(run_id, run, flag, checkpoint)
                 else:
                     raise ValueError(f"Unknown run type: {run.run_type}")
+                fields.update(result)
         except ExecutionCancelled:
-            self._mark_done(run_id, "cancelled")
+            status = "cancelled"
         except Exception as exc:
             logger.exception("Run %s failed", run_id)
-            self._mark_done(run_id, "failed", error=str(exc))
+            status, fields["error"] = "failed", str(exc)
         finally:
             try:
-                if output:
-                    final = self._history.get_run(run_id)
-                    finish_manifest(output, final.status if final else "failed")
-            except Exception as exc:
-                logger.exception("Could not finalize run manifest")
-                self._mark_done(run_id, "failed", error=f"Manifest finalization failed: {exc}")
+                with self._state_lock:
+                    if flag.is_set and status in ("completed", "partial"):
+                        status = "cancelled"
+                    if output:
+                        try:
+                            finish_manifest(output, status)
+                        except Exception as exc:
+                            logger.exception("Could not finalize run manifest")
+                            status = "failed"
+                            fields["error"] = f"Manifest finalization failed: {exc}"
+                    self._history.update_status(
+                        run_id, status, finished_at=datetime.now(timezone.utc).isoformat(), **fields
+                    )
+                    self._sse.publish_status(run_id, status)
             finally:
                 with self._state_lock:
                     self._cancellations.pop(run_id, None)
@@ -155,16 +187,6 @@ class RunEngine:
 
         return callback
 
-    def _mark_done(self, run_id, status, **fields):
-        with self._state_lock:
-            flag = self._cancellations.get(run_id)
-            if status in ("completed", "partial") and flag and flag.is_set:
-                status = "cancelled"
-            self._history.update_status(
-                run_id, status, finished_at=datetime.now(timezone.utc).isoformat(), **fields
-            )
-            self._sse.publish_status(run_id, status)
-
     def _output(self, run_id, run):
         return self._outputs.get(run_id) or Path(
             run.output_path or run.config.get("output_path") or "./output"
@@ -175,9 +197,7 @@ class RunEngine:
             output = self._output(run_id, run)
             path, bars, metadata = scan_stock(run.config, output)
             self._sse.publish_progress(run_id, 1, 1)
-            self._mark_done(
-                run_id, "completed", signal_count=bars, output_path=str(output), report_path=path
-            )
+            return "completed", {"signal_count": bars, "report_path": path}
 
     def _build_indicators_for_run(self, names, run_id=None):
         return build_indicators(names)
@@ -216,13 +236,7 @@ class RunEngine:
             )
             summary = results.summary
             atomic_json(output / "Run_Summary.json", summary)
-            self._mark_done(
-                run_id,
-                summary["status"],
-                signal_count=len(results),
-                output_path=str(output),
-                report_path=path,
-            )
+            return summary["status"], {"signal_count": len(results), "report_path": path}
 
     def _exec_task_run(self, run_id, run, flag, checkpoint=None):
         from quantflow.orchestration.app import Orchestrator
@@ -241,10 +255,7 @@ class RunEngine:
             )
             count = orch.run()
             check_cancelled()
-            self._mark_done(
-                run_id,
-                orch.last_summary["status"],
-                signal_count=count,
-                output_path=str(output),
-                report_path=orch.report_path,
-            )
+            return orch.last_summary["status"], {
+                "signal_count": count,
+                "report_path": orch.report_path,
+            }

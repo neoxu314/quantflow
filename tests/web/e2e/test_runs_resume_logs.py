@@ -14,7 +14,6 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 import pytest
@@ -22,8 +21,8 @@ from playwright.sync_api import Page
 
 from .conftest import SERVER_URL
 
-DB_PATH = Path.home() / ".quantflow" / "runs.db"
-CHECKPOINT_DIR = Path.home() / ".quantflow" / "checkpoints"
+DB_PATH = None
+CHECKPOINT_DIR = None
 
 
 def _seed_run(name: str, run_type: str, status: str, config: dict | None = None,
@@ -62,7 +61,7 @@ def _delete_run(run_id: str) -> None:
 
 
 @pytest.fixture
-def seeded_runs(base_url):
+def seeded_runs(e2e_url):
     ids: list[str] = []
 
     def _add(*args, **kwargs) -> str:
@@ -191,7 +190,6 @@ class TestResumeE2E:
         rid = seeded_runs("e2e_resume_reject", "task_run", "completed")
         # Drive the endpoint via the same call the UI button makes, but assert
         # the guard rail: a completed run cannot be resumed.
-        from fastapi.testclient import TestClient
         # Use raw HTTP to the live server instead (no in-process client here).
         resp = httpx.post(f"{SERVER_URL}/api/runs/{rid}/resume", timeout=10)
         assert resp.status_code == 400

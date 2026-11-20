@@ -6,35 +6,22 @@ import time
 from pathlib import Path
 
 import httpx
-import pytest
 from playwright.sync_api import Page, expect
 
-from .conftest import PROJECT_ROOT, SERVER_URL
+from .conftest import SERVER_URL
 
-DB_PATH = Path.home() / ".quantflow" / "runs.db"
+DB_PATH = None
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 120
 
 
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
-
-
 class TestRunsStockScanWorkflow:
 
-    def wait_for_run_completion(self, base_url: str, stock_code: str) -> dict | None:
+    def wait_for_run_completion(self, e2e_url: str, stock_code: str) -> dict | None:
         deadline = time.time() + RUN_TIMEOUT_SEC
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         if run.get("config", {}).get("code") == stock_code:
@@ -47,7 +34,7 @@ class TestRunsStockScanWorkflow:
             time.sleep(3)
         return None
 
-    def test_stock_scan_full_lifecycle(self, page: Page, base_url: str):
+    def test_stock_scan_full_lifecycle(self, page: Page, e2e_url: str):
         page.goto(SERVER_URL)
         page.wait_for_load_state("networkidle")
         page.click('button[data-tab="runs"]')
@@ -77,7 +64,7 @@ class TestRunsStockScanWorkflow:
             timeout=15000,
         )
 
-        run = self.wait_for_run_completion(base_url, TEST_STOCK_CODE)
+        run = self.wait_for_run_completion(e2e_url, TEST_STOCK_CODE)
         assert run is not None, "Run did not complete within timeout"
         assert run["status"] == "completed", f"Run failed: {run.get('error')}"
 

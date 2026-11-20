@@ -7,11 +7,9 @@ Hook: pytest_sessionfinish - verifies no production files modified.
 import pytest
 from pathlib import Path
 import hashlib
-import json
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SAFETY_LOG = PROJECT_ROOT / ".pytest_safety.json"
 
 # Production paths to protect (CRITICAL: NEVER modify these in tests!)
 PRODUCTION_PATHS = [
@@ -51,35 +49,25 @@ def pytest_sessionstart(session):
     
     CRITICAL SAFETY: Take snapshot of production files before any tests run.
     """
-    snapshot = _snapshot_production_files()
-    SAFETY_LOG.write_text(json.dumps(snapshot, indent=2))
+    session.quantflow_production_snapshot = _snapshot_production_files()
 
 
 def pytest_sessionfinish(session, exitstatus):
     """Called after whole test run finished.
     
     CRITICAL SAFETY: Verify no production files were modified during test session.
-    If modified, print CRITICAL warning and suggest recovery.
+    If modified, fail the session and list the changed files.
     """
-    if not SAFETY_LOG.exists():
+    original = getattr(session, "quantflow_production_snapshot", None)
+    if original is None:
         return
-    
-    # Load original snapshot
-    original = json.loads(SAFETY_LOG.read_text())
-    
-    # Take new snapshot
+
     current = _snapshot_production_files()
-    
-    # Compare
-    modified_files = []
-    for path, original_hash in original.items():
-        current_hash = current.get(path, "")
-        if current_hash != original_hash:
-            modified_files.append(path)
-    
-    # Clean up safety log
-    SAFETY_LOG.unlink()
-    
+    modified_files = [
+        path for path in sorted(original.keys() | current.keys())
+        if original.get(path) != current.get(path)
+    ]
+
     # If production files were modified, print CRITICAL warning
     if modified_files:
         msg = "\n\n" + "=" * 80
@@ -90,8 +78,6 @@ def pytest_sessionfinish(session, exitstatus):
             msg += f"  - {f}\n"
         msg += "\nTests must NEVER modify production data files.\n"
         msg += "Use tmp_path fixture instead.\n\n"
-        msg += "RECOVERY:\n"
-        msg += f"  git checkout -- watchlists/ config/\n"
         msg += "\n" + "=" * 80 + "\n\n"
         
         # Print to stderr (pytest captures stdout)

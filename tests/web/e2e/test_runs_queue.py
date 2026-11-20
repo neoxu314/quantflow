@@ -4,36 +4,23 @@ from __future__ import annotations
 import time
 
 import httpx
-import pytest
 from playwright.sync_api import Page
 
-from .conftest import PROJECT_ROOT, SERVER_URL
+from .conftest import SERVER_URL
 
 TEST_STOCK_CODE = "NVDA.US"
 RUN_TIMEOUT_SEC = 180
 
 
-@pytest.fixture(autouse=True)
-def cleanup_runs_after_test(base_url):
-    yield
-    try:
-        resp = httpx.get(f"{base_url}/api/runs/")
-        if resp.status_code == 200:
-            for run in resp.json().get("runs", []):
-                httpx.delete(f"{base_url}/api/runs/{run['id']}")
-    except Exception:
-        pass
-
-
 class TestRunsQueue:
 
     def wait_for_run_status(
-        self, base_url: str, identifier: str, target_status: str, timeout: int = 60
+        self, e2e_url: str, identifier: str, target_status: str, timeout: int = 60
     ) -> dict | None:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     for run in resp.json().get("runs", []):
                         code = run.get("config", {}).get("code", "")
@@ -46,12 +33,12 @@ class TestRunsQueue:
         return None
 
     def wait_for_all_completed(
-        self, base_url: str, codes: list, timeout: int = RUN_TIMEOUT_SEC
+        self, e2e_url: str, codes: list, timeout: int = RUN_TIMEOUT_SEC
     ) -> list:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                resp = httpx.get(f"{base_url}/api/runs/")
+                resp = httpx.get(f"{e2e_url}/api/runs/")
                 if resp.status_code == 200:
                     runs = resp.json().get("runs", [])
                     completed = []
@@ -67,9 +54,9 @@ class TestRunsQueue:
             time.sleep(3)
         return []
 
-    def test_queue_status_shows_active_and_pending(self, page: Page, base_url: str):
+    def test_queue_status_shows_active_and_pending(self, page: Page, e2e_url: str):
         resp1 = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": TEST_STOCK_CODE,
@@ -96,7 +83,7 @@ class TestRunsQueue:
             timeout=15000,
         )
 
-        queue_resp = httpx.get(f"{base_url}/api/runs/queue", timeout=10)
+        queue_resp = httpx.get(f"{e2e_url}/api/runs/queue", timeout=10)
         assert queue_resp.status_code == 200
         queue_data = queue_resp.json()
         assert "active_run_id" in queue_data
@@ -104,12 +91,12 @@ class TestRunsQueue:
         assert "total_queued" in queue_data
         assert queue_data["total_queued"] >= 1
 
-    def test_second_run_starts_after_first_completes(self, page: Page, base_url: str):
+    def test_second_run_starts_after_first_completes(self, page: Page, e2e_url: str):
         code1 = TEST_STOCK_CODE
         code2 = "AAPL.US"
 
         resp1 = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": code1,
@@ -121,7 +108,7 @@ class TestRunsQueue:
         run_id_1 = resp1.json()["run_id"]
 
         resp2 = httpx.post(
-            f"{base_url}/api/runs/",
+            f"{e2e_url}/api/runs/",
             json={
                 "run_type": "stock_scan",
                 "code": code2,
@@ -150,11 +137,11 @@ class TestRunsQueue:
             timeout=15000,
         )
 
-        queue_resp = httpx.get(f"{base_url}/api/runs/queue", timeout=10)
+        queue_resp = httpx.get(f"{e2e_url}/api/runs/queue", timeout=10)
         queue_data = queue_resp.json()
         assert queue_data["total_queued"] >= 2
 
-        completed = self.wait_for_all_completed(base_url, [code1, code2])
+        completed = self.wait_for_all_completed(e2e_url, [code1, code2])
         assert len(completed) == 2, f"Both runs should complete, got {len(completed)}"
 
         page.reload()
@@ -176,8 +163,8 @@ class TestRunsQueue:
                 timeout=10000,
             )
 
-    def test_queue_empty_when_no_runs(self, base_url: str):
-        queue_resp = httpx.get(f"{base_url}/api/runs/queue", timeout=10)
+    def test_queue_empty_when_no_runs(self, e2e_url: str):
+        queue_resp = httpx.get(f"{e2e_url}/api/runs/queue", timeout=10)
         assert queue_resp.status_code == 200
         queue_data = queue_resp.json()
         assert queue_data["pending_count"] >= 0

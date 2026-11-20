@@ -1,244 +1,149 @@
-"""pytest configuration for web E2E tests.
+"""Run each Web E2E test against its own project, state directory and loopback server."""
 
-Provides:
-1. Browser launch configuration (Chrome for Testing)
-2. Production config protection via backup/restore mechanism
-3. Test data cleanup (watchlists, task files)
-4. SAFETY: Prevents tests from writing to production paths
-
-All E2E tests use backup strategy to protect production YAML files:
-- config/quantflow.yaml → quantflow.yaml.bak
-- config/indicators.yaml → indicators.yaml.bak
-- ALL watchlists/*.yaml → backed up individually
-- ALL config/tasks*.yaml → backed up individually
-"""
 import os
 import shutil
 import subprocess
+import sys
 import time
-import socket
-import pytest
 from pathlib import Path
 
-# ─── Constants ──────────────────────────────────────────────────────────────
+import httpx
+import pytest
+import yaml
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+from quantflow.config.loader import ConfigLoader
 
-def _load_web_port():
-    try:
-        from quantflow.web.config import WebConfig
-        return WebConfig.load().port
-    except Exception:
-        return 8080
-
-WEB_PORT = _load_web_port()
-SERVER_URL = f"http://127.0.0.1:{WEB_PORT}"
-
-# Test data names (use _test_ prefix to distinguish from production)
+SOURCE_ROOT = Path(__file__).resolve().parents[3]
 TEST_WATCHLIST_NAME = "_test_e2e_wl"
 TEST_TASK_FILE = "tasks_e2e_test.yaml"
 
-# Backup file paths
-CFG_BACKUP = PROJECT_ROOT / "config" / "quantflow.yaml.bak"
-INDICATORS_BACKUP = PROJECT_ROOT / "config" / "indicators.yaml.bak"
-WATCHLISTS_BACKUP_DIR = PROJECT_ROOT / "watchlists" / ".bak"
-TASKS_BACKUP_DIR = PROJECT_ROOT / "config" / ".tasks_bak"
+# Legacy test helpers read these names from their module globals. The fixture
+# below assigns paths and URLs only after the temporary server is ready.
+PROJECT_ROOT = None
+SERVER_URL = None
+
+_SERVER = """
+import socket
+import sys
+from pathlib import Path
+
+import uvicorn
+
+home = Path(sys.argv[1])
+Path.home = classmethod(lambda cls: home)
+from quantflow.web.server import create_app
+
+app = create_app()
+with socket.socket() as sock:
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", int(sys.argv[2])))
+    Path("server.port").write_text(str(sock.getsockname()[1]))
+    uvicorn.Server(uvicorn.Config(app)).run(sockets=[sock])
+"""
 
 
-# ─── Browser Configuration ──────────────────────────────────────────────────
+class TestServer:
+    __test__ = False
 
-@pytest.fixture(scope="session")
-def browser_type_launch_args():
-    """Use the installed Chrome for Testing browser."""
-    return {"headless": True, "channel": "chrome"}
+    def __init__(self, root):
+        self.root = root
+        self.home = root / "home"
+        self.port = 0
+        self.process = None
 
+    @property
+    def url(self):
+        return f"http://127.0.0.1:{self.port}"
 
-# ─── Web Server Fixture ─────────────────────────────────────────────────────
+    def start(self):
+        port_file = self.root / "server.port"
+        port_file.unlink(missing_ok=True)
+        env = dict(os.environ, PYTHONPATH=str(self.root / "src"))
+        env.pop("TUSHARE_TOKEN", None)
+        log_path = self.root / "server.log"
+        with log_path.open("ab") as log:
+            self.process = subprocess.Popen(
+                [sys.executable, "-c", _SERVER, str(self.home), str(self.port)],
+                cwd=self.root, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+            )
 
-def _wait_for_server(host, port, timeout=30):
-    """Wait for server to be ready on given port."""
-    for _ in range(timeout * 2):
+        deadline = time.monotonic() + 20
+        with httpx.Client(trust_env=False, timeout=0.4) as client:
+            while self.process.poll() is None and time.monotonic() < deadline:
+                if port_file.exists() and (port := port_file.read_text()):
+                    self.port = int(port)
+                    try:
+                        if client.get(f"{self.url}/api/config").is_success:
+                            return
+                    except httpx.RequestError:
+                        pass
+                time.sleep(0.05)
+        raise RuntimeError(f"E2E Web server did not start:\n{log_path.read_text()[-4000:]}")
+
+    def stop(self):
+        if self.process is None or self.process.poll() is not None:
+            return
+        self.process.terminate()
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(0.5)
-            if s.connect_ex((host, port)) == 0:
-                s.close()
-                return True
-            s.close()
-        except OSError:
-            pass
-        time.sleep(0.5)
-    return False
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+
+    def restart(self):
+        self.stop()
+        self.start()
 
 
-@pytest.fixture(scope="session")
-def web_server():
-    """Start QuantFlow web server for E2E tests."""
-    
-    # Clean up port before starting (fix: port conflict issue)
-    import subprocess
-    try:
-        # Kill any existing process on WEB_PORT
-        subprocess.run(
-            f"lsof -ti:{WEB_PORT} | xargs kill -9",
-            shell=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=2
-        )
-        time.sleep(1)  # Wait for port to be freed
-    except subprocess.TimeoutExpired:
-        pass  # No process on port
-    except Exception:
-        pass  # Ignore errors (port may be free already)
-    
-    env = os.environ.copy()
-    proc = subprocess.Popen(
-        ["python3", "-m", "quantflow.cli", "web"],
-        cwd=str(PROJECT_ROOT),
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+def _write_fixture(path, values):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(values, sort_keys=False), encoding="utf-8")
+
+
+@pytest.fixture
+def web_server(tmp_path, request, monkeypatch):
+    root = tmp_path / "project"
+    shutil.copytree(
+        SOURCE_ROOT / "src" / "quantflow", root / "src" / "quantflow",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
-
-    if not _wait_for_server("127.0.0.1", WEB_PORT):
-        proc.kill()
-        raise RuntimeError(f"Web server did not start on port {WEB_PORT}")
-
-    yield proc
-
-    proc.terminate()
+    config = ConfigLoader()._get_defaults()
+    config.update({
+        "web": {"host": "127.0.0.1", "port": 8080},
+        "lookback": {"calendar_multiplier": 2, "buffer_days": 30},
+        "tushare": {"token": ""},
+        "yfinance": {"batch": {"chunk_size": 35, "sleep_min": 0, "sleep_max": 0}},
+    })
+    _write_fixture(root / "config" / "quantflow.yaml", config)
+    shutil.copyfile(SOURCE_ROOT / "config" / "indicators.yaml", root / "config" / "indicators.yaml")
+    _write_fixture(root / "watchlists" / "djia.yaml", {
+        "name": "DJIA", "items": [{"code": "AAPL.US", "name": "Apple"}],
+    })
+    _write_fixture(root / "config" / "tasks_test.yaml", {"tasks": [{
+        "name": "djia", "watchlist": "watchlists/djia.yaml",
+        "strategies": ["daily_bull_mid_range", "daily_bull_oversold"],
+    }]})
+    server = TestServer(root)
     try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        server.start()
+        state = server.home / ".quantflow"
+        bindings = {
+            "PROJECT_ROOT": root,
+            "SERVER_URL": server.url,
+            "DB_PATH": state / "runs.db",
+            "CHECKPOINT_DIR": state / "checkpoints",
+            "TEST_TMP_DIR": state / "e2e_browse_test",
+            "TASK_CONFIG_PATH": root / "config" / TEST_TASK_FILE,
+            "WATCHLIST_YAML": root / "watchlists" / f"{TEST_WATCHLIST_NAME}.yaml",
+        }
+        for name, value in bindings.items():
+            if hasattr(request.module, name):
+                monkeypatch.setattr(request.module, name, value)
+        yield server
+    finally:
+        server.stop()
 
-
-@pytest.fixture(scope="session")
-def base_url(web_server):
-    """Return base URL for the running web server."""
-    return SERVER_URL
-
-
-# ─── Production Config Protection ───────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
-def protect_production_configs(base_url):
-    """
-    Protect ALL production config and data files via backup/restore.
-    
-    CRITICAL SAFETY: This fixture runs before/after EVERY E2E test:
-    - Before: Backup ALL production files (quantflow.yaml, indicators.yaml, 
-              ALL watchlists/*.yaml, ALL config/tasks*.yaml)
-    - After: Restore ALL backups, delete test data files
-    
-    This ensures E2E tests NEVER modify production data.
-    
-    Protected files:
-    - config/quantflow.yaml
-    - config/indicators.yaml
-    - watchlists/*.yaml (ALL watchlists, not just test ones)
-    - config/tasks*.yaml (ALL task configs)
-    """
-    _backup_all_production_files()
-    yield
-    _restore_all_production_files()
-    _cleanup_test_data_via_api(base_url)
-
-
-def _backup_all_production_files():
-    """Backup ALL production files before test (CRITICAL SAFETY)."""
-    # Backup quantflow.yaml
-    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
-    if cfg.exists():
-        shutil.copy2(cfg, CFG_BACKUP)
-    
-    # Backup indicators.yaml
-    indicators = PROJECT_ROOT / "config" / "indicators.yaml"
-    if indicators.exists():
-        shutil.copy2(indicators, INDICATORS_BACKUP)
-    
-    # Backup ALL watchlists (not just test ones!)
-    watchlists_dir = PROJECT_ROOT / "watchlists"
-    if watchlists_dir.exists():
-        WATCHLISTS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        for wl_file in watchlists_dir.glob("*.yaml"):
-            # Skip test watchlists (they will be deleted anyway)
-            if not wl_file.name.startswith("_test_"):
-                shutil.copy2(wl_file, WATCHLISTS_BACKUP_DIR / wl_file.name)
-    
-    # Backup ALL task configs (not just test ones!)
-    config_dir = PROJECT_ROOT / "config"
-    if config_dir.exists():
-        TASKS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        for task_file in config_dir.glob("tasks*.yaml"):
-            # Skip test task files
-            if not task_file.name.startswith("tasks_e2e_"):
-                shutil.copy2(task_file, TASKS_BACKUP_DIR / task_file.name)
-
-
-def _restore_all_production_files():
-    """Restore ALL production files after test (CRITICAL SAFETY)."""
-    # Restore quantflow.yaml
-    cfg = PROJECT_ROOT / "config" / "quantflow.yaml"
-    if CFG_BACKUP.exists():
-        shutil.move(str(CFG_BACKUP), str(cfg))
-    elif cfg.exists():
-        cfg.unlink()
-    
-    # Restore indicators.yaml
-    indicators = PROJECT_ROOT / "config" / "indicators.yaml"
-    if INDICATORS_BACKUP.exists():
-        shutil.move(str(INDICATORS_BACKUP), str(indicators))
-    elif indicators.exists():
-        indicators.unlink()
-    
-    # Restore ALL watchlists
-    watchlists_dir = PROJECT_ROOT / "watchlists"
-    if WATCHLISTS_BACKUP_DIR.exists():
-        for backup_file in WATCHLISTS_BACKUP_DIR.glob("*.yaml"):
-            original = watchlists_dir / backup_file.name
-            shutil.move(str(backup_file), str(original))
-        # Clean up backup dir
-        shutil.rmtree(WATCHLISTS_BACKUP_DIR, ignore_errors=True)
-    
-    # Restore ALL task configs
-    config_dir = PROJECT_ROOT / "config"
-    if TASKS_BACKUP_DIR.exists():
-        for backup_file in TASKS_BACKUP_DIR.glob("*.yaml"):
-            original = config_dir / backup_file.name
-            shutil.move(str(backup_file), str(original))
-        # Clean up backup dir
-        shutil.rmtree(TASKS_BACKUP_DIR, ignore_errors=True)
-
-
-def _cleanup_test_data_via_api(base_url):
-    """Delete test watchlists and task files via API."""
-    import httpx
-    
-    for endpoint in [
-        f"{base_url}/api/watchlists/{TEST_WATCHLIST_NAME}.yaml",
-        f"{base_url}/api/task-files/{TEST_TASK_FILE}",
-    ]:
-        try:
-            httpx.delete(endpoint)
-        except Exception:
-            pass
-
-
-# ─── Test Constants Export ──────────────────────────────────────────────────
-
-# Export for use in test files
-__all__ = [
-    "PROJECT_ROOT",
-    "WEB_PORT", 
-    "SERVER_URL",
-    "TEST_WATCHLIST_NAME",
-    "TEST_TASK_FILE",
-    "CFG_BACKUP",
-    "INDICATORS_BACKUP",
-    "WATCHLISTS_BACKUP_DIR",
-    "TASKS_BACKUP_DIR",
-]
+def e2e_url(web_server):
+    return web_server.url

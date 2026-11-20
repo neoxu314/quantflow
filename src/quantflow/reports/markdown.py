@@ -15,12 +15,24 @@ class MarkdownReporter(Reporter):
     def _coverage_lines(summary):
         if not isinstance(summary, dict):
             return ["- **Coverage**: unknown (legacy results)", "- **No Signals**: unknown"]
-        return [f"- **Status**: {summary['status']}",
-                f"- **Successfully Analyzed**: {summary['analyzed']}/{summary['total']}",
-                f"- **Coverage**: {summary['coverage']:.1%}",
-                f"- **No Signals**: {summary['no_signal']}",
-                *[f"- **{key}**: {summary[key]}" for key in
-                  ("no_data", "stale", "suspended", "insufficient", "error")]]
+        coverage = summary["coverage"]
+        lines = [f"- **Status**: {summary['status']}"]
+        if coverage is None and summary.get("unreadable_watchlists"):
+            lines.append("- **Coverage**: unknown (one or more watchlists could not be read)")
+            enumerated = summary["enumerated_coverage"]
+            if enumerated is not None:
+                lines.append(f"- **Coverage of enumerated stocks**: {enumerated:.1%}")
+        else:
+            display = "unknown" if coverage is None else f"{coverage:.1%}"
+            lines.append(f"- **Coverage**: {display}")
+        lines.extend([
+            f"- **Successfully Analyzed**: {summary['analyzed']}/{summary['total']}",
+            f"- **No Signals**: {summary['no_signal']}",
+            *[f"- **{key}**: {summary[key]}" for key in
+              ("no_data", "stale", "suspended", "insufficient", "error")],
+        ])
+        return lines
+
     def _get_stock_info(self, watchlist):
         tag_map = {}
         for item in watchlist.items:

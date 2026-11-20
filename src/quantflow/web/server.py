@@ -1,5 +1,7 @@
 """Web UI server - FastAPI application and startup logic."""
+import sqlite3
 import webbrowser
+from contextlib import asynccontextmanager, closing, contextmanager
 from pathlib import Path
 from threading import Timer
 
@@ -8,15 +10,51 @@ import uvicorn
 from quantflow.web.config import WebConfig
 
 
+@contextmanager
+def _exclusive_runs_database(db_path):
+    """Reserve the database for one Web instance without blocking its writes."""
+    db_path = db_path.resolve()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = db_path.with_name(f"{db_path.name}.server-lock")
+    with closing(sqlite3.connect(lock_path, timeout=0)) as lock:
+        try:
+            lock.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as exc:
+            if str(exc) != "database is locked":
+                raise
+            raise RuntimeError(
+                f"QuantFlow Web is already running with database {db_path}"
+            ) from exc
+        yield
+
+
 def create_app():
     """Create the FastAPI application."""
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
 
+    from quantflow.web.api import presets as presets_api
+    from quantflow.web.api import runs as runs_api
+    from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager, run_history
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        with _exclusive_runs_database(run_history.DB_PATH):
+            history = RunHistory()
+            history.reconcile_stale_runs()
+            engine = RunEngine(queue=RunQueue(), history=history, sse=SSEManager())
+            runs_api._set_engine(engine)
+            presets_api._set_engine(engine)
+            try:
+                yield
+            finally:
+                engine.stop_processing()
+
     app = FastAPI(
         title="QuantFlow Web",
         description="Web UI for QuantFlow stock monitoring system",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     # Register API routes
@@ -34,27 +72,8 @@ def create_app():
     app.include_router(library_router)
     app.include_router(browse_router)
 
-    # Initialize Runs and Presets API engines and wire them to routers
-    from quantflow.web.api.presets import router as presets_router
-    from quantflow.web.api.runs import router as runs_router
-    from quantflow.web.engine import RunEngine, RunHistory, RunQueue, SSEManager
-    # Build singletons for the web app
-    history = RunHistory()
-    # Runs left 'running'/'queued' by a previous process (e.g. laptop lid
-    # closed, hard restart) can never complete — the in-memory threads and
-    # queue are gone.  Reconcile them to a terminal state at startup.
-    history.reconcile_stale_runs()
-    sse = SSEManager()
-    queue = RunQueue(on_run_available=lambda rid: None)
-    engine = RunEngine(queue=queue, history=history, sse=sse)
-    # Expose engine to API modules
-    from quantflow.web.api import presets as presets_api
-    from quantflow.web.api import runs as runs_api
-    runs_api._set_engine(engine)
-    presets_api._set_engine(engine)
-    # Register runs and presets routers as part of app routes
-    app.include_router(runs_router)
-    app.include_router(presets_router)
+    app.include_router(runs_api.router)
+    app.include_router(presets_api.router)
 
     # Serve static files (frontend)
     static_dir = Path(__file__).parent / "static"
@@ -69,18 +88,19 @@ def start_server(config: WebConfig = None):
     if config is None:
         config = WebConfig.load()
 
-    app = create_app()
-
-    url = f"http://{config.host}:{config.port}"
-    print(f"\n{'='*50}")
-    print("  QuantFlow Web UI")
-    print(f"  URL: {url}")
-    print(f"{'='*50}\n")
-
-    # Open browser after a short delay (so server is ready)
-    def _open_browser():
-        webbrowser.open(url)
-
-    Timer(1.5, _open_browser).start()
-
-    uvicorn.run(app, host=config.host, port=config.port, log_level="info")
+    server = uvicorn.Server(uvicorn.Config(
+        create_app(), host=config.host, port=config.port, log_level="info",
+        timeout_graceful_shutdown=5,
+    ))
+    # Reserve the port before starting the app or reconciling any run states.
+    with server.config.bind_socket() as listener:
+        host, port = listener.getsockname()[:2]
+        url = f"http://{'[' + host + ']' if ':' in host else host}:{port}"
+        timer = Timer(1.5, webbrowser.open, args=(url,))
+        timer.start()
+        try:
+            server.run(sockets=[listener])
+        finally:
+            timer.cancel()
+    if not server.started:
+        raise SystemExit(1)
