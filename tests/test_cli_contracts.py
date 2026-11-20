@@ -68,11 +68,28 @@ def test_single_scan_records_config_source_dates_and_strict_json(tmp_path,monkey
     from tests.execution.test_correctness_contracts import frame
     factory=Mock();factory.fetch_ohlcv.return_value=(frame(),'mock')
     monkeypatch.setattr('quantflow.config.loader.ConfigLoader.create_data_factory',lambda self:factory)
-    path,count,metadata=scan_stock({'code':'600000.SH','start_date':'2026-11-18','end_date':'2026-11-18'},
-                                   tmp_path,now='2026-11-18T14:00:00Z')
+    path,count,metadata=scan_stock({'code':'600000.SH','start_date':'2026-11-18','end_date':'2026-11-19'},
+                                   tmp_path,now='2026-11-19T06:00:00Z')
     assert count==1
     assert json.loads(Path(path).read_text())[0]['date'].startswith('2026-11-18')
     assert metadata['bar_date']=='2026-11-18' and metadata['source']=='mock'
     assert metadata['indicator_params']['DualLine']['ema_period']==10
     assert factory.fetch_ohlcv.call_args.kwargs['adjust']=='qfq'
+    assert factory.fetch_ohlcv.call_args.args[2] == "2026-11-18"
+    assert factory.fetch_ohlcv.call_args.kwargs["require_end_session"]
     assert (tmp_path/'600000.SH_snapshot.json').exists()
+
+
+def test_single_scan_rejects_current_history_with_internal_gap(tmp_path, monkeypatch):
+    from quantflow.execution.scanner import scan_stock
+    from tests.execution.test_correctness_contracts import frame
+
+    data = frame()
+    missing = data.date.iloc[-3].strftime("%Y-%m-%d")
+    factory = Mock()
+    factory.fetch_ohlcv.return_value = data.drop(data.index[-3]), "mock"
+    monkeypatch.setattr("quantflow.config.loader.ConfigLoader.create_data_factory", lambda _: factory)
+    config = {"code": "600000.SH", "start_date": "2026-11-16", "end_date": "2026-11-18"}
+    with pytest.raises(ValueError, match=f"data_gap.*{missing}"):
+        scan_stock(config, tmp_path, now="2026-11-18T08:00:00Z")
+    assert not (tmp_path / "600000.SH_indicators.json").exists()

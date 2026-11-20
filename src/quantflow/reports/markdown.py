@@ -28,9 +28,14 @@ class MarkdownReporter(Reporter):
         lines.extend([
             f"- **Successfully Analyzed**: {summary['analyzed']}/{summary['total']}",
             f"- **No Signals**: {summary['no_signal']}",
-            *[f"- **{key}**: {summary[key]}" for key in
-              ("no_data", "stale", "suspended", "insufficient", "error")],
+            *[f"- **{key}**: {summary.get(key, 0)}" for key in
+              ("no_data", "stale", "data_gap", "suspended", "insufficient", "error")],
         ])
+        lines.extend(
+            f"- **Calendar warning**: {warning}" for warning in summary.get("calendar_warnings", ())
+        )
+        if summary.get("as_of"):
+            lines.insert(1, f"- **Market data cutoff**: {summary['as_of']}")
         return lines
 
     def _get_stock_info(self, watchlist):

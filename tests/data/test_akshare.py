@@ -50,21 +50,22 @@ def test_get_sw_level():
     assert ds3._get_sw_level() == "l3"
 
 
-@patch("akshare.stock_hk_daily")
-def test_fetch_ohlcv_hk_success(mock_stock_hk_daily):
+@patch("akshare.stock_hk_hist_sina", create=True)
+def test_fetch_ohlcv_hk_success(mock_stock_hk_hist_sina):
     ds = AKShareDataSource("em")
     rows = {
         "date": ["2026-01-01", "2026-01-02"],
-        "开盘": [1.0, 1.2],
-        "最高": [1.5, 1.8],
-        "最低": [0.9, 1.1],
-        "收盘": [1.4, 1.7],
-        "成交量": [100, 200],
+        "open": [1.0, 1.2],
+        "high": [1.5, 1.8],
+        "low": [0.9, 1.1],
+        "close": [1.4, 1.7],
+        "volume": [100, 200],
     }
-    mock_stock_hk_daily.return_value = pd.DataFrame(rows)
+    mock_stock_hk_hist_sina.return_value = pd.DataFrame(rows)
 
     code = StockCode(code="0005", exchange="HK")
-    df = ds.fetch_ohlcv(code, "2026-01-01", "2026-01-02")
+    df = ds.fetch_ohlcv(code, "2026-01-01", "2026-01-02", adjust="none")
+    mock_stock_hk_hist_sina.assert_called_once_with(symbol="00005", adjust="")
     assert list(df.columns) == ["date", "open", "high", "low", "close", "volume"]
     assert len(df) == 2
     assert isinstance(df.loc[0, "date"], pd.Timestamp)
@@ -95,21 +96,21 @@ def test_get_industry_list_ths(mock_ths):
 
 
 @pytest.mark.parametrize("clf,fn_name", [
-    ("sw_l1", "sw_index_first_info"),
-    ("sw_l2", "sw_index_second_info"),
-    ("sw_l3", "sw_index_third_info"),
+    ("sw_l1", "index_first_info_sw"),
+    ("sw_l2", "index_second_info_sw"),
+    ("sw_l3", "index_third_info_sw"),
 ])
 def test_get_industry_list_sw_levels(monkeypatch, clf, fn_name):
     import akshare as ak
     fake_df = pd.DataFrame({"行业名称": ["SW"], "行业代码": ["857371"]})
     # Patch the target function to return our fake dataframe
-    monkeypatch.setattr(ak, fn_name, lambda: fake_df)
+    monkeypatch.setattr(ak, fn_name, lambda: fake_df, raising=False)
     ds = AKShareDataSource(clf)
     df = ds.get_industry_list()
     assert list(df.columns) == ["name", "code"]
 
 
-@patch("akshare.sw_index_third_cons")
+@patch("akshare.index_third_cons_sw", create=True)
 def test_get_industry_constituents_sw_l3(mock_cons):
     df = pd.DataFrame({"代码": ["600000", "000001"]})
     mock_cons.return_value = df
@@ -177,7 +178,7 @@ def test_exception_handling_get_industry_list(mock_em):
     assert df.empty
 
 
-@patch("akshare.sw_index_third_cons")
+@patch("akshare.index_third_cons_sw", create=True)
 def test_exception_handling_industry_constituents_sw(mock_cons):
     mock_cons.side_effect = Exception("boom")
     ds = AKShareDataSource("sw_l3")

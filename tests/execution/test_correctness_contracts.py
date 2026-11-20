@@ -10,6 +10,7 @@ from quantflow.artifacts import atomic_json, create_run_directory, delete_owned_
 from quantflow.config.loader import ConfigLoader
 from quantflow.control import ExecutionCancelled, cancellation_scope, cancellable_sleep
 from quantflow.data import StockCode
+from quantflow.data.trading_calendar import CALENDARS, session_schedule
 from quantflow.execution.checkpoint import Checkpoint
 from quantflow.execution.executor import Executor, InsufficientHistoryError
 from quantflow.execution.job import ExecutionJob
@@ -24,9 +25,13 @@ from quantflow.web.engine.run_engine import CancellationFlag
 AS_OF = "2026-11-18T14:00:00+00:00"
 
 
-def frame(rows=140, end="2026-11-18"):
+def frame(rows=140, end="2026-11-18", exchange="SH"):
+    year = pd.Timestamp(end).year
+    calendar = CALENDARS[exchange]
+    dates = session_schedule(calendar, year - 1).index.union(session_schedule(calendar, year).index)
+    dates = dates[dates <= pd.Timestamp(end)][-rows:]
     prices = [100 + i * .1 for i in range(rows)]
-    return pd.DataFrame({"date": pd.bdate_range(end=end, periods=rows),
+    return pd.DataFrame({"date": dates,
                          "open": prices, "high": [p+1 for p in prices],
                          "low": [p-1 for p in prices], "close": prices, "volume": [1000]*rows})
 
@@ -55,6 +60,24 @@ def test_configured_indicators_reach_actual_execution(monkeypatch, tmp_path):
     assert results.summary["analyzed"] == 1
     context = json.loads((tmp_path / "task_context.json").read_text())
     assert context["execution"]["indicators"]["DualLine"]["ma_periods"] == [2,3,4,5]
+
+
+def test_batch_requests_are_grouped_by_exchange_completed_session(monkeypatch, tmp_path):
+    executor, job, _ = setup_executor(
+        monkeypatch, tmp_path, codes=("600000.SH", "00700.HK", "AAPL.US")
+    )
+    request = Mock(side_effect=lambda codes, start, end, **kwargs: {
+        code.standard: (frame(end=end, exchange=code.exchange), "fixture") for code in codes
+    })
+    monkeypatch.setattr(executor.factory, "has_batch_support", lambda *args: True)
+    monkeypatch.setattr(executor.factory, "fetch_batch_ohlcv", request)
+    results = executor.execute(job)
+
+    assert results.summary["analyzed"] == 3
+    assert {
+        call.args[2]: [code.standard for code in call.args[0]] for call in request.call_args_list
+    } == {"2026-11-18": ["600000.SH", "00700.HK"], "2026-11-17": ["AAPL.US"]}
+    assert all(call.kwargs["require_end_session"] for call in request.call_args_list)
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -87,12 +110,14 @@ def test_outcomes_and_report_do_not_count_missing_as_no_signal(monkeypatch, tmp_
     assert results.summary["no_signal"] == 1
     assert results.summary["status"] == "partial"
     assert results.summary["coverage"] == pytest.approx(1/3)
+    assert results.summary["as_of"] == AS_OF
     from quantflow.reports.markdown import MarkdownReporter
     from quantflow.execution.watchlist import Watchlist
     path = MarkdownReporter().generate("task", job.strategies, results,
              Watchlist("watch", job.items), str(tmp_path), "2026-11-18")
     assert "**No Signals**: 1" in Path(path).read_text()
     assert "**no_data**: 1" in Path(path).read_text()
+    assert f"**Market data cutoff**: {AS_OF}" in Path(path).read_text()
 
 
 @pytest.mark.parametrize("end,status", [("2026-11-17","stale"), ("2026-11-18","insufficient")])
@@ -252,3 +277,21 @@ def test_repeated_resume_is_independent_of_original_run_artifacts(monkeypatch,tm
     assert result.summary['analyzed']==1
     current=Path(cp.get_stats('t','600000.SH')['outcome']['snapshot_path'])
     assert current.is_file() and 'third' in current.parts
+
+
+def test_internal_data_gap_blocks_strategy_and_is_reported(monkeypatch, tmp_path):
+    data = frame()
+    missing = data.date.iloc[-5].strftime("%Y-%m-%d")
+    executor, job, _ = setup_executor(monkeypatch, tmp_path, data.drop(data.index[-5]))
+    unexpected_execution = Mock(side_effect=AssertionError("strategy should not run"))
+    monkeypatch.setattr(executor, "_process_single", unexpected_execution)
+
+    results = executor.execute(job)
+    unexpected_execution.assert_not_called()
+    assert results == []
+    assert results.summary["data_gap"] == 1
+    assert results.summary["status"] == "failed"
+    assert results.summary["no_signal"] == 0
+    assert results.outcomes[0].missing_sessions == (missing,)
+    coverage = json.loads((tmp_path / "task_coverage.json").read_text())
+    assert coverage["outcomes"][0]["missing_sessions"] == [missing]

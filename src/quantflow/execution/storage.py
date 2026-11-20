@@ -21,14 +21,18 @@ class StockOutcome:
     error: Optional[str] = None
     snapshot_path: Optional[str] = None
     snapshot_sha256: Optional[str] = None
+    calendar_warning: Optional[str] = None
+    missing_sessions: tuple[str, ...] = ()
+    unexpected_dates: tuple[str, ...] = ()
 
 
 class ScanResults(list):
     """A list-compatible signal collection with explicit per-stock coverage."""
 
-    def __init__(self, items=(), outcomes=()):
+    def __init__(self, items=(), outcomes=(), *, as_of=None):
         super().__init__(items)
         self.outcomes = list(outcomes)
+        self.as_of = as_of
 
     @property
     def summary(self):
@@ -39,6 +43,7 @@ class ScanResults(list):
                 "no_signal",
                 "no_data",
                 "stale",
+                "data_gap",
                 "suspended",
                 "insufficient",
                 "error",
@@ -47,13 +52,19 @@ class ScanResults(list):
         total = len(self.outcomes)
         analyzed = counts["signal"] + counts["no_signal"]
         status = "completed" if analyzed == total else ("partial" if analyzed else "failed")
-        return dict(
+        result = dict(
             counts,
             total=total,
             analyzed=analyzed,
             status=status,
             coverage=analyzed / total if total else 1.0,
         )
+        calendar_warnings = sorted({o.calendar_warning for o in self.outcomes if o.calendar_warning})
+        if calendar_warnings:
+            result["calendar_warnings"] = calendar_warnings
+        if self.as_of is not None:
+            result["as_of"] = self.as_of
+        return result
 
 
 @dataclass

@@ -49,6 +49,47 @@ def test_partial_batch_fallback_only_fetches_missing_symbols(monkeypatch, missin
     assert fallback.calls == [["B.US"]]
 
 
+@pytest.mark.parametrize("batch", [False, True])
+def test_stale_history_uses_only_newer_fallback_and_keeps_its_source(monkeypatch, batch):
+    complete = sample()
+    stale = complete.iloc[:1]
+    code = StockCode("A", "US")
+    primary = FakeAdapter({code.standard: stale})
+    fallback = FakeAdapter({code.standard: complete})
+    factory = DataSourceFactory()
+    monkeypatch.setattr(
+        factory, "_get_adapter", lambda source: primary if source == "yahooquery" else fallback
+    )
+
+    def fetch():
+        args = ("2026-11-17", "2026-11-18")
+        if batch:
+            return factory.fetch_batch_ohlcv([code], *args, require_end_session=True)[code.standard]
+        return factory.fetch_ohlcv(code, *args, require_end_session=True)
+
+    assert fetch()[1] == "yfinance"
+    fallback.data[code.standard] = stale
+    result, source = fetch()
+    assert source == result.attrs["source"] == "yahooquery"
+    assert result.date.iloc[-1] == pd.Timestamp("2026-11-17")
+
+
+def test_primary_initialization_error_does_not_prevent_batch_fallback(monkeypatch):
+    code = StockCode("A", "US")
+    fallback = FakeAdapter({code.standard: sample()})
+    factory = DataSourceFactory()
+
+    def adapter(source):
+        if source == "yahooquery":
+            raise RuntimeError("primary initialization failed")
+        return fallback
+
+    monkeypatch.setattr(factory, "_get_adapter", adapter)
+    result = factory.fetch_batch_ohlcv([code], "2026-11-17", "2026-11-18")
+    assert result[code.standard][1] == "yfinance"
+    assert factory.failures[code.standard] == ["yahooquery: primary initialization failed"]
+
+
 @pytest.mark.parametrize("column,value", [("date",None), ("close",float('nan')), ("volume",-1), ("high",1)])
 def test_invalid_frames_are_rejected(column, value):
     df = sample()
@@ -61,8 +102,16 @@ def test_latest_date_uses_column_and_order_is_normalized():
     df = sample().iloc[::-1]
     assert DataSourceFactory._latest_date(df) == "2026-11-18"
     assert normalize_ohlcv(df).date.is_monotonic_increasing
-    with pytest.raises(ValueError, match="duplicate"):
+    with pytest.raises(ValueError, match="Duplicate"):
         normalize_ohlcv(pd.concat([df,df]))
+
+
+def test_invalid_price_outside_requested_window_cannot_poison_valid_bars():
+    data = sample()
+    data.loc[0, "high"] = 1.0
+    assert len(normalize_ohlcv(data, "2026-11-18", "2026-11-18")) == 1
+    with pytest.raises(ValueError, match="Inconsistent"):
+        normalize_ohlcv(data, "2026-11-17", "2026-11-18")
 
 
 @pytest.mark.parametrize("code,end,now,expected", [
@@ -192,3 +241,48 @@ def test_baostock_qfq_rebases_to_requested_end_not_future_action():
 ])
 def test_us_dst_early_close_and_thanksgiving(end,now,expected):
     assert last_completed_session(StockCode('AAPL','US'),end,now)==expected
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_current_but_gapped_primary_replaced_by_complete_fallback(monkeypatch, batch):
+    code = StockCode("A", "US")
+    complete = pd.concat([sample(), sample().iloc[[-1]].assign(date="2026-11-19")])
+    gapped = complete.iloc[[0, 2]]
+    primary = FakeAdapter({code.standard: gapped})
+    fallback = FakeAdapter({code.standard: complete})
+    factory = DataSourceFactory()
+    monkeypatch.setattr(
+        factory, "_get_adapter", lambda source: primary if source == "yahooquery" else fallback
+    )
+    args = ("2026-11-17", "2026-11-19")
+    kwargs = {"require_end_session": True, "min_history_bars": 3}
+
+    def fetch():
+        if batch:
+            return factory.fetch_batch_ohlcv([code], *args, **kwargs)[code.standard]
+        return factory.fetch_ohlcv(code, *args, **kwargs)
+
+    bars, source = fetch()
+    assert source == bars.attrs["source"] == "yfinance"
+    assert len(bars) == 3
+    fallback.data[code.standard] = gapped.iloc[[-1]]
+    bars, source = fetch()
+    assert source == "yahooquery"
+    assert len(bars) == 2
+
+
+def test_completed_session_check_distinguishes_gaps_from_holidays_and_short_history():
+    from quantflow.data.quality import inspect_daily_bars
+
+    code = StockCode("AAPL", "US")
+    before_holiday = sample().iloc[[0]].assign(date="2026-11-25")
+    after_holiday = sample().iloc[[1]].assign(date="2026-11-27")
+    closed_date = sample().iloc[[0]].assign(date="2026-11-26")
+    clean = normalize_ohlcv(pd.concat([before_holiday, after_holiday]))
+    assert inspect_daily_bars(clean, code, "2026-11-27").status == "ok"
+    assert inspect_daily_bars(clean.iloc[[-1]], code, "2026-11-27").status == "ok"
+    invalid = normalize_ohlcv(pd.concat([clean, closed_date]))
+    quality = inspect_daily_bars(invalid, code, "2026-11-27")
+    assert quality.status == "data_gap"
+    assert quality.missing_sessions == ()
+    assert quality.unexpected_dates == ("2026-11-26",)

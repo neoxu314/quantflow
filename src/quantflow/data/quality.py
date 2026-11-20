@@ -2,49 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from functools import lru_cache
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-CALENDARS = {
-    "SH": "XSHG",
-    "SZ": "XSHG",
-    "HK": "XHKG",
-    "US": "XNYS",
-    "T": "XTKS",
-    "JP": "XTKS",
-    "KS": "XKRX",
-    "KR": "XKRX",
-}
-
-
-@lru_cache(maxsize=32)
-def _calendar(name, year):
-    import exchange_calendars as xcals
-
-    return xcals.get_calendar(name, start=f"{year - 2}-01-01", end=f"{year}-12-31")
+from quantflow.data.trading_calendar import CALENDARS, completed_session, session_schedule
 
 
 def last_completed_session(code, end_date=None, now=None):
-    now = pd.Timestamp(now or datetime.now(timezone.utc))
-    now = now.tz_localize("UTC") if now.tzinfo is None else now.tz_convert("UTC")
-    name = CALENDARS.get(code.exchange)
-    if name is None:
-        raise ValueError(f"No trading calendar for {code.exchange}")
-    year = pd.Timestamp(end_date or now).year
-    cal = _calendar(name, year)
-    schedule = cal.schedule
-    # Date labels represent exchange-local sessions; market close is UTC.
-    sessions = schedule.index
-    limit = pd.Timestamp(end_date or now.tz_convert(cal.tz).date()).tz_localize(None)
-    labels = sessions.tz_localize(None)
-    closes = pd.to_datetime(schedule["close"], utc=True)
-    eligible = schedule.loc[(labels <= limit) & (closes <= now)]
-    if eligible.empty:
-        raise ValueError("No completed session in calendar range")
-    return eligible.index[-1].strftime("%Y-%m-%d")
+    return completed_session(code, end_date, now).date
 
 
 def normalize_ohlcv(frame, start=None, end=None):
@@ -56,8 +23,16 @@ def normalize_ohlcv(frame, start=None, end=None):
             raise ValueError("OHLCV requires an actual date column or DatetimeIndex")
         df["date"] = df.index
     df["date"] = pd.to_datetime(df["date"], errors="raise").dt.tz_localize(None).dt.normalize()
-    if df["date"].isna().any() or df["date"].duplicated().any():
-        raise ValueError("Missing or duplicate OHLCV session dates")
+    if df["date"].isna().any():
+        raise ValueError("Missing OHLCV session dates")
+    if start:
+        df = df.loc[df.date >= pd.Timestamp(start)]
+    if end:
+        df = df.loc[df.date <= pd.Timestamp(end)]
+    if df.empty:
+        return pd.DataFrame()
+    if df["date"].duplicated().any():
+        raise ValueError("Duplicate OHLCV session dates")
     columns = ["open", "high", "low", "close", "volume"]
     if set(columns) - set(df.columns):
         raise ValueError("OHLCV columns are incomplete")
@@ -72,24 +47,43 @@ def normalize_ohlcv(frame, start=None, end=None):
         | (df.low > df[["open", "close", "high"]].min(axis=1))
     ).any():
         raise ValueError("Inconsistent OHLC price range")
-    df = df.sort_values("date").reset_index(drop=True)
-    if start:
-        df = df[df.date >= pd.Timestamp(start)]
-    if end:
-        df = df[df.date <= pd.Timestamp(end)]
+    df = df.sort_values("date")
     df.attrs.update(frame.attrs)
     return df.reset_index(drop=True)
 
 
+@dataclass(frozen=True)
+class DailyBarQuality:
+    status: str
+    missing_sessions: tuple[str, ...] = ()
+    unexpected_dates: tuple[str, ...] = ()
+
+
+def inspect_daily_bars(frame, code, expected):
+    """Check normalized bars over their observed input window."""
+    if frame.empty:
+        return DailyBarQuality("no_data")
+    dates = pd.DatetimeIndex(frame.date)
+    last = dates[-1]
+    if last != pd.Timestamp(expected):
+        return DailyBarQuality("stale")
+    if frame.volume.iloc[-1] <= 0:
+        return DailyBarQuality("suspended")
+
+    # Leading absence may be a new listing. Only gaps after the first observed
+    # bar are measurable here. The indicator independently checks its lookback.
+    first = dates[0]
+    calendar = CALENDARS[code.exchange]
+    sessions = pd.DatetimeIndex([])
+    for year in range(first.year, last.year + 1):
+        year_dates = session_schedule(calendar, year).index
+        sessions = sessions.union(year_dates[(year_dates >= first) & (year_dates <= last)])
+    missing = tuple(sessions.difference(dates).strftime("%Y-%m-%d"))
+    unexpected = tuple(dates.difference(sessions).strftime("%Y-%m-%d"))
+    return DailyBarQuality("data_gap" if missing or unexpected else "ok", missing, unexpected)
+
+
 def prepare_daily_frame(frame, code, end_date, now=None):
-    df = normalize_ohlcv(frame)
     expected = last_completed_session(code, end_date, now)
-    df = df[df.date <= pd.Timestamp(expected)].reset_index(drop=True)
-    if df.empty:
-        return df, expected, "no_data"
-    actual = df.date.iloc[-1].strftime("%Y-%m-%d")
-    if actual != expected:
-        return df, expected, "stale"
-    if df.volume.iloc[-1] <= 0:
-        return df, expected, "suspended"
-    return df, expected, "ok"
+    df = normalize_ohlcv(frame, end=expected)
+    return df, expected, inspect_daily_bars(df, code, expected).status

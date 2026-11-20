@@ -37,8 +37,13 @@ from typing import Optional, List
 from enum import Enum
 
 from quantflow.data.base import DataSourceBase, SectorDataSource, StockCode
+from quantflow.data.quality import normalize_ohlcv
 
 logger = logging.getLogger(__name__)
+
+
+def _akshare_api(module, current, legacy):
+    return getattr(module, current, None) or getattr(module, legacy)
 
 
 class SectorClassification(Enum):
@@ -92,6 +97,9 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
             return "l2"
         else:
             return "l3"
+
+    def get_supported_periods(self) -> List[str]:
+        return ["d"]
     
     def fetch_ohlcv(
         self,
@@ -106,34 +114,21 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
         if code.exchange != "HK":
             raise ValueError(f"AKShare only supports HK stocks, got {code.exchange}")
         
-        logger.info(f"Fetching HK data for {code.code} via AKShare")
-        
-        try:
-            df = ak.stock_hk_daily(symbol=code.code, adjust="qfq")
-            
-            if df.empty:
-                return pd.DataFrame()
-            
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-            
-            start = pd.to_datetime(start_date)
-            end = pd.to_datetime(end_date)
-            df = df.loc[start:end]
-            
-            df = df.reset_index()
-            df = df.rename(columns={
-                "开盘": "open",
-                "最高": "high",
-                "最低": "low",
-                "收盘": "close",
-                "成交量": "volume"
-            })
-            
-            return df[["date", "open", "high", "low", "close", "volume"]]
-        except Exception as e:
-            logger.error(f"AKShare fetch failed: {e}")
-            return pd.DataFrame()
+        if period not in self.get_supported_periods():
+            raise ValueError(f"AKShare HK does not support period {period}")
+        adjust = adjust or "qfq"
+        if adjust not in self.get_supported_adjusts():
+            raise ValueError(f"AKShare HK does not support adjustment {adjust}")
+        fetch = _akshare_api(ak, "stock_hk_hist_sina", "stock_hk_daily")
+        df = fetch(symbol=code.code.zfill(5), adjust="" if adjust == "none" else adjust)
+        df = df.rename(columns={
+            "日期": "date", "开盘": "open", "最高": "high", "最低": "low",
+            "收盘": "close", "成交量": "volume",
+        })
+        df = normalize_ohlcv(df, start_date, end_date)
+        if df.empty:
+            return df
+        return df[["date", "open", "high", "low", "close", "volume"]]
     
     def get_industry_list(self) -> pd.DataFrame:
         """Get all industries with codes and names.
@@ -155,15 +150,15 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
                 return df.rename(columns={"行业名称": "name", "行业代码": "code"})
             
             elif clf == "sw_l1":
-                df = ak.sw_index_first_info()
+                df = _akshare_api(ak, "index_first_info_sw", "sw_index_first_info")()
                 return df.rename(columns={"行业名称": "name", "行业代码": "code"})
             
             elif clf == "sw_l2":
-                df = ak.sw_index_second_info()
+                df = _akshare_api(ak, "index_second_info_sw", "sw_index_second_info")()
                 return df.rename(columns={"行业名称": "name", "行业代码": "code"})
             
             elif clf == "sw_l3":
-                df = ak.sw_index_third_info()
+                df = _akshare_api(ak, "index_third_info_sw", "sw_index_third_info")()
                 return df.rename(columns={"行业名称": "name", "行业代码": "code"})
             
             else:
@@ -195,8 +190,12 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
                 logger.warning("THS classification does not have industry constituent API in AKShare")
                 return []
             
-            elif self._is_shenwan():
-                df = ak.sw_index_third_cons(symbol=industry_code)
+            elif clf in ("sw_l1", "sw_l2"):
+                df = ak.index_component_sw(symbol=industry_code.removesuffix(".SI"))
+            elif clf == "sw_l3":
+                df = _akshare_api(
+                    ak, "index_third_cons_sw", "sw_index_third_cons"
+                )(symbol=industry_code)
             
             else:
                 logger.warning(f"Unknown classification: {clf}")
@@ -205,7 +204,9 @@ class AKShareDataSource(DataSourceBase, SectorDataSource):
             codes = []
             for _, row in df.iterrows():
                 # Handle different column names across sources
-                code_str = str(row.get("代码", row.get("code", row.get("股票代码", ""))))
+                code_str = str(
+                    row.get("代码", row.get("证券代码", row.get("code", row.get("股票代码", ""))))
+                )
                 if "." in code_str:
                     code, exchange = code_str.split(".")
                     codes.append(StockCode(code=code, exchange=exchange))

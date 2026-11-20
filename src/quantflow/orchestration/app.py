@@ -68,6 +68,13 @@ class Orchestrator:
         tasks, errors, combined = [], [], ScanResults()
         unreadable_watchlists = 0
         try:
+            if self.checkpoint:
+                frozen_as_of = self.checkpoint.get_context("orchestration:as_of")
+                if frozen_as_of is None:
+                    self.checkpoint.set_context("orchestration:as_of", self.as_of)
+                    self.checkpoint.save()
+                else:
+                    self.as_of = frozen_as_of
             if self.isolated:
                 logfile = setup_logging(self.output_dir, "task_run")
                 if logfile:
@@ -146,7 +153,8 @@ class Orchestrator:
             if errors or len(tasks) != len(self.tasks):
                 summary["status"] = "partial" if summary["analyzed"] else "failed"
             summary.update(
-                tasks_requested=len(self.tasks), tasks_completed=len(tasks), task_errors=errors
+                tasks_requested=len(self.tasks), tasks_completed=len(tasks), task_errors=errors,
+                as_of=self.as_of,
             )
             if unreadable_watchlists:
                 summary["enumerated_coverage"] = summary["coverage"] if summary["total"] else None

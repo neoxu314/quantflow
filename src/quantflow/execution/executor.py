@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,7 +16,8 @@ from quantflow.artifacts import ArtifactWriteError, atomic_json, safe_name
 from quantflow.config.loader import ConfigLoader
 from quantflow.control import check_cancelled
 from quantflow.data import StockCode
-from quantflow.data.quality import prepare_daily_frame
+from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv
+from quantflow.data.trading_calendar import CALENDARS, completed_session
 from quantflow.execution.storage import ExecutionResultItem, ScanResults, StockOutcome, Storage
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.factory import IndicatorFactory
@@ -113,6 +115,7 @@ class Executor:
         check_cancelled()
         name = safe_name(job.name)
         indicators = self._indicators(job.strategies)
+        min_history_bars = max((i.lookback_bars for i in indicators), default=1)
         adjust = job.adjust or self.adjust
         identity = {
             "items": [
@@ -122,6 +125,7 @@ class Executor:
             "indicators": {i.name: i.params for i in indicators},
             "adjust": adjust,
             "days_back": job.days_back,
+            "end_date": job.end_date,
             "data_config": asdict(self.factory.config),
         }
         source_root = Path(__file__).resolve().parents[1]
@@ -132,18 +136,16 @@ class Executor:
         key = f"execution:{task_key}"
         frozen = checkpoint.get_context(key) if checkpoint else None
         done = checkpoint.get_done(task_key) if checkpoint else set()
-        if done and (not frozen or frozen.get("fingerprint") != fingerprint):
-            raise ValueError("Checkpoint configuration/code changed; start a new run")
+        if not frozen or frozen.get("fingerprint") != fingerprint:
+            if done:
+                raise ValueError("Checkpoint configuration/code changed; start a new run")
+            frozen = None
         if not frozen:
             now = job.as_of or datetime.now(timezone.utc).isoformat()
-            end = job.end_date or pd.Timestamp(now).date().isoformat()
             frozen = {
                 "fingerprint": fingerprint,
                 "as_of": now,
-                "end_date": end,
-                "start_date": (pd.Timestamp(end) - timedelta(days=job.days_back))
-                .date()
-                .isoformat(),
+                "end_date": job.end_date,
             }
             if checkpoint:
                 checkpoint.set_context(key, frozen)
@@ -154,7 +156,7 @@ class Executor:
             if checkpoint
             else {}
         )
-        results = ScanResults()
+        results = ScanResults(as_of=frozen["as_of"])
         pending, total = [], len(job.items)
         # Completion count, rather than original item indices, remains monotonic across markets.
         completed = 0
@@ -198,46 +200,65 @@ class Executor:
                 emit("stock_done", code.standard, "Resumed from frozen snapshot")
             else:
                 pending.append((item, code))
-        batch_items, sequential = [], []
+        batch_groups, sequential, sessions = defaultdict(list), [], {}
         for item, code in pending:
             check_cancelled()
             try:
+                calendar = CALENDARS[code.exchange]
+                if calendar not in sessions:
+                    session_info = completed_session(code, frozen["end_date"], frozen["as_of"])
+                    start = (
+                        pd.Timestamp(session_info.date) - timedelta(days=job.days_back)
+                    ).date().isoformat()
+                    sessions[calendar] = start, session_info
+                start, session_info = sessions[calendar]
+                session = session_info.date
                 market = self.factory._detect_market(code)
                 primary = self.factory.config.get_primary(market)
                 (
-                    batch_items if self.factory.has_batch_support(primary, market) else sequential
-                ).append((item, code))
+                    batch_groups[(start, session)]
+                    if self.factory.has_batch_support(primary, market)
+                    else sequential
+                ).append((item, code, start, session))
             except Exception as exc:
                 results.outcomes.append(StockOutcome(code.standard, "error", error=str(exc)))
                 completed += 1
                 emit("stock_done", code.standard, str(exc), "error")
-        batch = {}
-        if batch_items:
+        batch, offset = {}, 0
+        batch_total = sum(map(len, batch_groups.values()))
 
-            def fetch_progress(index, count, code):
-                check_cancelled()
-                if on_progress:
-                    on_progress(
-                        ProgressEvent(
-                            "fetch", index, count, str(code), f"Fetching {index}/{count}", "info"
-                        )
+        def fetch_progress(index, _count, code):
+            check_cancelled()
+            if on_progress:
+                current = offset + index
+                on_progress(
+                    ProgressEvent(
+                        "fetch", current, batch_total, str(code),
+                        f"Fetching {current}/{batch_total}", "info",
                     )
+                )
 
+        for (start, session), group in batch_groups.items():
             try:
-                batch = self.factory.fetch_batch_ohlcv(
-                    [c for _, c in batch_items],
-                    frozen["start_date"],
-                    frozen["end_date"],
-                    adjust=adjust,
-                    progress_cb=fetch_progress,
+                batch.update(
+                    self.factory.fetch_batch_ohlcv(
+                        [code for _, code, _, _ in group], start, session,
+                        adjust=adjust, progress_cb=fetch_progress, require_end_session=True,
+                        min_history_bars=min_history_bars,
+                    )
                 )
             except Exception as exc:
                 logger.exception("Batch download failed")
-                batch = {c.standard: (None, str(exc)) for _, c in batch_items}
+                batch.update({code.standard: (None, str(exc)) for _, code, _, _ in group})
+            offset += len(group)
+        batch_items = [entry for group in batch_groups.values() for entry in group]
         for is_batch, pairs in ((True, batch_items), (False, sequential)):
-            for item, code in pairs:
+            for item, code, start, session in pairs:
                 emit("stock_start", code.standard, f"Analyzing {code.standard}")
-                outcome = StockOutcome(code.standard, "error")
+                calendar_warning = sessions[CALENDARS[code.exchange]][1].calendar_warning
+                outcome = StockOutcome(
+                    code.standard, "error", expected_session=session, calendar_warning=calendar_warning
+                )
                 result = None
                 try:
                     if is_batch:
@@ -246,7 +267,8 @@ class Executor:
                             raise RuntimeError(source)
                     else:
                         df, source = self.factory.fetch_ohlcv(
-                            code, frozen["start_date"], frozen["end_date"], adjust=adjust
+                            code, start, session, adjust=adjust, require_end_session=True,
+                            min_history_bars=min_history_bars,
                         )
                     check_cancelled()
                     outcome.source = source
@@ -272,21 +294,24 @@ class Executor:
                                 "volume_unit": "shares",
                                 "fetched_at": datetime.now(timezone.utc).isoformat(),
                                 "as_of": frozen["as_of"],
+                                "query_start": start,
+                                "expected_session": session,
+                                "calendar_warning": calendar_warning,
                                 "rows": df.to_dict("records"),
                             },
                         )
                         outcome.snapshot_path = str(path)
                         outcome.snapshot_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
-                        clean, expected, quality = prepare_daily_frame(
-                            df, code, frozen["end_date"], frozen["as_of"]
-                        )
+                        clean = normalize_ohlcv(df, start, session)
                         clean.attrs.update(source=source, adjust=adjust)
-                        outcome.expected_session = expected
+                        quality = inspect_daily_bars(clean, code, session)
+                        outcome.missing_sessions = quality.missing_sessions
+                        outcome.unexpected_dates = quality.unexpected_dates
                         outcome.bar_date = (
                             clean.date.iloc[-1].strftime("%Y-%m-%d") if not clean.empty else None
                         )
-                        if quality != "ok":
-                            outcome.status = quality
+                        if quality.status != "ok":
+                            outcome.status = quality.status
                         else:
                             result = self._process_single(
                                 item, code, clean, job, indicators=indicators
