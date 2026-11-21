@@ -23,3 +23,4 @@ watchlists/_test_e2e_wl.yaml
 
 # Generated reports
 reports/
+!src/quantflow/reports/

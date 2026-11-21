@@ -66,9 +66,10 @@ def daily_sessions(code, first, last):
 
 
 def tradable_bars(frame):
-    if "trade_status" not in frame.columns:
-        return frame
-    return frame.loc[~frame.trade_status.eq("0")].reset_index(drop=True)
+    active = frame.volume.gt(0)
+    if "trade_status" in frame:
+        active &= ~frame.trade_status.astype(str).eq("0")
+    return frame.loc[active]
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,7 @@ def inspect_daily_bars(frame, code, expected):
         return DailyBarQuality("stale")
     suspended = ()
     if "trade_status" in frame:
-        suspended = tuple(dates[frame.trade_status.eq("0")].strftime("%Y-%m-%d"))
+        suspended = tuple(dates[frame.trade_status.astype(str).eq("0")].strftime("%Y-%m-%d"))
     if frame.volume.iloc[-1] <= 0 or expected in suspended:
         return DailyBarQuality("suspended", confirmed_suspensions=suspended)
 

@@ -18,6 +18,8 @@ class KDJDeadCrossSell(SellStrategy):
        意义：短期动量转弱，KDJ 指标发出卖出信号。
     """
 
+    previous_bars = 1
+
     @property
     def name(self) -> str:
         return "KDJ_DeadCross"

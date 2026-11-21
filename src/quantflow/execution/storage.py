@@ -26,6 +26,7 @@ class StockOutcome:
     unexpected_dates: tuple[str, ...] = ()
     confirmed_suspensions: tuple[str, ...] = ()
     listing_date: Optional[str] = None
+    retryable_download: bool = False
 
 
 class ScanResults(list):
@@ -62,6 +63,9 @@ class ScanResults(list):
             coverage=analyzed / total if total else 1.0,
         )
         calendar_warnings = sorted({o.calendar_warning for o in self.outcomes if o.calendar_warning})
+        pending = sum(o.retryable_download for o in self.outcomes)
+        if pending:
+            result["pending_downloads"] = pending
         if calendar_warnings:
             result["calendar_warnings"] = calendar_warnings
         if self.as_of is not None:

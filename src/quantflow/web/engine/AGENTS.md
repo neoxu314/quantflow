@@ -14,4 +14,4 @@ See [reliability and data contracts](../../../../docs/reliability-and-data-contr
   attempts for the current job, and analysis progress counts processed stocks across the Run.
   The UI labels the two phases and preserves the active detail tab when the status changes.
 - Resume validates the frozen run plan, source fingerprint and completed input snapshots.
-  The fingerprint reads Python source bytes, including comments and docstrings.
+  The calculation fingerprint ignores comments and docstrings. Copy and verify snapshots in the new run directory before enqueueing it.

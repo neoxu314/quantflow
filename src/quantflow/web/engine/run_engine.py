@@ -86,6 +86,20 @@ class RunEngine:
             self._sse.publish_status(run_id, "cancelling")
             return True
 
+    @staticmethod
+    def create_output(run):
+        defaults = {
+            "stock_scan": "./output/manual_scans",
+            "watchlist_run": "./output/manual_watchlist",
+            "task_run": "./output",
+        }
+        base = Path(run.config.get("output_path") or defaults[run.run_type])
+        if not base.is_absolute():
+            base = PROJECT_ROOT / base
+        if run.config.get("daily"):
+            base /= datetime.now().strftime("%Y-%m-%d")
+        return create_run_directory(base, run.id, config=run.config)
+
     def _execute_run(self, run_id):
         with self._state_lock:
             if self._stopping or run_id in self._workers:
@@ -98,7 +112,7 @@ class RunEngine:
             if run.status == "cancelling":
                 flag.cancel()
             self._cancellations[run_id] = flag
-        output = None
+        output = Path(run.output_path) if run.config.get("resume_from") and run.output_path else None
         status, fields = "failed", {}
         try:
             with cancellation_scope(flag):
@@ -108,17 +122,7 @@ class RunEngine:
                         run_id, "running", started_at=datetime.now(timezone.utc).isoformat()
                     )
                     self._sse.publish_status(run_id, "running")
-                defaults = {
-                    "stock_scan": "./output/manual_scans",
-                    "watchlist_run": "./output/manual_watchlist",
-                    "task_run": "./output",
-                }
-                base = Path(run.config.get("output_path") or defaults[run.run_type])
-                if not base.is_absolute():
-                    base = PROJECT_ROOT / base
-                if run.config.get("daily"):
-                    base /= datetime.now().strftime("%Y-%m-%d")
-                output = create_run_directory(base, run_id, config=run.config)
+                output = output or self.create_output(run)
                 self._outputs[run_id] = output
                 fields["output_path"] = str(output)
                 log = setup_logging(output, f"{run.run_type}_{run_id}")
@@ -282,7 +286,7 @@ class RunEngine:
             )
             summary = results.summary
             atomic_json(output / "Run_Summary.json", summary)
-            return summary["status"], {"signal_count": len(results), "report_path": path}
+            return self._scan_result(summary, len(results), path)
 
     def _exec_task_run(self, run_id, run, flag, checkpoint=None):
         from quantflow.orchestration.app import Orchestrator
@@ -298,7 +302,12 @@ class RunEngine:
             )
             count = orch.run()
             check_cancelled()
-            return orch.last_summary["status"], {
-                "signal_count": count,
-                "report_path": orch.report_path,
-            }
+            return self._scan_result(orch.last_summary, count, orch.report_path)
+
+    @staticmethod
+    def _scan_result(summary, count, path):
+        fields = {"signal_count": count, "report_path": path}
+        if pending := summary.get("pending_downloads"):
+            fields["error"] = (f"Market data unavailable for {pending} stock(s). "
+                               "Use Resume when the connection recovers.")
+        return summary["status"], fields

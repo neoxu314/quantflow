@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import time
 from copy import deepcopy
 
 import pandas as pd
@@ -16,6 +17,7 @@ from quantflow.data.adapters import (
     YahooQueryDataSource,
     YFinanceDataSource,
 )
+from quantflow.data import yahoo_batch
 from quantflow.data.config import DEFAULT_CONFIG
 from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 
@@ -40,6 +42,8 @@ class DataSourceFactory:
         self._yahooquery = yahooquery_config or {}
         self._adapters = {}
         self.failures = {}
+        self._provider_cooldowns = {}
+        self.pending_network = set()
 
     def _get_adapter(self, source_name):
         if source_name in self._adapters:
@@ -192,12 +196,36 @@ class DataSourceFactory:
             # The single-symbol path records primary errors and can still use its fallback.
             return False
 
+    def _request_batch(self, source, adapter, group, args, deadline, *, progress=None, probe=False):
+        if type(adapter) in (YahooQueryDataSource, YFinanceDataSource):
+            if self._provider_cooldowns.get(source, 0) > time.monotonic():
+                self.pending_network.update(code.standard for code in group)
+                raise ConnectionError("Network unavailable; retry pending stocks with Resume")
+            settings = self._yahooquery if source == "yahooquery" else self._yfinance
+            allowed = inspect.signature(type(adapter)).parameters
+            settings = {k: v for k, v in settings.items() if k in allowed}
+            received = yahoo_batch.download(source, settings, group, args, deadline, progress,
+                                           probe=probe)
+            adapter.batch_errors = received.errors
+            self.pending_network.update(received.errors)
+            if received.outage:
+                self._provider_cooldowns[source] = time.monotonic() + yahoo_batch.COOLDOWN_SECONDS
+                logger.warning("%s unavailable or timed out; deferring unresolved quotes", source)
+            return received.frames
+        kwargs = {}
+        if progress and "progress_cb" in inspect.signature(adapter.fetch_batch_ohlcv).parameters:
+            kwargs["progress_cb"] = progress
+        return adapter.fetch_batch_ohlcv(group, *args, **kwargs)
+
     def fetch_batch_ohlcv(
         self, codes, start_date, end_date, period="d", adjust="qfq", progress_cb=None,
         *, require_end_session=False, min_history_bars=1,
     ):
+        started = time.monotonic()
+        deadline = started + yahoo_batch.BATCH_SECONDS
         groups, results, missing = {}, {}, []
         for code in codes:
+            self.pending_network.discard(code.standard)
             self.failures.pop(code.standard, None)
             market = self._detect_market(code)
             source = self.config.get_primary(market)
@@ -223,19 +251,13 @@ class DataSourceFactory:
             try:
                 for code in group:
                     self._contract(adapter, self._detect_market(code), period, adjust)
-                kwargs = {}
-                if (
-                    progress_cb
-                    and "progress_cb" in inspect.signature(adapter.fetch_batch_ohlcv).parameters
-                ):
+                def notify(index, total, code, base=offset):
+                    check_cancelled()
+                    progress_cb(base + index, len(codes), code)
 
-                    def notify(index, total, code, base=offset):
-                        check_cancelled()
-                        progress_cb(base + index, len(codes), code)
-
-                    kwargs["progress_cb"] = notify
-                batch = adapter.fetch_batch_ohlcv(
-                    group, start_date, end_date, period, adjust, **kwargs
+                batch = self._request_batch(
+                    source, adapter, group, (start_date, end_date, period, adjust),
+                    started + yahoo_batch.PRIMARY_SECONDS, progress=notify if progress_cb else None,
                 )
                 check_cancelled()
                 self._record_batch_errors(adapter, source, group)
@@ -264,12 +286,11 @@ class DataSourceFactory:
             offset += len(group)
         self._batch_fallback(
             missing, start_date, end_date, period, adjust, results, require_end_session,
-            min_history_bars,
+            min_history_bars, deadline=deadline,
         )
         retry = [
             code for code in missing
-            if self.failures.get(code.standard)
-            and self._needs_fallback(
+            if self._needs_fallback(
                 results.get(code.standard, (pd.DataFrame(), None))[0],
                 code, period, end_date, require_end_session, min_history_bars,
             )
@@ -279,7 +300,7 @@ class DataSourceFactory:
                         len(retry), ", ".join(code.standard for code in retry))
             self._batch_fallback(
                 retry, start_date, end_date, period, adjust, results, require_end_session,
-                min_history_bars, use_primary=True,
+                min_history_bars, deadline=deadline, use_primary=True,
             )
         return results
 
@@ -292,7 +313,7 @@ class DataSourceFactory:
 
     def _batch_fallback(
         self, failed_codes, start_date, end_date, period, adjust, all_results, require_end_session,
-        min_history_bars, *, use_primary=False,
+        min_history_bars, *, deadline, use_primary=False,
     ):
         groups = {}
         source_for = self.config.get_primary if use_primary else self.config.get_fallback
@@ -307,7 +328,12 @@ class DataSourceFactory:
                 for code in group:
                     self._contract(adapter, self._detect_market(code), period, adjust)
                 if callable(getattr(adapter, "fetch_batch_ohlcv", None)):
-                    batch = adapter.fetch_batch_ohlcv(group, start_date, end_date, period, adjust)
+                    probe = not use_primary and any(
+                        until > time.monotonic() for until in self._provider_cooldowns.values()
+                    )
+                    batch = self._request_batch(source, adapter, group,
+                                                (start_date, end_date, period, adjust),
+                                                deadline, probe=probe)
                 else:
                     batch = {}
                     for code in group:

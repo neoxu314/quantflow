@@ -256,7 +256,8 @@ function renderProgressTab(run) {
             ${run.signal_count ? `<div class="text-sm text-gray-500 mt-1">${run.signal_count} ${label}</div>` : ""}</div>`;
     }
     else if (run.status === "partial") {
-        statusHtml = '<div class="text-center py-2 text-amber-600">Partially complete — review data coverage in the report.</div>';
+        statusHtml = `<div class="text-center py-2 text-amber-600">Partially complete — review data coverage in the report.
+            ${run.error ? escapeHtml(run.error) : ""}</div>`;
     }
     else if (run.status === "failed") {
         statusHtml = `<div class="text-center py-2"><div class="text-2xl mb-1">❌</div>
@@ -373,16 +374,13 @@ function renderReportTab(run) {
         }).catch(() => { panel.innerHTML = '<div class="text-red-500 text-center">Failed to load</div>'; });
         return;
     }
-    if (!run.report_path) {
-        panel.innerHTML = '<div class="text-gray-500 text-center py-8">No report available</div>';
-        return;
-    }
     panel.innerHTML = '<div class="text-sm text-gray-500 text-center">Loading...</div>';
     api(`/api/runs/${run.id}/report`)
         .then(data => {
         if (data.report) {
             const warning = data.legacy_warning ? '<div class="text-amber-700 mb-2">This older report may have been replaced by a later run.</div>' : '';
-            panel.innerHTML = warning + `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
+            const download = data.partial ? `<a class="text-blue-600 underline" href="/api/runs/${encodeURIComponent(run.id)}/report?download=true" download>Download partial report</a>` : '';
+            panel.innerHTML = warning + download + `<div class="prose max-w-none">${mdToHtml(data.report)}</div>`;
         }
         else {
             panel.innerHTML = `<div class="text-gray-500 text-center py-8">${escapeHtml(data.message || "No content")}</div>`;

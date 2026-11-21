@@ -19,6 +19,7 @@ from quantflow.control import ExecutionCancelled, check_cancelled
 from quantflow.data import StockCode
 from quantflow.data.quality import inspect_daily_bars, normalize_ohlcv, tradable_bars
 from quantflow.data.trading_calendar import CALENDARS, completed_session
+from quantflow.execution.identity import execution_hash
 from quantflow.execution.storage import ExecutionResultItem, ScanResults, StockOutcome, Storage
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.factory import IndicatorFactory
@@ -73,6 +74,8 @@ class Executor:
         for ind in indicators:
             if len(df) < ind.lookback_bars or df[ind.get_output_fields()].iloc[-1].isna().any():
                 raise InsufficientHistoryError(f"Insufficient valid bars for {ind.name}")
+        if len(df) < max((s.get_lookback_bars() for s in job.strategies), default=1):
+            raise InsufficientHistoryError("Insufficient warmed history for strategy transition")
         # The immutable indicator frame is the input to EVERY strategy.
         base = df.drop(columns=["buy_signal", "sell_signal", "signal_reason"], errors="ignore")
         buys, sells, reasons = [], [], []
@@ -117,10 +120,6 @@ class Executor:
 
     def execution_identity(self, job, indicators=None):
         indicators = self._indicators(job.strategies) if indicators is None else indicators
-        source_root = Path(__file__).resolve().parents[1]
-        code_hash = hashlib.sha256(
-            b"".join(p.read_bytes() for p in sorted(source_root.rglob("*.py")))
-        ).hexdigest()
         dependencies = {}
         for package in ("exchange-calendars", "pandas", "numpy", *self.factory.ADAPTER_MAP):
             try:
@@ -142,7 +141,7 @@ class Executor:
                 "yfinance": self.config.get_yfinance_config(),
                 "yahooquery": self.config.get_yahooquery_config(),
             },
-            "code_hash": code_hash,
+            "code_hash": execution_hash(),
             "dependencies": dependencies,
         }
 
@@ -151,7 +150,7 @@ class Executor:
         check_cancelled()
         name = safe_name(job.name)
         indicators = self._indicators(job.strategies)
-        min_history_bars = max((i.lookback_bars for i in indicators), default=1)
+        min_history_bars = max((s.get_lookback_bars() for s in job.strategies), default=1)
         adjust = job.adjust or self.adjust
         identity = self.execution_identity(job, indicators)
         fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -207,14 +206,15 @@ class Executor:
                 dest = (
                     Path(job.output_dir) / "snapshots" / name / f"{safe_name(code.standard)}.json"
                 )
-                atomic_json(dest, json.loads(snapshot.read_text(encoding="utf-8")))
-                outcome.snapshot_path = str(dest)
-                checkpoint.mark_done(
-                    task_key,
-                    code.standard,
-                    stats={"outcome": asdict(outcome)},
-                    result=cached[code.standard].to_dict() if code.standard in cached else None,
-                )
+                if dest.resolve() != snapshot.resolve():
+                    atomic_json(dest, json.loads(snapshot.read_text(encoding="utf-8")))
+                    outcome.snapshot_path = str(dest)
+                    checkpoint.mark_done(
+                        task_key,
+                        code.standard,
+                        stats={"outcome": asdict(outcome)},
+                        result=cached[code.standard].to_dict() if code.standard in cached else None,
+                    )
                 results.outcomes.append(outcome)
                 if code.standard in cached:
                     results.append(cached[code.standard])
@@ -261,7 +261,7 @@ class Executor:
                         if on_progress:
                             on_progress(ProgressEvent(
                                 "fetch", current, batch_total, str(code),
-                                f"Downloaded {current}/{batch_total}", "info", job.name,
+                                f"Fetch progress {current}/{batch_total}", "info", job.name,
                             ))
 
                     try:
@@ -301,6 +301,7 @@ class Executor:
                     if df is None or df.empty:
                         errors = self.factory.failures.get(code.standard, [])
                         outcome.status = "error" if errors else "no_data"
+                        outcome.retryable_download = code.standard in self.factory.pending_network
                         outcome.error = "; ".join(errors) or "No data returned"
                     else:
                         path = (

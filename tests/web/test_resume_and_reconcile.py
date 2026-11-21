@@ -122,43 +122,60 @@ class TestCheckpoint:
 
     def test_copy_to_new_run(self, app_and_engine):
         from quantflow.execution.checkpoint import Checkpoint
-        _, _, _, _ = app_and_engine
+        _, _, _, tmp_path = app_and_engine
         cp = Checkpoint("old")
-        cp.mark_done("t", "X", result=None)
-        assert Checkpoint.copy_to("old", "new") is True
+        cp.freeze_run_plan({"tasks": []})
+        cp.fork("new", None, tmp_path)
         new_cp = Checkpoint.load("new")
-        assert new_cp.get_done("t") == {"X"}
+        assert new_cp.get_context("run:plan") == {"tasks": []}
         assert new_cp._data["resumed_from"] == "old"
 
 
 class TestResumeApi:
     def test_resume_creates_new_run_and_copies_checkpoint(self, app_and_engine, monkeypatch):
         from quantflow.execution.checkpoint import Checkpoint
-        from quantflow.execution.executor import Executor
+        from tests.support.replay_market import install_replay
 
-        app, engine, history, tmp_path = app_and_engine
+        app, engine, history, root = app_and_engine
+        install_replay(root, monkeypatch.setattr)
         monkeypatch.setattr(engine, "start_processing", lambda rid: None)
-        file = tmp_path / "watch.yaml"
-        file.write_text("name: watch\nitems:\n  - code: AAPL.US\n")
-        rid = history.create_run("wl", "watchlist_run", {"watchlist": str(file)})
-        history.update_status(rid, "partial")
-        cp = Checkpoint(rid)
-        watchlist, job = engine._watchlist_job(history.get_run(rid), tmp_path)
-        cp.freeze_run_plan({
-            "watchlist": watchlist.to_dict(), "execution": Executor().execution_identity(job),
-        })
-        cp.mark_done("watchlist", "AAPL.US", result={"code": "AAPL.US"})
+        watchlist = root / "watch.yaml"
+        watchlist.write_text("name: watch\nitems: [{code: AAPL.US}, {code: BROKEN.US}]\n")
+        rid = history.create_run("wl", "watchlist_run", {
+            "watchlist": str(watchlist), "output_path": str(root),
+            "strategies": ["daily_bull_oversold"]})
+        engine._execute_run(rid)
+        original = history.get_run(rid)
+        assert original.status == "partial"
+        assert Checkpoint.load(rid).get_done("watchlist") == {"AAPL.US"}
 
         client = TestClient(app)
+        engine._queue.enqueue("occupied")
+        snapshot = Path(Checkpoint.load(rid).get_stats("watchlist", "AAPL.US")["outcome"]["snapshot_path"])
+        saved = snapshot.read_bytes()
+        snapshot.write_text("changed")
+        assert not client.get(f"/api/runs/{rid}/checkpoint").json()["can_resume"]
+        assert client.post(f"/api/runs/{rid}/resume").status_code == 400
+        assert {p.name for p in (root / "runs").iterdir()} == {rid}
+        assert {run.id for run in history.list_runs()} == {rid}
+        snapshot.write_bytes(saved)
         assert client.get(f"/api/runs/{rid}/checkpoint").json()["can_resume"]
-        r = client.post(f"/api/runs/{rid}/resume")
-        assert r.status_code == 200, r.text
-        data = r.json()
-        assert data["ok"] is True
-        new_id = data["run_id"]
-        new_run = history.get_run(new_id)
-        assert new_run.config["resume_from"] == rid
-        assert Checkpoint.load(new_id).get_done("watchlist") == {"AAPL.US"}
+        res = client.post(f"/api/runs/{rid}/resume")
+        assert res.status_code == 200, res.text
+        assert res.json()["status"] == "queued"
+        new_id = res.json()["run_id"]
+        assert client.delete(f"/api/runs/{rid}").status_code == 200
+        assert not (Path(original.output_path) / "snapshots").exists()
+        cloned = Checkpoint.load(new_id)
+        assert len(list(cloned.verified_snapshots(history.get_run(new_id).output_path))) == 1
+
+        (root / "provider-available").touch()
+        (root / "provider-requests.log").write_text("")
+        assert engine._queue.finish("occupied") == new_id
+        engine._execute_run(new_id)
+        assert history.get_run(new_id).status == "completed"
+        assert (root / "provider-requests.log").read_text().splitlines() == ["BROKEN.US"]
+        assert "AAPL.US" in client.get(f"/api/runs/{new_id}/report").json()["report"]
 
     def test_changed_watchlist_is_rejected_before_enqueue(self, app_and_engine):
         from quantflow.execution.checkpoint import Checkpoint
@@ -223,3 +240,33 @@ class TestLoggingIsolation:
             assert len(qf) == 2  # one console + one file, not accumulating
         finally:
             root.handlers = original
+
+
+def test_legacy_run_exports_only_verified_finished_work(app_and_engine):
+    import hashlib
+    from quantflow.artifacts import create_run_directory, atomic_json
+    from quantflow.execution.checkpoint import Checkpoint
+
+    app, _, history, base = app_and_engine
+    rid = history.create_run("legacy", "watchlist_run", {"watchlist": "old-list.yaml"})
+    root = create_run_directory(base, rid)
+    history.update_status(rid, "cancelled", output_path=str(root))
+    cp = Checkpoint(rid)
+    cp.freeze_run_plan({"watchlist": {"items": [{"code":"A.US"}, {"code":"B.US"}]},
+                        "execution": {"code_hash": "older-source-hash"}})
+    path = root / "snapshots/old/A.US.json"
+    atomic_json(path, {"code": "A.US"})
+    cp.mark_done("watchlist", "A.US", stats={"outcome": {
+        "code":"A.US", "status":"signal", "bar_date":"2025-06-04", "source":"fixture",
+        "snapshot_path":str(path), "snapshot_sha256":hashlib.sha256(path.read_bytes()).hexdigest()
+    }}, result={"code":"A.US", "matched_buy_strategies":["DailyBullishOversold"], "price":100})
+    client = TestClient(app)
+    assert not client.get(f"/api/runs/{rid}/checkpoint").json()["can_resume"]
+    view = client.get(f"/api/runs/{rid}/report").json()
+    assert view["partial"] and "Verified coverage: 1/2" in view["report"]
+    assert "A.US" in view["report"] and "DailyBullishOversold" in view["report"]
+    exported = client.get(f"/api/runs/{rid}/report?download=true")
+    assert exported.text == view["report"] and "attachment" in exported.headers["content-disposition"]
+    assert history.get_run(rid).report_path is None
+    path.write_text("changed")
+    assert client.get(f"/api/runs/{rid}/report?download=true").status_code == 409

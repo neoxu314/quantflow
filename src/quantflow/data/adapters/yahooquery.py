@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from quantflow.data.adapters.yahoo_proxy import session_options
 from quantflow.data.base import DataSourceBase, FundamentalData, StockCode
 from quantflow.control import ExecutionCancelled, check_cancelled, cancellable_sleep
 from datetime import datetime, timezone
@@ -33,15 +34,15 @@ def _patch_yahooquery_error_handling() -> None:
 
         def patched(self, data, params, adj_timezone):
             if isinstance(data, dict) and "error" in data and len(data) == 1:
-                return pd.DataFrame(
-                    columns=["high", "low", "volume", "open", "close"]
-                )
+                raise ValueError(f"Yahoo history error: {data['error']}")
             d = {}
             for symbol in self._symbols:
                 if symbol not in data:
                     continue
                 symbol_data = data[symbol]
                 if isinstance(symbol_data, str):
+                    if len(self._symbols) == 1:
+                        raise ValueError(f"Yahoo history error for {symbol}: {symbol_data}")
                     continue
                 if isinstance(symbol_data, dict):
                     if "timestamp" in symbol_data:
@@ -162,7 +163,7 @@ class YahooQueryDataSource(DataSourceBase):
 
         logger.info(f"Fetching {period} data for {symbol} via YahooQuery")
 
-        ticker = Ticker(symbol, asynchronous=False, timeout=30)
+        ticker = Ticker(symbol, asynchronous=False, timeout=30, **session_options())
         check_cancelled()
         raw = ticker.history(
             start=start_date,
@@ -260,7 +261,7 @@ class YahooQueryDataSource(DataSourceBase):
         for attempt in range(1, self._MAX_RETRIES + 1):
             try:
                 check_cancelled()
-                ticker = ticker_cls(yq_sym, asynchronous=False, timeout=30)
+                ticker = ticker_cls(yq_sym, asynchronous=False, timeout=30, **session_options())
                 check_cancelled()
                 raw = ticker.history(
                     start=start_date,

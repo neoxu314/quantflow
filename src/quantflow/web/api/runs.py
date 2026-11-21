@@ -10,7 +10,7 @@ from queue import Empty
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,17 @@ def cancel_run(run_id: str):
         if not run:
             raise HTTPException(status_code=404, detail="Run not found")
         if engine._queue.cancel(run_id):
-            engine._history.update_status(run_id, "cancelled",
-                finished_at=datetime.now(timezone.utc).isoformat())
+            finished = datetime.now(timezone.utc).isoformat()
+            if run.output_path and run.config.get("resume_from"):
+                from quantflow.artifacts import finish_manifest
+                try:
+                    finish_manifest(run.output_path, "cancelled", finished_at=finished,
+                                    run_result={"report": None, "signal_count": 0})
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    engine._history.update_status(run_id, "failed", finished_at=finished, error=str(exc))
+                    engine._sse.publish_status(run_id, "failed")
+                    raise HTTPException(500, detail="Cannot finalize cancelled run") from exc
+            engine._history.update_status(run_id, "cancelled", finished_at=finished)
             engine._sse.publish_status(run_id, "cancelled")
             return {"ok": True, "status": "cancelled"}
         if engine._queue.active == run_id and engine.cancel(run_id):
@@ -189,6 +198,12 @@ def get_checkpoint(run_id: str):
         raise HTTPException(status_code=404, detail="Not found")
     checkpoint = Checkpoint.load(run_id)
     error = _resume_error(engine, run, checkpoint)
+    if checkpoint and error is None:
+        try:
+            for _ in checkpoint.verified_snapshots(run.output_path):
+                pass
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            error = str(exc)
     response = {"exists": checkpoint is not None, "can_resume": error is None}
     if checkpoint:
         response["summary"] = checkpoint.summary()
@@ -203,43 +218,62 @@ def resume_run(run_id: str):
     from quantflow.execution.checkpoint import Checkpoint
 
     engine = _get_engine()
-    original = engine._history.get_run(run_id)
-    if not original:
-        raise HTTPException(status_code=404, detail="Not found")
-    error = _resume_error(engine, original, Checkpoint.load(run_id))
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    config = dict(original.config)
-    config["resume_from"] = run_id
-    new_id = engine._history.create_run(
-        f"{original.name} (resume)", original.run_type, config,
-        preset_id=original.preset_id)
-    # Copy the checkpoint so the new run can validate and reuse completed items.
-    if not Checkpoint.copy_to(run_id, new_id):
-        engine._history.delete_run(new_id)
-        raise HTTPException(status_code=400, detail="Cannot copy checkpoint")
-
+    from quantflow.artifacts import delete_owned_artifacts
     from quantflow.web.engine.run_queue import QueueFullError
-    try:
-        became_active = engine.enqueue(new_id)
-    except QueueFullError as exc:
-        Checkpoint(new_id).delete()
-        raise HTTPException(status_code=429, detail=str(exc))
+
+    with engine._state_lock:
+        original = engine._history.get_run(run_id)
+        if not original:
+            raise HTTPException(status_code=404, detail="Not found")
+        checkpoint = Checkpoint.load(run_id)
+        error = _resume_error(engine, original, checkpoint)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+        config = dict(original.config, resume_from=run_id)
+        new_id = engine._history.create_run(
+            f"{original.name} (resume)", original.run_type, config, preset_id=original.preset_id)
+        output = None
+        try:
+            output = engine.create_output(engine._history.get_run(new_id))
+            engine._history.update_status(new_id, "queued", output_path=str(output))
+            checkpoint.fork(new_id, original.output_path, output)
+            became_active = engine.enqueue(new_id)
+        except Exception as exc:
+            Checkpoint(new_id).delete()
+            engine._history.delete_run(new_id)
+            if output:
+                delete_owned_artifacts(output, new_id)
+            status = 429 if isinstance(exc, QueueFullError) else 400
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
     return {"ok": True, "run_id": new_id, "resumed_from": run_id,
             "status": "active" if became_active else "queued"}
 
 
 @router.get("/{run_id}/report")
-def get_report(run_id: str):
+def get_report(run_id: str, download: bool = False):
     run = _get_engine()._history.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Not found")
-    if not run.report_path:
-        return {"report": None, "message": "No report available"}
-    rp = Path(run.report_path)
-    if not rp.exists():
-        return {"report": None, "message": "Report file not found"}
-    return {"report": rp.read_text(), "path": str(rp), "legacy_warning": _legacy_warning(run)}
+    path = Path(run.report_path) if run.report_path else None
+    if path and path.is_file():
+        return {"report": path.read_text(), "path": str(path), "legacy_warning": _legacy_warning(run)}
+    if run.status in ("failed", "partial", "cancelled", "interrupted"):
+        from quantflow.execution.checkpoint import Checkpoint
+        from quantflow.reports.checkpoint import partial_report
+
+        checkpoint = Checkpoint.load(run_id)
+        try:
+            report = partial_report(checkpoint, run.output_path) if checkpoint else None
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            raise HTTPException(409, detail=f"Cannot verify partial report: {exc}") from exc
+        if report:
+            if download:
+                return PlainTextResponse(report, media_type="text/markdown",
+                                         headers={"Content-Disposition":
+                                                  f'attachment; filename="partial-{run.id}.md"'})
+            return {"report": report, "partial": True}
+    message = "Report file not found" if path else "No report available"
+    return {"report": None, "message": message}
 
 
 def _legacy_warning(run):

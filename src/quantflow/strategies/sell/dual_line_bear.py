@@ -15,6 +15,8 @@ class DualLineBearZoneSell(SellStrategy):
     持续处于空头区间时只在进入的那根日线触发。
     """
 
+    previous_bars = 1
+
     @property
     def name(self) -> str:
         return "DualLine_BearZone"
@@ -30,7 +32,9 @@ class DualLineBearZoneSell(SellStrategy):
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         
-        df["zone_change_to_bear"] = df["is_bear_zone"] & (~df["is_bear_zone"].shift(1).fillna(False).infer_objects(copy=False))
+        df["zone_change_to_bear"] = (
+            df["is_bear_zone"].eq(True) & df["is_bear_zone"].shift(1).eq(False)
+        ).fillna(False)
         
         df["dual_line_bear_sell"] = df["zone_change_to_bear"]
         df["sell_signal"] = df["dual_line_bear_sell"]

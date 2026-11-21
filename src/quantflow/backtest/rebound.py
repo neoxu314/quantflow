@@ -10,7 +10,7 @@ import pandas as pd
 
 from quantflow.artifacts import atomic_json
 from quantflow.data import StockCode
-from quantflow.data.quality import daily_sessions, normalize_ohlcv
+from quantflow.data.quality import daily_sessions, normalize_ohlcv, tradable_bars
 from quantflow.indicators.composer import IndicatorComposer
 from quantflow.indicators.factory import IndicatorFactory
 from quantflow.strategies.buy import DailyBullishOversoldBuy
@@ -40,11 +40,12 @@ def _signals(bars, strategy):
     indicators = strategy.get_required_indicators()
     warmup = max(indicator.lookback_bars for indicator in indicators)
     markers = pd.DataFrame(False, index=bars.index, columns=SCENARIOS)
-    usable = bars.open.notna() & bars.volume.gt(0)
-    if "trade_status" in bars:
-        usable &= ~bars.trade_status.astype(str).eq("0")
-    for _, part in bars.loc[usable].groupby((~usable).cumsum()[usable]):
-        if len(part) <= warmup:
+    # A missing session breaks the observed history. A recorded suspension
+    # consumes a calendar session but contributes no bar to either calculator.
+    segment = bars.open.isna().cumsum()
+    observed = tradable_bars(bars.loc[bars.open.notna()])
+    for _, part in observed.groupby(segment):
+        if len(part) < warmup:
             continue
         calculated = IndicatorComposer(indicators).compose(part)
         signaled = strategy.generate_signals(calculated)
@@ -60,6 +61,8 @@ def _signals(bars, strategy):
         }, index=part.index)
         # Also require a fully warmed previous observation for transitions.
         markers.loc[part.index[warmup:]] = flags.iloc[warmup:]
+        first_ready = part.index[warmup - 1]
+        markers.loc[first_ready, "each_oversold_day"] = active.loc[first_ready]
     return markers
 
 

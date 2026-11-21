@@ -10,7 +10,7 @@ results visible to the factory. The
 | BaoStock | A-share daily prices. Maps qfq/hfq/none to flags 2/1/3. |
 | Tushare | A-share daily prices and fundamental data with a token. Applies adjustment factors and converts lots to shares. |
 | YFinance | Yahoo daily prices and selected fundamentals. Uses configured download chunks, bounded retry, cooldown and missed-symbol recovery. |
-| YahooQuery | Yahoo daily prices and selected fundamentals. Fetches batch symbols sequentially, with up to five attempts and a three-second retry delay. |
+| YahooQuery | Yahoo daily prices and selected fundamentals. The factory requests symbols sequentially and handles unresolved quotes together with the fallback. |
 | AKShare | Sector data and HK daily prices. Supported sector operations depend on the selected classification. |
 
 - Yahoo accepts qfq and unadjusted requests. Provider adjustment semantics and upstream
@@ -19,6 +19,7 @@ results visible to the factory. The
 - YFinance uses the values under `yfinance.batch` for chunking and delays. Empty or failed
   results may trigger cooling, smaller chunks or a bounded recovery pass. These settings
   control only local request behavior.
+- Managed Yahoo batches run in spawned workers with one attempt per request and a shared deadline. The factory retains partial responses and retries only unresolved symbols. Direct adapter calls retain their local retry settings.
 - YahooQuery uses synchronous per-symbol requests with configured inter-symbol delay.
   `chunk_size` and `max_workers` are accepted for compatibility with existing configuration.
   Preserve the historical-data conversion guard for provider error responses.

@@ -44,6 +44,9 @@ class CompositeStrategy(StrategyBase):
                 indicators[indicator.name] = indicator
         return list(indicators.values())
 
+    def get_lookback_bars(self):
+        return max((s.get_lookback_bars() for s in self.strategies), default=1)
+
     def get_required_period(self) -> str:
         periods = {strategy.get_required_period() for strategy in self.strategies}
         periods.discard("d")

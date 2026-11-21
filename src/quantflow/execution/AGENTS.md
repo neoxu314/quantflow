@@ -19,7 +19,7 @@ jobs. Both use the market contract for the last completed trading day and normal
   `~/.quantflow/checkpoints/<run_id>.json`. See `run:plan`, `execution:<task_key>`
   and `orchestration:as_of` for plan, execution identity and shared cutoff.
   Analyzed inputs live in `snapshots/<task>/<code>.json` under the run directory.
-- Resume copies the checkpoint and validates the recorded plan and source fingerprint.
+- Resume verifies the recorded plan and calculation fingerprint, then clones snapshots before enqueue.
   Reuse successful items only after validating their saved input snapshots. Retry unfinished
   stocks against the original cutoff. Separate manifests track each run's artifact ownership.
 - Run `python -m pytest tests/execution tests/test_rebound_workflows.py`.

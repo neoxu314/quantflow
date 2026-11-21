@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from quantflow.data.adapters.yahoo_proxy import session_options
 from quantflow.data.base import DataSourceBase, FundamentalData, StockCode
 from quantflow.control import check_cancelled, cancellable_sleep
 from datetime import datetime, timezone
@@ -45,7 +46,7 @@ def _check_ssl_compatibility() -> Optional[str]:
 def _get_chrome_session():
     try:
         from curl_cffi import Session
-        return Session(impersonate="chrome")
+        return Session(impersonate="chrome", **session_options())
     except ImportError:
         logger.warning("curl_cffi not installed, using default session")
         return None
@@ -54,7 +55,10 @@ def _get_chrome_session():
 def _unstack_ticker(raw_df: pd.DataFrame, col_map: Dict[str, str]) -> pd.DataFrame:
     if raw_df.empty:
         return raw_df
-    df = raw_df.reset_index()
+    prices = [col for col in ("Open", "High", "Low", "Close") if col in raw_df]
+    if len(prices) != 4:
+        return pd.DataFrame()
+    df = raw_df.dropna(subset=prices, how="all").reset_index()
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     cols = ["date", "open", "high", "low", "close", "volume"]
     df = df[[c for c in cols if c in df.columns]]
@@ -204,12 +208,22 @@ class YFinanceDataSource(DataSourceBase):
         """Restore yfinance logger to its original level after download."""
         logging.getLogger("yfinance").setLevel(original_level)
 
+    def download_once(self, codes, start, end, period, adjust):
+        """One SDK request. The factory owns managed batch retries and failover."""
+        self._validate_request(period, adjust)
+        self._adjust = adjust
+        symbols = {self._get_yfinance_symbol(c): c.standard for c in codes}
+        frames, _ = self._download_chunk(list(symbols), start, end, self.PERIOD_INTERVAL[period],
+                                         max_attempts=1, propagate_errors=True)
+        return {symbols[symbol]: frame for symbol, frame in frames.items()}
+
     def _download_chunk(
-        self, yf_symbols: List[str], start_date: str, end_date: str, interval: str
+        self, yf_symbols: List[str], start_date: str, end_date: str, interval: str,
+        *, max_attempts=None, propagate_errors=False,
     ) -> tuple[Dict[str, pd.DataFrame], bool]:
         import yfinance as yf
 
-        max_attempts = self._retry_max_attempts
+        max_attempts = self._retry_max_attempts if max_attempts is None else max_attempts
         base_delay = self._retry_base_delay
 
         df_multi = None
@@ -237,6 +251,8 @@ class YFinanceDataSource(DataSourceBase):
                 finally:
                     self._restore_yfinance_logs(saved_level)
             except Exception as e:
+                if propagate_errors:
+                    raise
                 logger.warning(f"  Exception during download: {type(e).__name__}: {e}")
                 if attempt < max_attempts:
                     delay = base_delay * (2 ** (attempt - 1))
@@ -253,25 +269,15 @@ class YFinanceDataSource(DataSourceBase):
                     cancellable_sleep(delay)
                 continue
 
-            success_count = 0
-            for sym in yf_symbols:
-                try:
-                    if sym in df_multi and not df_multi[sym].empty:
-                        success_count += 1
-                except (KeyError, AttributeError):
-                    pass
-
-            success_rate = success_count / len(yf_symbols)
-
-            if success_rate >= 0.5:
-                logger.info(f"  Success rate {success_rate:.0%} >= 50% - accepted")
+            if any(symbol in df_multi and not _unstack_ticker(df_multi[symbol], self._COL_MAP).empty
+                   for symbol in yf_symbols):
                 break
             elif attempt == max_attempts:
-                logger.warning(f"  Success rate {success_rate:.0%} < 50% but max attempts reached")
+                logger.warning("  No usable symbol after final attempt")
                 was_rate_limited = True
                 break
             else:
-                logger.warning(f"  Success rate {success_rate:.0%} < 50% - retrying...")
+                logger.warning("  No usable symbol - retrying...")
                 delay = base_delay * (2 ** (attempt - 1))
                 logger.warning(f"  Retry in {delay:.0f}s...")
                 cancellable_sleep(delay)

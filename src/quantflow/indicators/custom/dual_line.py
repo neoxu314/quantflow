@@ -23,7 +23,7 @@ class DualLineIndicator(IndicatorBase):
     
     @property
     def lookback_bars(self) -> int:
-        return max(self.ma_periods)
+        return max(self.ema_period, *self.ma_periods)
     
     @property
     def params(self) -> Dict[str, Any]:
@@ -66,7 +66,7 @@ class DualLineIndicator(IndicatorBase):
         avg = ma_sum / valid_count.replace(0, np.nan)
         df["long_short_line"] = avg.where(is_complete)
         
-        df["is_bull_zone"] = df["long_short_line"] < df["short_trend_line"]
-        df["is_bear_zone"] = df["long_short_line"] > df["short_trend_line"]
+        df["is_bull_zone"] = (df["long_short_line"] < df["short_trend_line"]).astype("boolean").where(is_complete)
+        df["is_bear_zone"] = (df["long_short_line"] > df["short_trend_line"]).astype("boolean").where(is_complete)
         
         return df

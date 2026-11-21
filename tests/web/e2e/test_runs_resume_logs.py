@@ -211,3 +211,35 @@ class TestResumeE2E:
         assert "verified run plan" in checkpoint["reason"]
         response = httpx.post(f"{SERVER_URL}/api/runs/{rid}/resume", timeout=10)
         assert response.status_code == 400
+
+
+def test_download_partial_report_from_cancelled_history(page, seeded_runs, tmp_path):
+    import hashlib
+    from .run_helpers import open_run_tab, open_runs, select_run
+
+    rid = seeded_runs("unfinished", "watchlist_run", "cancelled")
+    root = tmp_path / "runs" / rid
+    snapshot = root / "snapshots/watchlist/A.US.json"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text('{"code":"A.US"}')
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE run_history SET output_path=? WHERE id=?", (str(root), rid))
+    checkpoint = {
+        "run_id": rid,
+        "context": {"run:plan": {"watchlist": {"items": [{"code":"A.US"}, {"code":"B.US"}]}}},
+        "work": {"watchlist": {"done": {"A.US": {"outcome": {
+            "code": "A.US", "status": "no_signal", "snapshot_path": str(snapshot),
+            "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+        }}}}},
+    }
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    (CHECKPOINT_DIR / f"{rid}.json").write_text(json.dumps(checkpoint))
+    open_runs(page, SERVER_URL)
+    select_run(page, rid, "cancelled")
+    report = open_run_tab(page, "report")
+    report.get_by_text("Verified coverage: 1/2", exact=False).first.wait_for()
+    with page.expect_download() as downloading:
+        report.get_by_role("link", name="Download partial report").click()
+    download = downloading.value
+    assert download.suggested_filename == f"partial-{rid}.md"
+    assert "Verified coverage: 1/2" in download.path().read_text()

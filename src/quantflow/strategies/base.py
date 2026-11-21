@@ -25,6 +25,7 @@ class SignalOutput:
 
 
 class StrategyBase(ABC):
+    previous_bars = 0
     
     @property
     @abstractmethod
@@ -51,7 +52,7 @@ class StrategyBase(ABC):
         indicators = self.get_required_indicators()
         if not indicators:
             return 1
-        return max(ind.lookback_bars for ind in indicators)
+        return max(ind.lookback_bars for ind in indicators) + self.previous_bars
     
     def get_required_period(self) -> str:
         indicators = self.get_required_indicators()

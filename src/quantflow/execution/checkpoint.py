@@ -8,14 +8,16 @@ original cutoff. The checkpoint itself is saved with the shared atomic writer.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+from copy import deepcopy
 import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from quantflow.artifacts import atomic_json
+from quantflow.artifacts import atomic_json, atomic_text
 
 logger = logging.getLogger(__name__)
 
@@ -110,22 +112,35 @@ class Checkpoint:
                 return True
             return False
 
-    @classmethod
-    def copy_to(cls, src_run_id: str, dst_run_id: str) -> bool:
-        """Copy a checkpoint to a new run id (used when resuming)."""
-        checkpoint = cls.load(src_run_id)
-        if checkpoint is None:
-            return False
-        destination = cls(dst_run_id)
-        destination._data = checkpoint._data
-        destination._data["run_id"] = dst_run_id
-        destination._data["resumed_from"] = src_run_id
-        try:
-            destination.save()
-            return True
-        except OSError as exc:
-            logger.warning("Failed to copy checkpoint %s -> %s: %s", src_run_id, dst_run_id, exc)
-            return False
+    def verified_snapshots(self, source_root):
+        """Read only snapshots belonging to the source run and check their digests."""
+        for task, work in self._data["work"].items():
+            for code, stats in work["done"].items():
+                outcome = stats.get("outcome") or {}
+                if not source_root or outcome.get("code") != code or not outcome.get("snapshot_path"):
+                    raise ResumePlanError(f"Missing checkpoint snapshot for {code}")
+                path = Path(outcome["snapshot_path"])
+                root = Path(source_root).resolve()
+                base = Path(source_root)
+                relative = path.relative_to(base if path.is_relative_to(base) else root)
+                if (relative.parts[:1] != ("snapshots",) or path.resolve() != root / relative
+                        or path.name != f"{code}.json"):
+                    raise ResumePlanError(f"Invalid checkpoint snapshot path for {code}")
+                content = path.read_bytes()
+                if hashlib.sha256(content).hexdigest() != outcome.get("snapshot_sha256"):
+                    raise ResumePlanError(f"Checkpoint input snapshot was modified: {code}")
+                yield task, code, relative, content
+
+    def fork(self, new_id, source_root, destination_root):
+        destination = Checkpoint(new_id)
+        destination._data = deepcopy(self._data)
+        destination._data.update(run_id=new_id, resumed_from=self.run_id)
+        for task, code, relative, content in self.verified_snapshots(source_root):
+            path = destination_root / relative
+            atomic_text(path, content.decode("utf-8"))
+            destination._data["work"][task]["done"][code]["outcome"]["snapshot_path"] = str(path)
+        destination.save()
+        return destination
 
     @classmethod
     def exists(cls, run_id: str) -> bool:

@@ -28,7 +28,7 @@ shared across CLI, Web and storage.
   Propagate failures to persist required output, and keep the queue slot until the active
   worker stops.
 - Freeze run configuration, strategy parameters and completed trading days. Resume validates
-  the run plan and execution identity, including a hash of Python source bytes, and requires
+  the run plan and execution identity, including a semantic hash of calculation modules, and requires
   valid snapshots for completed stocks.
 - Data windows are inclusive, daily execution uses complete trading sessions, and adapters
   normalize volume to shares. Keep adjustment, provider, dates and value units traceable.
