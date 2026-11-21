@@ -164,6 +164,11 @@ Strategy JSON rows include the normalized code, trading date, actual provider, a
 strategy names, indicator values and reasons. A completed run can contain zero signals.
 Inspect coverage before interpreting a partial report.
 
+For scripts reading individual Task Run outputs, resolve the directory from
+`Run_Summary.json` → `task_directories`, then read `results.json`, `report.md`, or
+`coverage.json` inside it. For older runs without that mapping, use the artifact
+paths recorded in their manifest.
+
 Deleting a Web run removes its record and eligible unchanged files owned by its manifest.
 User additions, edited files and unverifiable legacy shared files are preserved.
 Web history, checkpoints and presets live under `~/.quantflow/`. Use the backup command

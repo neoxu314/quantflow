@@ -24,6 +24,8 @@
 2. 在 `Run_Summary.json` 的 `task_directories` 中按任务名找到目录，查看其中的 `coverage.json` 区分零命中、部分完成和数据失败。单任务报告为同目录的 `report.md`。
    调度器应记录退出码。部分完成返回 2，失败返回 1，取消返回 130。
 3. Web 中打开 Runs 的 Progress、Report、Files 查看同一次运行的记录和产物。
+   Files 显示相对运行目录的路径，例如 `tasks/0001/report.md`。编号随任务在配置中的顺序变化，
+   脚本应按任务名查询 `task_directories`。早期运行可从其 `manifest.json` 查找原路径。
    日常备份与恢复条件见 [运行契约](reliability-and-data-contracts.md)。
 
 代码更新前让当前工作结束，并检查是否有待续跑的 checkpoint。检查点会校验原计划、

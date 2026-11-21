@@ -12,6 +12,9 @@ approximately 4.40. Those inputs meet all three conditions. The trend-only MSFT.
 series produces no signal. A symbol with no bars tests partial and failed status.
 
 [The backtest cases](backtest/test_rebound.py) check entry on the next session, 5/10-session
-exits, costs, overlap, the market holiday and the cutoff at the end of a sample. The CLI case
-also verifies the saved input hash. These assertions cover calculation and report contracts.
+exits, costs, overlap and a market holiday. They verify that exits on the sample's final
+session count as complete and positions still open at the cutoff count as entries only.
+The CLI case also verifies the saved input hash. The
+[task artifact tests](orchestration/test_reliability_contracts.py) cover task names that
+match system filenames or differ only by case, including snapshot reuse and deletion.
 Provider checks use the separate live-market command in the [README](../README.md).
