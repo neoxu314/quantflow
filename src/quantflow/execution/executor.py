@@ -148,7 +148,6 @@ class Executor:
     @IndicatorFactory.snapshot()
     def execute(self, job, on_progress=None, checkpoint=None, task_key=""):
         check_cancelled()
-        name = safe_name(job.name)
         indicators = self._indicators(job.strategies)
         min_history_bars = max((s.get_lookback_bars() for s in job.strategies), default=1)
         adjust = job.adjust or self.adjust
@@ -171,7 +170,7 @@ class Executor:
             if checkpoint:
                 checkpoint.set_context(key, frozen)
                 checkpoint.save()
-        atomic_json(Path(job.output_dir) / f"{name}_context.json", dict(frozen, execution=identity))
+        atomic_json(job.result_path("context"), dict(frozen, task=job.name, execution=identity))
         cached = (
             {d["code"]: ExecutionResultItem.from_dict(d) for d in checkpoint.get_results(task_key)}
             if checkpoint
@@ -203,9 +202,7 @@ class Executor:
                 digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()
                 if digest != outcome.snapshot_sha256:
                     raise ValueError("Checkpoint input snapshot was modified; start a new run")
-                dest = (
-                    Path(job.output_dir) / "snapshots" / name / f"{safe_name(code.standard)}.json"
-                )
+                dest = job.snapshot_dir / f"{safe_name(code.standard)}.json"
                 if dest.resolve() != snapshot.resolve():
                     atomic_json(dest, json.loads(snapshot.read_text(encoding="utf-8")))
                     outcome.snapshot_path = str(dest)
@@ -304,12 +301,7 @@ class Executor:
                         outcome.retryable_download = code.standard in self.factory.pending_network
                         outcome.error = "; ".join(errors) or "No data returned"
                     else:
-                        path = (
-                            Path(job.output_dir)
-                            / "snapshots"
-                            / name
-                            / f"{safe_name(code.standard)}.json"
-                        )
+                        path = job.snapshot_dir / f"{safe_name(code.standard)}.json"
                         atomic_json(
                             path,
                             {
@@ -377,7 +369,7 @@ class Executor:
                     "info" if outcome.status in ("signal", "no_signal") else "warning",
                 )
         check_cancelled()
-        self.storage.save_results(Path(job.output_dir) / f"{name}.json", results)
-        self.storage.save_coverage(Path(job.output_dir) / f"{name}_coverage.json", results)
-        logger.info("Task %s: %s", name, results.summary)
+        self.storage.save_results(job.result_path("results"), results)
+        self.storage.save_coverage(job.result_path("coverage"), results)
+        logger.info("Task %s: %s", job.name, results.summary)
         return results

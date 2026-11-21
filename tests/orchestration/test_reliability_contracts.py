@@ -117,3 +117,48 @@ def test_runs_reject_changes_to_unstarted_tasks_before_processing(tmp_path, monk
     with pytest.raises(ResumePlanError, match="inputs changed"):
         original.run()
     assert ran == []
+
+
+def test_conflicting_task_names_have_independent_artifacts_and_resume(tmp_path, monkeypatch):
+    import hashlib
+
+    from quantflow.artifacts import delete_owned_artifacts
+    from tests.support.replay_market import install_replay
+
+    install_replay(tmp_path, monkeypatch.setattr)
+    watchlist = tmp_path / "quotes.yaml"
+    watchlist.write_text("name: quotes\nitems: [{code: AAPL.US}]\n")
+    names = ["manifest", "Run_Summary", "Combined_Results", "Daily_Report",
+             "scan", "Scan", "scan_context", "scan_coverage"]
+    tasks = [TaskConfig(name, str(watchlist), ["daily_bull_oversold"]) for name in names]
+    cp = Checkpoint("first", path=tmp_path / "first.json")
+    app = Orchestrator(tasks, output_override=tmp_path, checkpoint=cp)
+    assert app.run() == len(names)
+    root = app.output_dir
+    summary = json.loads((root / "Run_Summary.json").read_text())
+    assert summary["status"] == "completed" and summary["analyzed"] == len(names)
+    assert len(json.loads((root / "Combined_Results.json").read_text())) == len(names)
+    manifest = json.loads((root / "manifest.json").read_text())
+    assert (manifest["run_id"], manifest["status"]) == (root.name, "completed")
+    assert len(set(summary["task_directories"].values())) == len(names)
+    for n, name in enumerate(names, 1):
+        folder = root / summary["task_directories"][name]
+        assert folder == root / "tasks" / f"{n:04d}"
+        assert json.loads((folder / "results.json").read_text())[0]["code"] == "AAPL.US"
+        assert json.loads((folder / "context.json").read_text())["task"] == name
+        assert (folder / "report.md").read_text().startswith(f"# {name} Scan Report")
+        outcome, = json.loads((folder / "coverage.json").read_text())["outcomes"]
+        snapshot = root / "snapshots" / f"{n:04d}" / "AAPL.US.json"
+        assert Path(outcome["snapshot_path"]) == snapshot
+        for path in [*folder.iterdir(), snapshot]:
+            record = manifest["artifacts"][path.relative_to(root).as_posix()]
+            assert record["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert len(list(cp.verified_snapshots(root))) == len(names)
+
+    request_log = tmp_path / "provider-requests.log"
+    request_log.write_text("")
+    resumed = Orchestrator(tasks, output_override=tmp_path, checkpoint=cp)
+    assert resumed.run() == len(names) and request_log.read_text() == ""
+    delete_owned_artifacts(root, root.name)
+    assert not root.exists()
+    assert len(list(cp.verified_snapshots(resumed.output_dir))) == len(names)

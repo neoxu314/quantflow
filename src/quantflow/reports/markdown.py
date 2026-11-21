@@ -104,6 +104,7 @@ class MarkdownReporter(Reporter):
         watchlist: Any,
         output_dir: str,
         date_str: str,
+        *, file_stem: str | None = None,
     ) -> str:
         stock_map = self._get_stock_info(watchlist)
         total_watched = self._count_watched(watchlist)
@@ -140,7 +141,7 @@ class MarkdownReporter(Reporter):
                              f"expected={outcome.expected_session}; {outcome.error or ''}")
 
         os.makedirs(output_dir, exist_ok=True)
-        file_path = os.path.join(output_dir, f"{safe_name(task_name)}.md")
+        file_path = os.path.join(output_dir, f"{safe_name(file_stem if file_stem is not None else task_name)}.md")
         atomic_text(file_path, "\n".join(lines))
         return file_path
 

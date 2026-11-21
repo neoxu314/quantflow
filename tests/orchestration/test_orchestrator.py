@@ -1,7 +1,9 @@
 """Tests for the orchestration Orchestrator class (partial mock + integration style)."""
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
+import pytest
 
 from quantflow.orchestration.app import MarkdownReporter, Orchestrator
 from quantflow.execution.storage import ExecutionResultItem
@@ -244,39 +246,21 @@ tasks:
         assert total == 0
 
 
-class TestOrchestratorPathResolution:
-    """Verify _resolve_task_dir and _resolve_combined_dir."""
+@pytest.mark.parametrize("daily", [False, True])
+@pytest.mark.parametrize("override", [False, True])
+def test_task_files_use_run_directory_for_daily_and_default_paths(tmp_path, monkeypatch, daily, override):
+    from quantflow.orchestration.loader import TaskConfig
 
-    def test_resolve_task_dir_without_daily(self, tmp_path):
-        """Without daily mode, uses base path only."""
-        app = Orchestrator([], output_override="/base", daily_mode=False)
-        app.date_str = "2026-05-05"
-        cfg = MagicMock(output_dir="/alternative")
-        assert app._resolve_task_dir(cfg) == "/base"
-
-    def test_resolve_task_dir_with_daily(self, tmp_path):
-        """With daily mode, appends date to base path."""
-        app = Orchestrator([], output_override="/base", daily_mode=True)
-        app.date_str = "2026-05-05"
-        cfg = MagicMock(output_dir="/alternative")
-        assert app._resolve_task_dir(cfg) == "/base/2026-05-05"
-
-    def test_resolve_combined_dir_without_daily(self):
-        """Without daily mode, use the specified base."""
-        app = Orchestrator([], output_override="/base", daily_mode=False)
-        app.date_str = "2026-05-05"
-        assert app._resolve_combined_dir() == "/base"
-
-    def test_resolve_task_dir_fallback_to_default_output(self):
-        """Without override, defaults to './output'."""
-        app = Orchestrator([], daily_mode=False)
-        cfg = MagicMock()
-        assert app._resolve_task_dir(cfg) == "output"
-
-    def test_resolve_combined_dir_fallback_to_reports(self):
-        """With no override, the combined report uses the default output base."""
-        app = Orchestrator([], daily_mode=False)
-        assert app._resolve_combined_dir() == "output"
+    monkeypatch.chdir(tmp_path)
+    wl = tmp_path / "empty.yaml"
+    wl.write_text("name: empty\nitems: []\n")
+    app = Orchestrator([TaskConfig("manifest", str(wl), ["daily_bull_oversold"])],
+                       output_override=tmp_path / "custom" if override else None, daily_mode=daily)
+    app.run()
+    base = tmp_path / ("custom" if override else "output")
+    assert app.output_dir.parent == (base / app.date_str if daily else base) / "runs"
+    assert (app.output_dir / "tasks/0001/report.md").is_file()
+    assert (app.output_dir / "Daily_Report.md").is_file()
 
 
 class TestOrchestratorEmptyTasks:

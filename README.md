@@ -155,8 +155,9 @@ Use the Run's **Files** tab to locate its output folder.
 | `manifest.json` | Run ID, status and hashes of owned files |
 | `<code>_indicators.json`, `<code>_context.json`, `<code>_snapshot.json` | Scan values, metadata and daily input |
 | `cli-<watchlist>.json/.md` or `web-<watchlist>.json/.md` | Structured signal results and Markdown |
-| `<task>.json/.md`, `Combined_Results.json`, `Daily_Report.md` | Per-task and combined strategy results |
-| `Run_Summary.json`, `*_coverage.json`, `snapshots/` | Strategy run coverage, per-stock outcomes and inputs |
+| `tasks/0001/results.json`, `tasks/0001/report.md` | Individual task signals and report. Look up the numbered folder by task name in `Run_Summary.json` → `task_directories`. |
+| `Combined_Results.json`, `Daily_Report.md` | Combined task results and report |
+| `Run_Summary.json`, `tasks/0001/coverage.json` (watchlist: `*_coverage.json`), `snapshots/` | Strategy run coverage, per-stock outcomes and inputs |
 | `logs/` | Run log files when file logging is enabled |
 
 Strategy JSON rows include the normalized code, trading date, actual provider, adjustment,

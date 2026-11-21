@@ -502,7 +502,7 @@ function renderFilesTab(run: RunRecord) {
         panel.innerHTML = '<div class="text-gray-500 text-center py-8">No output files</div>';
         return;
     }
-    api<{ files: { name: string; path: string; size: string; type: string }[] }>(`/api/runs/${run.id}/files`)
+    api<{ files: { name: string; relative_path?: string; path: string; size: string; type: string }[] }>(`/api/runs/${run.id}/files`)
         .then(data => {
             if (!data.files.length) { panel.innerHTML = '<div class="text-gray-500 text-center py-8">No files</div>'; return; }
             let html = `<div class="mb-3 flex justify-between items-center">
@@ -514,7 +514,7 @@ function renderFilesTab(run: RunRecord) {
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead><tbody>`;
             data.files.forEach(f => {
-                html += `<tr><td class="px-4 py-2 font-mono text-xs">${f.name}</td>
+                html += `<tr><td class="px-4 py-2 font-mono text-xs">${escapeHtml(f.relative_path || f.name)}</td>
                     <td class="px-4 py-2 text-gray-500">${f.size}</td>
                     <td class="px-4 py-2"><button class="text-blue-500 hover:text-blue-700 text-xs"
                         onclick="copyToClipboard('${f.path}')">📋 Copy Path</button></td></tr>`;

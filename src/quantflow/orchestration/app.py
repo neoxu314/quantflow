@@ -49,19 +49,10 @@ class Orchestrator:
         self.output_dir = None
         self.report_path = None
 
-    def _resolve_task_dir(self, cfg):
-        if self.output_dir:
-            return str(self.output_dir)
-        base = Path(self.output_override or "./output")
-        return str(base / self.date_str) if self.daily_mode else str(base)
-
-    def _resolve_combined_dir(self):
-        return self._resolve_task_dir(None)
-
     def prepare_tasks(self, output_dir):
         """Resolve the ordered task inputs once, before processing any stock."""
         prepared = []
-        for cfg in self.tasks:
+        for number, cfg in enumerate(self.tasks, start=1):
             check_cancelled()
             path = Path(cfg.watchlist_path)
             if not path.is_absolute() and not path.exists():
@@ -75,7 +66,7 @@ class Orchestrator:
                 self.executor._indicators(strategies)
                 job = ExecutionJob(
                     cfg.name, watchlist.items, strategies, str(output_dir),
-                    compute_days_back(strategies, cfg.days_back), as_of=self.as_of,
+                    compute_days_back(strategies, cfg.days_back), as_of=self.as_of, task_number=number,
                 )
             except Exception as exc:
                 error = exc
@@ -156,7 +147,8 @@ class Orchestrator:
                     results = self.executor.execute(job, **kwargs)
                     check_cancelled()
                     self.reporter.generate(
-                        cfg.name, strategies, results, wl, str(self.output_dir), self.date_str
+                        cfg.name, strategies, results, wl, str(job.artifact_dir), self.date_str,
+                        file_stem="report",
                     )
                     combined.extend(results)
                     if isinstance(results, ScanResults):
@@ -179,6 +171,10 @@ class Orchestrator:
             summary.update(
                 tasks_requested=len(self.tasks), tasks_completed=len(tasks), task_errors=errors,
                 as_of=self.as_of,
+                task_directories={
+                    cfg.name: job.artifact_dir.relative_to(self.output_dir).as_posix()
+                    for cfg, _, _, job, _ in prepared if job is not None
+                },
             )
             if unreadable_watchlists:
                 summary["enumerated_coverage"] = summary["coverage"] if summary["total"] else None

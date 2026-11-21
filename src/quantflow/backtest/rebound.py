@@ -74,14 +74,14 @@ def _trades(code, bars, candidates, first, last, horizon, side_cost):
     for pos in dates.get_indexer(candidates.loc[first:last].index[candidates.loc[first:last]]):
         event = {"code": code.standard, "signal": dates[pos].date().isoformat()}
         results.append(event)
-        if pos + 2 + horizon - 1 > cutoff:
-            event["status"] = "right_censored"
-            continue
         if pos < busy_until:
             event["status"] = "overlap_skipped"
             continue
         entry = None
         for index in range(pos + 1, pos + 3):
+            if index > cutoff:
+                event["status"] = "right_censored"
+                break
             allowed = _eligible(bars.iloc[index], code.exchange, "buy")
             if allowed is None:
                 event["status"] = "entry_unknown"
@@ -94,11 +94,15 @@ def _trades(code, bars, candidates, first, last, horizon, side_cost):
             continue
         exit_index = entry + horizon - 1
         event["entry"] = dates[entry].date().isoformat()
+        if exit_index > cutoff:
+            event["status"] = "right_censored"
+            busy_until = cutoff + 1
+            continue
         event["exit_target"] = dates[exit_index].date().isoformat()
         allowed = _eligible(bars.iloc[exit_index], code.exchange, "sell")
         if allowed is not True:
             event["status"] = "exit_unknown" if allowed is None else "exit_blocked"
-            busy_until = cutoff
+            busy_until = cutoff + 1
             continue
         entry_price = bars.open.iloc[entry] * (1 + side_cost)
         exit_price = bars.close.iloc[exit_index] * (1 - side_cost)
@@ -116,8 +120,9 @@ def _trades(code, bars, candidates, first, last, horizon, side_cost):
 
 def _summarize(events):
     counts = Counter(event["status"] for event in events)
-    considered = len(events) - counts["right_censored"] - counts["overlap_skipped"]
-    entered = counts["complete"] + counts["exit_unknown"] + counts["exit_blocked"]
+    # A known entry still counts as a fill when the sample ends during the holding period.
+    entered = sum("entry" in event for event in events)
+    considered = entered + counts["entry_blocked"] + counts["entry_unknown"]
     realized = pd.Series(
         [event["net_return"] for event in events if event["status"] == "complete"], dtype=float
     )

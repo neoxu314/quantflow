@@ -18,7 +18,7 @@ jobs. Both use the market contract for the last completed trading day and normal
   `Checkpoint` stores per-task analyzed codes and their results in
   `~/.quantflow/checkpoints/<run_id>.json`. See `run:plan`, `execution:<task_key>`
   and `orchestration:as_of` for plan, execution identity and shared cutoff.
-  Analyzed inputs live in `snapshots/<task>/<code>.json` under the run directory.
+  Task Run inputs live in `snapshots/<number>/<code>.json` under the run directory. Watchlist Run uses the watchlist job name in place of the number.
 - Resume verifies the recorded plan and calculation fingerprint, then clones snapshots before enqueue.
   Reuse successful items only after validating their saved input snapshots. Retry unfinished
   stocks against the original cutoff. Separate manifests track each run's artifact ownership.

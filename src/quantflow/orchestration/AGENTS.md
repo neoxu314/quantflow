@@ -9,8 +9,10 @@
 - `app.py` resolves strategies and lookback, sets a single market-data cutoff,
   dispatches execution jobs and aggregates task coverage. `Orchestrator.run()` returns
   the number of result items across tasks. One result item can contain several signals.
-- Processed tasks write `<task>.json` and `<task>.md`. The orchestrator writes
-  `Combined_Results.json`, `Daily_Report.md` and `Run_Summary.json` to the same run directory. The output base
+- Task Run writes each task's report, results, coverage and context under
+  `tasks/<number>/`, using its one-based position in the frozen plan. The run root
+  holds `Combined_Results.json`, `Daily_Report.md` and `Run_Summary.json`.
+  The summary maps display names to folders in `task_directories`. The output base
   comes from the caller. Daily mode inserts the date before `runs/<run_id>/`.
 - `discovery.py` exposes standard and custom indicator metadata to the Web Library.
   External schedulers invoke the CLI as described in

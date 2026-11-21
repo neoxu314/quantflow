@@ -21,11 +21,11 @@
 ```
 
 1. 使用 `Daily_Report.md` 阅读组合报告，机器处理使用 `Combined_Results.json`。
-2. 查看 `Run_Summary.json` 和各任务的 `*_coverage.json` 区分零命中、部分完成和数据失败。
+2. 在 `Run_Summary.json` 的 `task_directories` 中按任务名找到目录，查看其中的 `coverage.json` 区分零命中、部分完成和数据失败。单任务报告为同目录的 `report.md`。
    调度器应记录退出码。部分完成返回 2，失败返回 1，取消返回 130。
 3. Web 中打开 Runs 的 Progress、Report、Files 查看同一次运行的记录和产物。
    日常备份与恢复条件见 [运行契约](reliability-and-data-contracts.md)。
 
 代码更新前让当前工作结束，并检查是否有待续跑的 checkpoint。检查点会校验原计划、
-指标参数、依赖版本及 Python 源文件内容。修改 Python 注释同样会改变内容哈希。
+指标参数、依赖版本及计算模块的语法树。新断点的指纹忽略 Python 注释和文档字符串。
 若恢复资格不通过，使用 **Run Again** 新建运行。它使用新的数据截止时点。

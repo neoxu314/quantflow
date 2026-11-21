@@ -46,7 +46,7 @@ def test_task_run_reports_expected_signal_and_owned_files(page, client, e2e_url,
     report = open_run_tab(page, "report")
     expect(report).to_contain_text("Oversold J=4.4 in bull channel")
     files = open_run_tab(page, "files")
-    for filename in ("Daily_Report.md", "Combined_Results.json"):
+    for filename in ("Daily_Report.md", "Combined_Results.json", "tasks/0001/report.md"):
         expect(files.get_by_role("cell", name=filename, exact=True)).to_be_visible()
     progress = open_run_tab(page, "progress")
     expect(progress.locator("#run-log-container")).to_contain_text("Task djia:")
